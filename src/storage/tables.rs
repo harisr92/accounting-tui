@@ -19,3 +19,18 @@ pub(super) const PROJECT_SUMMARIES: TableDefinition<Uuid, &[u8]> =
 pub(super) type LedgerTable = TableDefinition<'static, &'static str, &'static [u8]>;
 pub(super) const ACCOUNTS: LedgerTable = TableDefinition::new("accounts");
 pub(super) const TRANSACTIONS: LedgerTable = TableDefinition::new("transactions");
+
+/// Issued invoices, keyed by invoice number
+pub(super) const INVOICES: TableDefinition<&str, &[u8]> = TableDefinition::new("invoices");
+
+/// `InvoiceSummary` rows, always written in the same transaction as `INVOICES`
+pub(super) const INVOICE_SUMMARIES: TableDefinition<&str, &[u8]> =
+    TableDefinition::new("invoice_summaries");
+
+/// Last invoice sequence used in each financial year, keyed by `2026-27`
+pub(super) const INVOICE_COUNTERS: TableDefinition<&str, u32> =
+    TableDefinition::new("invoice_counters");
+
+/// Single-row settings, keyed by name (`business_profile`)
+pub(super) const SETTINGS: TableDefinition<&str, &[u8]> = TableDefinition::new("settings");
+pub(super) const PROFILE_KEY: &str = "business_profile";

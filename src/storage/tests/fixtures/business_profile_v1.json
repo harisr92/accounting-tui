@@ -1,0 +1,15 @@
+{
+  "name": "Nila Design & Code",
+  "address": [
+    "12 FC Road",
+    "Pune 411004"
+  ],
+  "gstin": "27AAPFU0939F1ZV",
+  "sac_code": "998314",
+  "invoice_prefix": "NDC",
+  "lut_arn": "AD270426001234X",
+  "terms": [
+    "Bank: HDFC Bank, A/c 50100012345678, IFSC HDFC0000123",
+    "Payment due within 15 days"
+  ]
+}

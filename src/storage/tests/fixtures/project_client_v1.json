@@ -1,0 +1,29 @@
+{
+  "id": "610bcb7a-b641-4890-838b-b6e55acad42f",
+  "name": "API Audit",
+  "client_name": "Initrode GmbH",
+  "client_gstin": null,
+  "client_address": [
+    "Hauptstrasse 1",
+    "10115 Berlin"
+  ],
+  "client_region": {
+    "type": "abroad",
+    "country": "Germany"
+  },
+  "billing": {
+    "type": "fixed"
+  },
+  "milestones": [
+    {
+      "id": "156dc41b-de0f-4f5f-a482-922e5ec5bee9",
+      "name": "Audit report",
+      "amount": "90000.00",
+      "due_date": "2026-06-30",
+      "status": "PAID",
+      "invoice_number": "NDC/26-27/001"
+    }
+  ],
+  "total_amount": "90000.00",
+  "status": "PAID"
+}

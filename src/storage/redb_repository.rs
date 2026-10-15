@@ -1,0 +1,224 @@
+use std::sync::Arc;
+
+use accounting_core::{Account, Transaction};
+use redb::{
+    Database, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableHandle, WriteTransaction,
+};
+
+use super::codec::{decode, encode};
+use super::tables::{
+    ACCOUNTS, INVOICE_COUNTERS, INVOICE_SUMMARIES, INVOICES, PROFILE_KEY, PROJECT_SUMMARIES,
+    PROJECTS, SETTINGS, TRANSACTIONS,
+};
+use super::{
+    InvoiceRepository, IssueRecord, PaymentRecord, ProjectRepository, SettingsRepository,
+    StorageError,
+};
+use crate::domain::{
+    BusinessProfile, FiscalYear, Invoice, InvoiceNumber, InvoiceSummary, Project, ProjectId,
+    ProjectSummary,
+};
+
+/// All of compter's records on redb. One type behind every repository trait, so a change that
+/// spans projects, invoices and the ledger is one write transaction.
+#[derive(Clone)]
+pub struct RedbRepository {
+    db: Arc<Database>,
+}
+
+impl RedbRepository {
+    pub(super) fn new(db: Arc<Database>) -> Self {
+        Self { db }
+    }
+}
+
+/// Write a project and its summary
+fn put_project(txn: &WriteTransaction, project: &Project) -> Result<(), StorageError> {
+    let id = project.id();
+    let record = encode(PROJECTS.name(), id, project)?;
+    let summary = encode(PROJECT_SUMMARIES.name(), id, &ProjectSummary::from(project))?;
+    txn.open_table(PROJECTS)?
+        .insert(id.as_uuid(), record.as_slice())?;
+    txn.open_table(PROJECT_SUMMARIES)?
+        .insert(id.as_uuid(), summary.as_slice())?;
+    Ok(())
+}
+
+/// Write an invoice and its summary
+fn put_invoice(txn: &WriteTransaction, invoice: &Invoice) -> Result<(), StorageError> {
+    let key = invoice.number().as_str();
+    let record = encode(INVOICES.name(), key, invoice)?;
+    let summary = encode(
+        INVOICE_SUMMARIES.name(),
+        key,
+        &InvoiceSummary::from(invoice),
+    )?;
+    txn.open_table(INVOICES)?.insert(key, record.as_slice())?;
+    txn.open_table(INVOICE_SUMMARIES)?
+        .insert(key, summary.as_slice())?;
+    Ok(())
+}
+
+/// Add a new ledger transaction, refusing to overwrite one with the same id
+fn put_transaction(txn: &WriteTransaction, transaction: &Transaction) -> Result<(), StorageError> {
+    let id = transaction.id.as_str();
+    let bytes = encode(TRANSACTIONS.name(), id, transaction)?;
+    let mut table = txn.open_table(TRANSACTIONS)?;
+    if table.get(id)?.is_some() {
+        return Err(StorageError::DuplicateTransaction(id.to_owned()));
+    }
+    table.insert(id, bytes.as_slice())?;
+    Ok(())
+}
+
+/// Create the ledger accounts that don't exist yet; existing ones are left as they are
+fn put_missing_accounts(txn: &WriteTransaction, accounts: &[Account]) -> Result<(), StorageError> {
+    let mut table = txn.open_table(ACCOUNTS)?;
+    for account in accounts {
+        if table.get(account.id.as_str())?.is_none() {
+            let bytes = encode(ACCOUNTS.name(), &account.id, account)?;
+            table.insert(account.id.as_str(), bytes.as_slice())?;
+        }
+    }
+    Ok(())
+}
+
+impl ProjectRepository for RedbRepository {
+    fn list(&self) -> Result<Vec<ProjectSummary>, StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(PROJECT_SUMMARIES)?;
+        let mut summaries = Vec::with_capacity(usize::try_from(table.len()?).unwrap_or_default());
+        for row in table.iter()? {
+            let (key, value) = row?;
+            summaries.push(decode(
+                PROJECT_SUMMARIES.name(),
+                key.value(),
+                value.value(),
+            )?);
+        }
+        summaries.sort_by(|a: &ProjectSummary, b| a.name().cmp(b.name()).then(a.id().cmp(&b.id())));
+        Ok(summaries)
+    }
+
+    fn load(&self, id: ProjectId) -> Result<Project, StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(PROJECTS)?;
+        let row = table
+            .get(id.as_uuid())?
+            .ok_or(StorageError::ProjectNotFound(id))?;
+        decode(PROJECTS.name(), id, row.value())
+    }
+
+    fn save(&mut self, project: &Project) -> Result<(), StorageError> {
+        let txn = self.db.begin_write()?;
+        put_project(&txn, project)?;
+        txn.commit()?;
+        Ok(())
+    }
+
+    fn delete(&mut self, id: ProjectId) -> Result<(), StorageError> {
+        let txn = self.db.begin_write()?;
+        {
+            let removed = txn.open_table(PROJECTS)?.remove(id.as_uuid())?.is_some();
+            if !removed {
+                // Dropping the transaction aborts it
+                return Err(StorageError::ProjectNotFound(id));
+            }
+            txn.open_table(PROJECT_SUMMARIES)?.remove(id.as_uuid())?;
+        }
+        txn.commit()?;
+        Ok(())
+    }
+}
+
+impl InvoiceRepository for RedbRepository {
+    fn next_sequence(&self, year: FiscalYear) -> Result<u32, StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(INVOICE_COUNTERS)?;
+        let last = table.get(year.label().as_str())?.map_or(0, |v| v.value());
+        Ok(last.saturating_add(1))
+    }
+
+    fn issue(&mut self, record: &IssueRecord<'_>) -> Result<(), StorageError> {
+        let number = record.invoice.number().as_str();
+        let year = record.invoice.fiscal_year().label();
+        let txn = self.db.begin_write()?;
+        {
+            let mut counters = txn.open_table(INVOICE_COUNTERS)?;
+            let last = counters.get(year.as_str())?.map_or(0, |v| v.value());
+            if record.sequence != last.saturating_add(1) {
+                return Err(StorageError::StaleInvoiceNumber);
+            }
+            counters.insert(year.as_str(), record.sequence)?;
+        }
+        if txn.open_table(INVOICES)?.get(number)?.is_some() {
+            return Err(StorageError::DuplicateInvoice(number.to_owned()));
+        }
+        put_invoice(&txn, record.invoice)?;
+        put_project(&txn, record.project)?;
+        put_missing_accounts(&txn, record.accounts)?;
+        put_transaction(&txn, record.transaction)?;
+        txn.commit()?;
+        Ok(())
+    }
+
+    fn record_payment(&mut self, record: &PaymentRecord<'_>) -> Result<(), StorageError> {
+        let number = record.invoice.number().as_str();
+        let txn = self.db.begin_write()?;
+        if txn.open_table(INVOICES)?.get(number)?.is_none() {
+            return Err(StorageError::InvoiceNotFound(number.to_owned()));
+        }
+        put_invoice(&txn, record.invoice)?;
+        put_project(&txn, record.project)?;
+        put_missing_accounts(&txn, record.accounts)?;
+        put_transaction(&txn, record.transaction)?;
+        txn.commit()?;
+        Ok(())
+    }
+
+    fn list_invoices(&self) -> Result<Vec<InvoiceSummary>, StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(INVOICE_SUMMARIES)?;
+        let mut summaries = Vec::with_capacity(usize::try_from(table.len()?).unwrap_or_default());
+        for row in table.iter()? {
+            let (key, value) = row?;
+            summaries.push(decode(
+                INVOICE_SUMMARIES.name(),
+                key.value(),
+                value.value(),
+            )?);
+        }
+        summaries.sort_by(|a: &InvoiceSummary, b| {
+            b.date().cmp(&a.date()).then(b.number().cmp(a.number()))
+        });
+        Ok(summaries)
+    }
+
+    fn load_invoice(&self, number: &InvoiceNumber) -> Result<Invoice, StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(INVOICES)?;
+        let row = table
+            .get(number.as_str())?
+            .ok_or_else(|| StorageError::InvoiceNotFound(number.to_string()))?;
+        decode(INVOICES.name(), number, row.value())
+    }
+}
+
+impl SettingsRepository for RedbRepository {
+    fn load_profile(&self) -> Result<Option<BusinessProfile>, StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(SETTINGS)?;
+        let row = table.get(PROFILE_KEY)?;
+        row.map(|value| decode(SETTINGS.name(), PROFILE_KEY, value.value()))
+            .transpose()
+    }
+
+    fn save_profile(&mut self, profile: &BusinessProfile) -> Result<(), StorageError> {
+        let bytes = encode(SETTINGS.name(), PROFILE_KEY, profile)?;
+        let txn = self.db.begin_write()?;
+        txn.open_table(SETTINGS)?
+            .insert(PROFILE_KEY, bytes.as_slice())?;
+        txn.commit()?;
+        Ok(())
+    }
+}

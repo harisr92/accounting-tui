@@ -6,9 +6,10 @@ use redb::{Database, DatabaseError, ReadableTable};
 
 use super::migrations;
 use super::tables::{
-    ACCOUNTS, META, PROJECT_SUMMARIES, PROJECTS, SCHEMA_KEY, SCHEMA_VERSION, TRANSACTIONS,
+    ACCOUNTS, INVOICE_COUNTERS, INVOICE_SUMMARIES, INVOICES, META, PROJECT_SUMMARIES, PROJECTS,
+    SCHEMA_KEY, SCHEMA_VERSION, SETTINGS, TRANSACTIONS,
 };
-use super::{DataDir, RedbLedgerStorage, RedbProjectRepository, StorageError};
+use super::{DataDir, RedbLedgerStorage, RedbRepository, StorageError};
 
 /// The open database; hands out repositories that share it
 #[derive(Clone)]
@@ -36,8 +37,9 @@ impl Store {
         Self::init(db)
     }
 
-    pub fn projects(&self) -> RedbProjectRepository {
-        RedbProjectRepository::new(Arc::clone(&self.db))
+    /// Projects, invoices and settings, sharing this database
+    pub fn repository(&self) -> RedbRepository {
+        RedbRepository::new(Arc::clone(&self.db))
     }
 
     pub fn ledger(&self) -> RedbLedgerStorage {
@@ -70,6 +72,10 @@ impl Store {
             txn.open_table(PROJECT_SUMMARIES)?;
             txn.open_table(ACCOUNTS)?;
             txn.open_table(TRANSACTIONS)?;
+            txn.open_table(INVOICES)?;
+            txn.open_table(INVOICE_SUMMARIES)?;
+            txn.open_table(INVOICE_COUNTERS)?;
+            txn.open_table(SETTINGS)?;
         }
         txn.commit()?;
         Ok(Self { db: Arc::new(db) })

@@ -47,4 +47,12 @@ impl DataDir {
     pub fn database_path(&self) -> PathBuf {
         self.root.join(DATABASE_FILE)
     }
+
+    /// `<root>/invoices/2026-27/INV-26-27-004.pdf`
+    pub fn invoice_pdf_path(&self, year_label: &str, file_stem: &str) -> PathBuf {
+        self.root
+            .join("invoices")
+            .join(year_label)
+            .join(format!("{file_stem}.pdf"))
+    }
 }

@@ -9,7 +9,7 @@ use crate::storage::{ProjectRepository, StorageError, Store};
 fn store_with_samples() -> (Store, Vec<Project>) {
     let store = Store::in_memory().unwrap();
     let projects = demo::projects().unwrap();
-    let mut repo = store.projects();
+    let mut repo = store.repository();
     for project in &projects {
         repo.save(project).unwrap();
     }
@@ -30,7 +30,7 @@ fn write_raw(store: &Store, id: ProjectId, json: &serde_json::Value) {
 #[test]
 fn saves_and_loads_projects() {
     let (store, projects) = store_with_samples();
-    let repo = store.projects();
+    let repo = store.repository();
     for project in &projects {
         assert_eq!(&repo.load(project.id()).unwrap(), project);
     }
@@ -40,7 +40,7 @@ fn saves_and_loads_projects() {
 fn lists_summaries_sorted_by_name() {
     let (store, _) = store_with_samples();
     let names: Vec<String> = store
-        .projects()
+        .repository()
         .list()
         .unwrap()
         .iter()
@@ -55,9 +55,9 @@ fn lists_summaries_sorted_by_name() {
 #[test]
 fn save_replaces_project_and_summary_together() {
     let (store, mut projects) = store_with_samples();
-    let mut repo = store.projects();
+    let mut repo = store.repository();
     let website = &mut projects[0];
-    website.invoice_milestone(2).unwrap();
+    website.invoice_milestone(2, "T-1").unwrap();
     repo.save(website).unwrap();
 
     let summary = repo
@@ -77,7 +77,7 @@ fn save_replaces_project_and_summary_together() {
 #[test]
 fn delete_removes_project_and_summary() {
     let (store, projects) = store_with_samples();
-    let mut repo = store.projects();
+    let mut repo = store.repository();
     let id = projects[1].id();
     repo.delete(id).unwrap();
 
@@ -94,7 +94,7 @@ fn delete_removes_project_and_summary() {
 #[test]
 fn missing_project_is_not_found() {
     let store = Store::in_memory().unwrap();
-    let mut repo = store.projects();
+    let mut repo = store.repository();
     let id = ProjectId::generate();
     assert!(matches!(
         repo.load(id),
@@ -109,7 +109,7 @@ fn missing_project_is_not_found() {
 #[test]
 fn stored_derived_fields_are_recomputed_on_load() {
     let store = Store::in_memory().unwrap();
-    let mut repo = store.projects();
+    let mut repo = store.repository();
     let mut project = Project::new("Site", "Acme", None, Billing::Fixed).unwrap();
     let due = chrono::NaiveDate::from_ymd_opt(2026, 10, 1).unwrap();
     project
@@ -130,7 +130,7 @@ fn stored_derived_fields_are_recomputed_on_load() {
 #[test]
 fn invalid_stored_project_is_rejected_with_its_key() {
     let store = Store::in_memory().unwrap();
-    let mut repo = store.projects();
+    let mut repo = store.repository();
     let project = Project::new("Site", "Acme", None, Billing::Fixed).unwrap();
     repo.save(&project).unwrap();
 

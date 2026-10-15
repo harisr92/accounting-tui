@@ -1,0 +1,66 @@
+{
+  "number": "NDC/25-26/001",
+  "date": "2026-03-10",
+  "kind": "plain",
+  "project_id": "450a9e79-c1c3-4e60-ad27-0adeadee7e9d",
+  "milestone_id": "94576121-d144-4f95-81b1-01c2bc4865e9",
+  "client_name": "Umbrella Analytics",
+  "milestone_name": "Ingestion",
+  "amounts": {
+    "taxable_value": "45000.00",
+    "cgst": "0",
+    "sgst": "0",
+    "igst": "0",
+    "total": "45000.00"
+  },
+  "print": {
+    "title": "Invoice",
+    "invoice_number": "NDC/25-26/001",
+    "invoice_date": "10-03-2026",
+    "place_of_supply": "29",
+    "is_inter_state": false,
+    "seller": {
+      "name": "Nila Design & Code",
+      "address": [
+        "12 FC Road",
+        "Pune 411004"
+      ]
+    },
+    "buyer": {
+      "name": "Umbrella Analytics",
+      "address": [
+        "4th Floor, Prestige Tower",
+        "Bengaluru 560001"
+      ],
+      "gstin": "29AAPFU0939F1ZR"
+    },
+    "rows": [
+      {
+        "serial": 1,
+        "hsn_sac": "998314",
+        "description": "Data Pipeline - Ingestion",
+        "quantity": "1",
+        "rate": "45,000.00",
+        "taxable_value": "45,000.00",
+        "gst_rate": "-",
+        "tax": "0.00",
+        "amount": "45,000.00"
+      }
+    ],
+    "taxable_value": "45,000.00",
+    "tax_lines": [],
+    "total_tax": "0.00",
+    "total": "45,000.00",
+    "total_in_words": "Rupees Forty Five Thousand Only"
+  },
+  "terms": [
+    "Bank: HDFC Bank, A/c 50100012345678, IFSC HDFC0000123",
+    "Payment due within 15 days"
+  ],
+  "status": {
+    "state": "paid",
+    "date": "2026-03-25",
+    "received": "40500.00",
+    "tds": "4500.00"
+  }
+}

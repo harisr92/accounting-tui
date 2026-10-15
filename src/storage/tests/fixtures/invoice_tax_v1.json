@@ -1,0 +1,88 @@
+{
+  "number": "NDC/26-27/005",
+  "date": "2026-10-10",
+  "kind": "tax",
+  "project_id": "8432173d-8a70-48f5-bf5b-c3dae15644ec",
+  "milestone_id": "6dac713c-711a-4d74-a13d-bda9f797ca9f",
+  "client_name": "Globex Labs",
+  "milestone_name": "Prototype",
+  "amounts": {
+    "taxable_value": "15750.00",
+    "cgst": "0",
+    "sgst": "0",
+    "igst": "2835.00",
+    "total": "18585.00"
+  },
+  "print": {
+    "title": "Tax Invoice",
+    "invoice_number": "NDC/26-27/005",
+    "invoice_date": "10-10-2026",
+    "place_of_supply": "29",
+    "is_inter_state": true,
+    "seller": {
+      "name": "Nila Design & Code",
+      "address": [
+        "12 FC Road",
+        "Pune 411004"
+      ],
+      "gstin": "27AAPFU0939F1ZV"
+    },
+    "buyer": {
+      "name": "Globex Labs",
+      "address": [
+        "22 Residency Road",
+        "Bengaluru 560025"
+      ]
+    },
+    "rows": [
+      {
+        "serial": 1,
+        "hsn_sac": "998314",
+        "description": "Mobile App - Prototype (10h 30m @ Rs. 1,500.00/hour)",
+        "quantity": "1",
+        "rate": "15,750.00",
+        "taxable_value": "15,750.00",
+        "gst_rate": "18%",
+        "tax": "2,835.00",
+        "amount": "18,585.00"
+      }
+    ],
+    "taxable_value": "15,750.00",
+    "tax_lines": [
+      {
+        "label": "IGST",
+        "amount": "2,835.00"
+      }
+    ],
+    "total_tax": "2,835.00",
+    "total": "18,585.00",
+    "total_in_words": "Rupees Eighteen Thousand Five Hundred Eighty Five Only"
+  },
+  "terms": [
+    "Bank: HDFC Bank, A/c 50100012345678, IFSC HDFC0000123",
+    "Payment due within 15 days"
+  ],
+  "gst": {
+    "invoice_number": "NDC/26-27/005",
+    "invoice_date": "2026-10-10",
+    "seller_gstin": "27AAPFU0939F1ZV",
+    "buyer": {
+      "unregistered": {
+        "place_of_supply": "29"
+      }
+    },
+    "line_items": [
+      {
+        "hsn_sac": "998314",
+        "description": "Mobile App - Prototype (10h 30m @ Rs. 1,500.00/hour)",
+        "quantity": "1",
+        "unit_price": "15750.00",
+        "gst_rate": "18",
+        "treatment": "taxable"
+      }
+    ]
+  },
+  "status": {
+    "state": "issued"
+  }
+}

@@ -25,6 +25,20 @@ pub enum StorageError {
     UnsupportedSchema(u32),
     #[error("project {0} not found")]
     ProjectNotFound(ProjectId),
+    #[error("invoice {0} not found")]
+    InvoiceNotFound(String),
+    #[error("invoice {0} already exists")]
+    DuplicateInvoice(String),
+    #[error("ledger transaction {0} already exists")]
+    DuplicateTransaction(String),
+    #[error("another invoice was numbered first; try again")]
+    StaleInvoiceNumber,
+    #[error("could not write {path}")]
+    WriteFile {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
     #[error("invalid record {key} in table {table}")]
     Codec {
         table: &'static str,
