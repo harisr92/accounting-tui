@@ -1,0 +1,12 @@
+[package]
+name = "compter-tui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+accounting-core = { git = "https://github.com/harisr92/accounting-blue.git", rev = "3467ec6114e57ec6fba7b7d9c066382da0d4fa4a", features = ["pdf"] }
+bigdecimal = "0.4"
+chrono = "0.4"
+color-eyre = "0.6.5"
+ratatui = { version = "0.30.2", default-features = false, features = ["termion"] }
+termion = "4"
