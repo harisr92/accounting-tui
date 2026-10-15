@@ -27,6 +27,11 @@ pub fn money(amount: &BigDecimal) -> String {
     format!("₹{}", format_inr(amount))
 }
 
+/// Logged time as `6h 30m`
+pub fn duration(minutes: u32) -> String {
+    format!("{}h {:02}m", minutes / 60, minutes % 60)
+}
+
 /// A `width` x `height` rect centred in `area`, clamped to fit
 pub fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
     let [row] = Layout::vertical([Constraint::Length(height.min(area.height))])

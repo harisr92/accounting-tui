@@ -30,3 +30,6 @@ pub fn draw(frame: &mut Frame, app: &App) {
         popup::render_help(frame, app);
     }
 }
+
+#[cfg(test)]
+mod tests;

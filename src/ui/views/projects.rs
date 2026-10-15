@@ -1,14 +1,16 @@
+use std::borrow::Cow;
+
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Row, Table};
 use termion::event::Key;
 
-use crate::domain::Project;
+use crate::domain::{Billing, Project};
 use crate::ui::selection::{Nav, Selection};
 use crate::ui::theme::Theme;
 use crate::ui::view::{Action, KeyHint, View};
-use crate::ui::widgets::{money, panel, status_span};
+use crate::ui::widgets::{duration, money, panel, status_span};
 
 const HINTS: &[KeyHint] = &[
     KeyHint::new("Tab", "focus"),
@@ -19,6 +21,10 @@ const HINTS: &[KeyHint] = &[
 
 /// Wide enough for the longest status label
 const STATUS_WIDTH: u16 = 9;
+/// Fits up to `999h 59m`
+const HOURS_WIDTH: u16 = 8;
+/// Fits up to `₹99,99,999.99`
+const AMOUNT_WIDTH: u16 = 13;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Focus {
@@ -51,8 +57,8 @@ impl ProjectsView {
     fn render_list(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let rows = self.projects.iter().map(|p| {
             Row::new(vec![
-                Line::raw(p.name.as_str()),
-                Line::from(status_span(p.status, theme)),
+                Line::raw(p.name()),
+                Line::from(status_span(p.status(), theme)),
             ])
         });
         let widths = [Constraint::Fill(1), Constraint::Length(STATUS_WIDTH)];
@@ -74,12 +80,12 @@ impl ProjectsView {
         };
 
         let [summary_area, milestones_area] =
-            Layout::vertical([Constraint::Length(5), Constraint::Min(0)]).areas(area);
+            Layout::vertical([Constraint::Length(6), Constraint::Min(0)]).areas(area);
 
-        let block = panel(&project.name, false, theme).title(
+        let block = panel(project.name(), false, theme).title(
             Line::from(vec![
                 Span::raw(" "),
-                status_span(project.status, theme),
+                status_span(project.status(), theme),
                 Span::raw(" "),
             ])
             .right_aligned(),
@@ -87,18 +93,32 @@ impl ProjectsView {
         let inner = block.inner(summary_area);
         frame.render_widget(block, summary_area);
 
-        let [client_area, stats_area] =
-            Layout::vertical([Constraint::Length(1), Constraint::Length(2)]).areas(inner);
+        let [client_area, billing_area, stats_area] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(2),
+        ])
+        .areas(inner);
+        let billing = match project.billing() {
+            Billing::Fixed => Span::raw("Fixed price"),
+            Billing::Hourly { rate } => Span::raw(format!("Hourly {}/h", money(rate))),
+        };
         let client = Line::from(vec![
             Span::styled("Client ", theme.dim()),
-            Span::raw(project.client_name.as_str()),
+            Span::raw(project.client_name()),
             Span::styled("   GSTIN ", theme.dim()),
-            Span::raw(project.client_gstin.as_deref().unwrap_or("unregistered")),
+            Span::raw(
+                project
+                    .client_gstin()
+                    .map_or("unregistered", |g| g.as_str()),
+            ),
         ]);
         frame.render_widget(client, client_area);
+        let billing = Line::from(vec![Span::styled("Billing ", theme.dim()), billing]);
+        frame.render_widget(billing, billing_area);
 
         let stats = [
-            ("Total", money(&project.total_amount)),
+            ("Total", money(project.total_amount())),
             ("Paid", money(&project.paid_amount())),
             ("Outstanding", money(&project.outstanding_amount())),
         ];
@@ -111,27 +131,35 @@ impl ProjectsView {
             frame.render_widget(stat, *cell);
         }
 
-        let rows = project.milestones.iter().map(|m| {
+        let hourly = project.billing().rate().is_some();
+        let rows = project.milestones().iter().map(|m| {
+            let hours: Cow<'static, str> = if hourly {
+                duration(m.logged_minutes()).into()
+            } else {
+                "—".into()
+            };
             Row::new(vec![
-                Line::raw(m.name.as_str()),
-                Line::raw(money(&m.amount)).right_aligned(),
-                Line::raw(m.due_date.format("%Y-%m-%d").to_string()),
-                Line::from(status_span(m.status, theme)),
+                Line::raw(m.name()),
+                Line::raw(hours).right_aligned(),
+                Line::raw(money(m.amount())).right_aligned(),
+                Line::raw(m.due_date().format("%Y-%m-%d").to_string()),
+                Line::from(status_span(m.status(), theme)),
             ])
         });
         let widths = [
             Constraint::Fill(1),
-            Constraint::Length(14),
-            Constraint::Length(12),
+            Constraint::Length(HOURS_WIDTH),
+            Constraint::Length(AMOUNT_WIDTH),
+            Constraint::Length(10),
             Constraint::Length(STATUS_WIDTH),
         ];
         let table = Table::new(rows, widths)
-            .header(Row::new(["Name", "Amount", "Due", "Status"]).style(theme.key()))
-            .column_spacing(2)
+            .header(Row::new(["Name", "Hours", "Amount", "Due", "Status"]).style(theme.key()))
+            .column_spacing(1)
             .block(panel("Milestones", self.focus == Focus::Milestones, theme))
             .row_highlight_style(theme.selected)
             .highlight_symbol("> ");
-        let mut state = self.milestone_sel.table_state(project.milestones.len());
+        let mut state = self.milestone_sel.table_state(project.milestones().len());
         frame.render_stateful_widget(table, milestones_area, &mut state);
     }
 }
@@ -156,7 +184,7 @@ impl View for ProjectsView {
                     self.milestone_sel.reset();
                 }
                 Focus::Milestones => {
-                    let len = self.selected().map_or(0, |p| p.milestones.len());
+                    let len = self.selected().map_or(0, |p| p.milestones().len());
                     self.milestone_sel.move_by(nav, len);
                 }
             }
