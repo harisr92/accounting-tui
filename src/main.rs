@@ -21,9 +21,11 @@ use compter_tui::ui::{self, theme::Theme, view::View};
 
 const TICK_RATE: Duration = Duration::from_millis(250);
 
-const USAGE: &str = "usage: compter [--demo]
+const USAGE: &str = "usage: compter [--demo] [-V | --version] [-h | --help]
 
-  --demo   try compter on sample projects kept in memory; nothing is saved
+  --demo           try compter on sample projects kept in memory; nothing is saved
+  -V, --version    display version information
+  -h, --help       display this help text
 
 Data is stored in $COMPTER_HOME, $XDG_DATA_HOME/compter or ~/.local/share/compter.";
 
@@ -32,6 +34,10 @@ fn main() -> Result<ExitCode> {
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
             "--demo" => demo_mode = true,
+            "-V" | "--version" => {
+                println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+                return Ok(ExitCode::SUCCESS);
+            }
             "-h" | "--help" => {
                 println!("{USAGE}");
                 return Ok(ExitCode::SUCCESS);
