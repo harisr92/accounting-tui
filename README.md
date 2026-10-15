@@ -24,7 +24,7 @@ Tab focus · j/k move · n new · i invoice · 1-9/←→ tabs · ? help · q qu
 
 ## Status
 
-**Steps 1–2 of 7 are done**: the layout shell and the domain model (billing, time tracking, status transitions, validation, serde). The app still runs on built-in sample data. Nothing is saved yet.
+**Steps 1–3 of 7 are done**: the layout shell, the domain model (billing, time tracking, status transitions, validation, serde) and redb storage. The TUI still runs on built-in sample data; step 4 connects it to the database.
 
 ## Build and run
 
@@ -111,7 +111,7 @@ The financial year is the Indian April–March year (`FY 2026-27`).
                                                 │ reads
    ┌────────────┐      ┌────────────┐     ┌─────▼─────┐
    │  storage/  │ ───▶ │ services/  │ ──▶ │  domain/  │  Project, Milestone, Billing, DomainError
-   │ (step 3)   │      │ (step 5+)  │     └───────────┘
+   │   (redb)   │      │ (step 5+)  │     └───────────┘
    └────────────┘      └─────┬──────┘
                              ▼
                       accounting-core  (GstInvoice, Ledger, PDF, GSTR-1, reports)
@@ -123,7 +123,17 @@ src/
 ├── lib.rs               library root; everything below is the `compter_tui` crate
 ├── app.rs               App state and global key bindings
 ├── event.rs             termion input and tick threads
-├── mock.rs              sample data (removed in step 4)
+├── mock.rs              sample data (TUI until step 4; also test fixtures)
+├── storage/             redb persistence
+│   ├── store.rs         Store: open/in-memory, schema check, hands out repositories
+│   ├── repository.rs    ProjectRepository trait
+│   ├── projects.rs      RedbProjectRepository
+│   ├── ledger.rs        RedbLedgerStorage (accounting-core AccountStore + TransactionStore)
+│   ├── tables.rs        every table definition
+│   ├── codec.rs         JSON encode/decode of values
+│   ├── migrations.rs    upgrade steps between schema versions
+│   ├── data_dir.rs      where compter.redb lives
+│   └── error.rs         StorageError
 ├── domain/              pure types and rules
 │   ├── project.rs       Project, ProjectId, ProjectStatus, mutations, validated serde
 │   ├── milestone.rs     Milestone, MilestoneStatus, transitions
@@ -140,31 +150,44 @@ src/
     └── views/           projects (live), placeholder (Dashboard, Invoices, Reports)
 ```
 
-Unit tests sit in a `tests/` folder beside the code they cover (`src/domain/tests/`, `src/ui/tests/`, and `src/tests/` for `app.rs`), one `<file>_tests.rs` per source file.
+Unit tests sit in a `tests/` folder beside the code they cover (`src/domain/tests/`, `src/storage/tests/`, `src/ui/tests/`, and `src/tests/` for `app.rs`), one `<file>_tests.rs` per source file. Integration tests that reopen a real database file are in the top-level `tests/` directory.
 
 Each tab implements `View`. A new screen is a new `View` registered in `main.rs`; the core loop doesn't change. See `CLAUDE.md` for the SOLID, DRY and memory rules the code follows.
 
-## Storage *(step 3)*
+## Storage
 
-Plain files under `~/.local/share/compter/` (override with `$COMPTER_HOME`):
+Everything lives in one [redb](https://www.redb.org) database file, `compter.redb`. redb is an embedded, ACID key-value store. The file goes in the first of these that is set:
 
-```
-projects/index.json        lightweight list: id, name, client, status, total
-projects/<id>.json         full project with milestones
-invoices/<number>.json     issued GST invoices (+ <number>.pdf)
-ledger/accounts.json       chart of accounts
-ledger/transactions.json   journal
-config.toml                seller name, GSTIN, address, invoice prefix
-```
+1. `$COMPTER_HOME`
+2. `$XDG_DATA_HOME/compter`
+3. `$HOME/.local/share/compter`
 
-Writes are atomic (temp file, then rename). The ledger files back an `accounting-core` `AccountStore` + `TransactionStore` implementation.
+| Table | Key | Value |
+|-------|-----|-------|
+| `meta` | `"schema_version"` | `1` |
+| `projects` | project UUID | full project with milestones and time entries |
+| `project_summaries` | project UUID | id, name, client, status, total, for list views |
+| `accounts` | account id | accounting-core `Account` |
+| `transactions` | transaction id | accounting-core `Transaction` |
+
+- **Atomic**: a project and its summary are written in one transaction, so the list can never disagree with the records. A crash leaves the last committed state.
+- **Low memory**: nothing is cached. Lists read only the small summary rows; a full project is read when you open it. The ledger store answers each query from the database.
+- **Validated on load**: values are stored as JSON bytes and decoded through the same checks as the domain constructors. A hand-edited bad record fails with its table and key instead of loading.
+- **Single process**: redb locks the file, so a second `compter` is refused with a clear error instead of corrupting data.
+- **Versioned, with upgrades**: the `meta` table records the schema version. Opening an older database runs the upgrade steps in `storage/migrations.rs` within one transaction. A database from a *newer* compter is refused rather than guessed at. Saved-format fixtures (`storage/tests/fixtures/`) are loaded on every `cargo test`, so a change that would stop existing records from loading fails the build first.
+
+`Store::open(&DataDir)` opens the file, and `Store::in_memory()` gives the same database in memory for tests. From a store you get:
+- `store.projects()`: a `ProjectRepository` (list, load, save, delete)
+- `store.ledger()`: an accounting-core `AccountStore` + `TransactionStore`, so `Ledger::new(store.ledger())` works directly
+
+The TUI still runs on sample data until step 4 switches it to the store.
 
 ## Roadmap
 
 1. ✅ **TUI layout shell**: tabs, project list and milestone table, footer hints, help popup
 2. ✅ **Domain model**: serde, hourly billing and time entries, status transitions, validation
-3. **File storage**: JSON repositories, ledger storage for `accounting-core`
+3. ✅ **Storage**: redb database, project repository, ledger storage for `accounting-core`
 4. **Wire storage into the TUI**: load and save, forms to create and edit projects and milestones, log hours
-5. **Invoicing**: milestone → `GstInvoice` (SAC code, CGST+SGST or IGST), validation, preview, PDF export, ledger posting, record payment
+5. **Invoicing** (+ invoice and settings tables): milestone → `GstInvoice` (SAC code, CGST+SGST or IGST), validation, preview, PDF export, ledger posting, record payment
 6. **Tax and reports**: dashboard, income statement per FY, receivables, GSTR-1 JSON export, per-client income summary for ITR (incl. 44ADA view)
 7. **Polish**: search and filter, settings screen, error toasts, theming, integration tests

@@ -1,7 +1,9 @@
 use bigdecimal::{BigDecimal, Zero};
 use chrono::NaiveDate;
 
-use crate::domain::{Billing, DomainError, MilestoneStatus, Project, ProjectStatus, TimeEntry};
+use crate::domain::{
+    Billing, DomainError, MilestoneStatus, Project, ProjectStatus, ProjectSummary, TimeEntry,
+};
 
 const GSTIN: &str = "29AAPFU0939F1ZR";
 
@@ -230,4 +232,17 @@ fn fixed_amounts_round_to_paise_before_validation() {
         p.add_milestone("B", date(), amount("0.004")),
         Err(DomainError::NonPositiveAmount)
     ));
+}
+
+#[test]
+fn summary_mirrors_project() {
+    let mut p = fixed();
+    p.add_milestone("A", date(), rupees(100)).unwrap();
+    p.invoice_milestone(0).unwrap();
+    let summary = ProjectSummary::from(&p);
+    assert_eq!(summary.id(), p.id());
+    assert_eq!(summary.name(), "Site");
+    assert_eq!(summary.client_name(), "Acme");
+    assert_eq!(summary.status(), ProjectStatus::Completed);
+    assert_eq!(summary.total_amount(), &BigDecimal::from(100));
 }

@@ -4,6 +4,7 @@ pub mod app;
 pub mod domain;
 pub mod event;
 pub mod mock;
+pub mod storage;
 pub mod ui;
 
 #[cfg(test)]

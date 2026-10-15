@@ -15,7 +15,7 @@ The crate is a library (`src/lib.rs`, `compter_tui`) plus a thin binary (`src/ma
 
 ```
 domain/    pure types and rules: no I/O, no UI, no termion/ratatui imports
-storage/   file I/O behind repository traits (step 3)
+storage/   redb database behind ProjectRepository and the ledger store
 services/  use-cases: invoicing, payments, tax; depend on repository traits (step 5+)
 app.rs     application state and global key handling
 event.rs   input and tick threads
@@ -33,6 +33,23 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - Status changes go through the explicit transition methods (`invoice_milestone`, `record_payment`). No status setters.
 - Money is `BigDecimal`, rounded with `with_scale_round(2, RoundingMode::HalfUp)`. Durations are whole minutes (`u32`).
 - Reuse accounting-core value types (`Gstin`) instead of re-validating strings.
+
+## Storage (redb)
+
+- One database file, `compter.redb`, opened once via `storage::Store`. Code outside `storage/` never touches redb types; it uses `ProjectRepository` or the ledger store.
+- Every `TableDefinition` lives in `storage/tables.rs`. A new table also goes into `Store::init`.
+- Users' real records live in this file, so **stored types evolve compatibly**. This covers any type that is serialised into a table: `Project`, `Milestone`, `TimeEntry`, `Billing`, `ProjectSummary`, and later invoices and settings.
+  - **Adding a field**: give it `#[serde(default)]` (or `Option<_>`) so older records still load. No version bump.
+  - **Renaming, removing or retyping a field, or changing an enum's tags**: bump `SCHEMA_VERSION` and append an upgrade step to `storage/migrations.rs` that rewrites the old rows. Steps run in `Store::init`, inside the same write transaction as the version bump, so a failed upgrade leaves the file untouched.
+  - Never use `#[serde(deny_unknown_fields)]` on stored types.
+  - The fixtures in `storage/tests/fixtures/*_v1.json` are records in the shipped format. **Never edit them** to make a test pass. If `format_tests` fails, the change is breaking: add a default or a migration. When the format version changes, add new fixtures next to the old ones.
+  - A database with a newer version than `SCHEMA_VERSION` is refused (`UnsupportedSchema`); never guess at it.
+- Values are encoded and decoded only through `storage/codec.rs` (JSON bytes). Don't switch to postcard or bincode: they can't decode internally tagged enums like `Billing`.
+- Decoding goes through the domain's validated `try_from`. Storage never builds domain types any other way.
+- A logical write that touches several tables (a project + its summary) happens in **one** write transaction. Return before `commit()` to abort.
+- redb's per-operation errors convert into `StorageError` via `?`. Map `StorageError` to accounting-core errors with `LedgerError::from`.
+- accounting-core's store traits are async; we implement them with sync redb calls and drive them with `pollster::block_on`. Don't add an async runtime.
+- Tests use `Store::in_memory()`. Tests that reopen the file use `tempfile` and go in the top-level `tests/`.
 
 ## SOLID
 
@@ -56,7 +73,7 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - Formatting dynamic values (money, dates) while rendering is fine. Only redraw when something changed: the `App` dirty flag and `take_dirty()`.
 - Fieldless `Copy` enums for statuses, `Copy` newtype ids (`ProjectId(Uuid)`), `u32` minutes. Use `Vec::with_capacity` when the size is known. No `Rc<RefCell<_>>` graphs.
 - Channels are bounded (`sync_channel`). Producers that can drop work (ticks) use `try_send`.
-- Storage (step 3+): load a small project index for lists and load full records only on selection. Write files with `BufWriter` and atomic tmp-then-rename.
+- Storage: lists read summary tables (`project_summaries`), never full records. Load a full record only when it is opened. Repositories and the ledger store cache nothing in memory.
 
 ## Style
 

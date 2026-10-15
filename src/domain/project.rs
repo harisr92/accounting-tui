@@ -53,13 +53,17 @@ impl fmt::Display for ProjectStatus {
 }
 
 /// Stable project identifier
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ProjectId(Uuid);
 
 impl ProjectId {
     pub fn generate() -> Self {
         Self(Uuid::new_v4())
+    }
+
+    pub fn as_uuid(self) -> Uuid {
+        self.0
     }
 }
 
@@ -116,6 +120,52 @@ impl TryFrom<RawProject> for Project {
         project.validate()?;
         project.refresh();
         Ok(project)
+    }
+}
+
+/// What list views need about a project, without its milestones
+///
+/// Stored next to each project and rewritten with it, so lists never load full records.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectSummary {
+    id: ProjectId,
+    name: Box<str>,
+    client_name: Box<str>,
+    status: ProjectStatus,
+    total_amount: BigDecimal,
+}
+
+impl ProjectSummary {
+    pub fn id(&self) -> ProjectId {
+        self.id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn client_name(&self) -> &str {
+        &self.client_name
+    }
+
+    pub fn status(&self) -> ProjectStatus {
+        self.status
+    }
+
+    pub fn total_amount(&self) -> &BigDecimal {
+        &self.total_amount
+    }
+}
+
+impl From<&Project> for ProjectSummary {
+    fn from(project: &Project) -> Self {
+        Self {
+            id: project.id,
+            name: project.name.as_str().into(),
+            client_name: project.client_name.as_str().into(),
+            status: project.status,
+            total_amount: project.total_amount.clone(),
+        }
     }
 }
 

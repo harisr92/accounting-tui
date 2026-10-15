@@ -10,7 +10,7 @@ pub use billing::{Billing, TimeEntry};
 pub use error::DomainError;
 pub use fiscal_year::FiscalYear;
 pub use milestone::{Milestone, MilestoneStatus};
-pub use project::{Project, ProjectId, ProjectStatus};
+pub use project::{Project, ProjectId, ProjectStatus, ProjectSummary};
 
 #[cfg(test)]
 mod tests;
