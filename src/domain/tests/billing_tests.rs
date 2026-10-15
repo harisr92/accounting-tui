@@ -37,3 +37,15 @@ fn loading_validates_billing_and_time_entries() {
     let zero_minutes = r#"{"date":"2026-10-01","minutes":0,"note":""}"#;
     assert!(serde_json::from_str::<TimeEntry>(zero_minutes).is_err());
 }
+
+#[test]
+fn time_entry_is_at_most_one_day() {
+    let date = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+    assert!(TimeEntry::new(date, 24 * 60, "").is_ok());
+    assert!(matches!(
+        TimeEntry::new(date, 90 * 60, "typed 90 meaning minutes"),
+        Err(DomainError::EntryTooLong)
+    ));
+    let stored = r#"{"date":"2026-10-01","minutes":5400,"note":""}"#;
+    assert!(serde_json::from_str::<TimeEntry>(stored).is_err());
+}

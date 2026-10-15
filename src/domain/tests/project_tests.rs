@@ -246,3 +246,94 @@ fn summary_mirrors_project() {
     assert_eq!(summary.status(), ProjectStatus::Completed);
     assert_eq!(summary.total_amount(), &BigDecimal::from(100));
 }
+
+#[test]
+fn edits_pending_milestones_only() {
+    let mut p = fixed();
+    p.add_milestone("A", date(), rupees(100)).unwrap();
+    let due = NaiveDate::from_ymd_opt(2026, 12, 1).unwrap();
+    p.edit_milestone(0, "Design", due, rupees(250)).unwrap();
+    let m = &p.milestones()[0];
+    assert_eq!((m.name(), m.due_date()), ("Design", due));
+    assert_eq!(p.total_amount(), &BigDecimal::from(250));
+
+    assert!(matches!(
+        p.edit_milestone(0, "", due, rupees(1)),
+        Err(DomainError::EmptyField("milestone name"))
+    ));
+    assert!(matches!(
+        p.edit_milestone(0, "X", due, None),
+        Err(DomainError::BillingMismatch)
+    ));
+    p.invoice_milestone(0).unwrap();
+    assert!(matches!(
+        p.edit_milestone(0, "X", due, rupees(1)),
+        Err(DomainError::MilestoneLocked)
+    ));
+    assert_eq!(p.milestones()[0].name(), "Design");
+}
+
+#[test]
+fn undo_last_time_entry() {
+    let mut p = hourly();
+    p.add_milestone("A", date(), None).unwrap();
+    assert!(matches!(
+        p.remove_last_time_entry(0),
+        Err(DomainError::NoTimeEntries)
+    ));
+    p.log_time(0, TimeEntry::new(date(), 60, "ok").unwrap())
+        .unwrap();
+    p.log_time(0, TimeEntry::new(date(), 600, "typo").unwrap())
+        .unwrap();
+    assert_eq!(p.remove_last_time_entry(0).unwrap().note(), "typo");
+    assert_eq!(p.total_amount(), &BigDecimal::from(1500));
+}
+
+#[test]
+fn update_details_is_all_or_nothing() {
+    let mut p = fixed();
+    p.update_details("Shop", "Globex", None).unwrap();
+    assert_eq!((p.name(), p.client_name()), ("Shop", "Globex"));
+    assert!(p.client_gstin().is_none());
+
+    assert!(p.update_details("New", "Client", Some("bad")).is_err());
+    assert_eq!((p.name(), p.client_name()), ("Shop", "Globex"));
+}
+
+#[test]
+fn rate_change_reprices_pending_only_and_type_is_locked_by_milestones() {
+    let mut p = hourly();
+    p.add_milestone("Billed", date(), None).unwrap();
+    p.add_milestone("Open", date(), None).unwrap();
+    p.log_time(0, TimeEntry::new(date(), 60, "").unwrap())
+        .unwrap();
+    p.log_time(1, TimeEntry::new(date(), 60, "").unwrap())
+        .unwrap();
+    p.invoice_milestone(0).unwrap();
+
+    p.set_billing(Billing::hourly(BigDecimal::from(2000)).unwrap())
+        .unwrap();
+    assert_eq!(p.milestones()[0].amount(), &BigDecimal::from(1500));
+    assert_eq!(p.milestones()[1].amount(), &BigDecimal::from(2000));
+
+    assert!(matches!(
+        p.set_billing(Billing::Fixed),
+        Err(DomainError::BillingMismatch)
+    ));
+    let mut empty = hourly();
+    empty.set_billing(Billing::Fixed).unwrap();
+    assert_eq!(empty.billing(), &Billing::Fixed);
+}
+
+#[test]
+fn only_unbilled_projects_can_be_deleted() {
+    let mut p = fixed();
+    assert!(p.ensure_deletable().is_ok());
+    p.add_milestone("A", date(), rupees(100)).unwrap();
+    assert!(p.ensure_deletable().is_ok());
+    p.invoice_milestone(0).unwrap();
+    assert!(matches!(
+        p.ensure_deletable(),
+        Err(DomainError::HasBilledMilestones)
+    ));
+}

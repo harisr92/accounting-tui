@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use super::DomainError;
 
 const MINUTES_PER_HOUR: u32 = 60;
+/// One entry records at most one day of work
+pub const MAX_ENTRY_MINUTES: u32 = 24 * MINUTES_PER_HOUR;
 
 /// How a project charges its client
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -118,10 +120,10 @@ impl TimeEntry {
     }
 
     pub(super) fn validate(&self) -> Result<(), DomainError> {
-        if self.minutes == 0 {
-            Err(DomainError::ZeroDuration)
-        } else {
-            Ok(())
+        match self.minutes {
+            0 => Err(DomainError::ZeroDuration),
+            m if m > MAX_ENTRY_MINUTES => Err(DomainError::EntryTooLong),
+            _ => Ok(()),
         }
     }
 }

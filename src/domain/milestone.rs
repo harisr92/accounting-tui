@@ -122,6 +122,26 @@ impl Milestone {
         Ok(())
     }
 
+    /// Replace the details of a pending milestone
+    pub(super) fn edit(
+        &mut self,
+        name: String,
+        due_date: NaiveDate,
+        amount: BigDecimal,
+    ) -> Result<(), DomainError> {
+        self.ensure_pending()?;
+        self.name = name;
+        self.due_date = due_date;
+        self.amount = amount;
+        Ok(())
+    }
+
+    /// Take back the most recent time entry of a pending milestone
+    pub(super) fn undo_last_entry(&mut self) -> Result<TimeEntry, DomainError> {
+        self.ensure_pending()?;
+        self.time_entries.pop().ok_or(DomainError::NoTimeEntries)
+    }
+
     pub(super) fn set_amount(&mut self, amount: BigDecimal) {
         self.amount = amount;
     }

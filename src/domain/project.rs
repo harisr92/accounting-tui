@@ -249,20 +249,72 @@ impl Project {
     ) -> Result<usize, DomainError> {
         let name = name.into();
         require(&name, "milestone name")?;
-        let amount = match (&self.billing, amount) {
+        let amount = self.resolve_amount(amount)?;
+        self.milestones.push(Milestone::new(name, due_date, amount));
+        self.refresh();
+        Ok(self.milestones.len() - 1)
+    }
+
+    /// Change a pending milestone; `amount` follows the same rules as [`Self::add_milestone`]
+    pub fn edit_milestone(
+        &mut self,
+        index: usize,
+        name: impl Into<String>,
+        due_date: NaiveDate,
+        amount: Option<BigDecimal>,
+    ) -> Result<(), DomainError> {
+        let name = name.into();
+        require(&name, "milestone name")?;
+        let amount = self.resolve_amount(amount)?;
+        self.milestone_mut(index)?.edit(name, due_date, amount)?;
+        self.refresh();
+        Ok(())
+    }
+
+    /// Fixed projects need a positive amount (rounded to paise); hourly ones derive it from time
+    fn resolve_amount(&self, amount: Option<BigDecimal>) -> Result<BigDecimal, DomainError> {
+        match (&self.billing, amount) {
             (Billing::Fixed, Some(amount)) => {
                 let amount = amount.with_scale_round(2, RoundingMode::HalfUp);
                 if amount <= BigDecimal::zero() {
                     return Err(DomainError::NonPositiveAmount);
                 }
-                amount
+                Ok(amount)
             }
-            (Billing::Hourly { .. }, None) => BigDecimal::zero(),
-            _ => return Err(DomainError::BillingMismatch),
-        };
-        self.milestones.push(Milestone::new(name, due_date, amount));
+            (Billing::Hourly { .. }, None) => Ok(BigDecimal::zero()),
+            _ => Err(DomainError::BillingMismatch),
+        }
+    }
+
+    /// Rename the project or change its client; nothing changes if any value is invalid
+    pub fn update_details(
+        &mut self,
+        name: impl Into<String>,
+        client_name: impl Into<String>,
+        client_gstin: Option<&str>,
+    ) -> Result<(), DomainError> {
+        let (name, client_name) = (name.into(), client_name.into());
+        require(&name, "project name")?;
+        require(&client_name, "client name")?;
+        let client_gstin = client_gstin.map(Gstin::parse).transpose()?;
+        self.name = name;
+        self.client_name = client_name;
+        self.client_gstin = client_gstin;
+        Ok(())
+    }
+
+    /// Change the hourly rate, or the billing type while there are no milestones
+    ///
+    /// A new rate re-prices pending milestones only; invoiced amounts stay as billed.
+    pub fn set_billing(&mut self, billing: Billing) -> Result<(), DomainError> {
+        billing.validate()?;
+        let same_type = billing.rate().is_some() == self.billing.rate().is_some();
+        if !same_type && !self.milestones.is_empty() {
+            return Err(DomainError::BillingMismatch);
+        }
+        self.billing = billing;
         self.refresh();
-        Ok(self.milestones.len() - 1)
+        Ok(())
     }
 
     /// Remove a milestone that has not been invoiced yet
@@ -281,6 +333,27 @@ impl Project {
         self.milestone_mut(index)?.log(entry)?;
         self.refresh();
         Ok(())
+    }
+
+    /// A project may be deleted only while nothing in it has been invoiced: invoiced and paid
+    /// milestones are the records income tax and GST filings are built from
+    pub fn ensure_deletable(&self) -> Result<(), DomainError> {
+        let billed = self
+            .milestones
+            .iter()
+            .any(|m| m.status() != MilestoneStatus::Pending);
+        if billed {
+            Err(DomainError::HasBilledMilestones)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Undo the most recent time entry of a pending milestone
+    pub fn remove_last_time_entry(&mut self, index: usize) -> Result<TimeEntry, DomainError> {
+        let entry = self.milestone_mut(index)?.undo_last_entry()?;
+        self.refresh();
+        Ok(entry)
     }
 
     pub fn invoice_milestone(&mut self, index: usize) -> Result<(), DomainError> {

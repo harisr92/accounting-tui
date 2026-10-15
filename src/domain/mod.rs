@@ -6,7 +6,7 @@ mod fiscal_year;
 mod milestone;
 mod project;
 
-pub use billing::{Billing, TimeEntry};
+pub use billing::{Billing, MAX_ENTRY_MINUTES, TimeEntry};
 pub use error::DomainError;
 pub use fiscal_year::FiscalYear;
 pub use milestone::{Milestone, MilestoneStatus};

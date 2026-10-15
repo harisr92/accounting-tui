@@ -15,6 +15,8 @@ pub enum DomainError {
     NonPositiveRate,
     #[error("time entry must be at least one minute")]
     ZeroDuration,
+    #[error("one time entry can be at most 24 hours; split longer work by day")]
+    EntryTooLong,
     #[error("milestone cannot move from {from} to {to}")]
     InvalidTransition {
         from: MilestoneStatus,
@@ -28,6 +30,10 @@ pub enum DomainError {
     MilestoneNotFound(usize),
     #[error("milestone has nothing to invoice")]
     NothingToInvoice,
+    #[error("milestone has no time entries")]
+    NoTimeEntries,
+    #[error("this project has invoiced milestones; they are billing records and can't be deleted")]
+    HasBilledMilestones,
 }
 
 /// Reject blank text fields
