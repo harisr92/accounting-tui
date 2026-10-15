@@ -34,6 +34,20 @@ pub enum DomainError {
     NoTimeEntries,
     #[error("this project has invoiced milestones; they are billing records and can't be deleted")]
     HasBilledMilestones,
+    #[error("a client abroad can't have a GSTIN")]
+    ForeignClientWithGstin,
+    #[error("SAC code {0} is not in the GST rate list")]
+    UnknownSacCode(String),
+    #[error("invoice prefix must be 1 to 5 letters, digits or '-'")]
+    InvalidInvoicePrefix,
+    #[error("amount can't be negative")]
+    NegativeAmount,
+    #[error("this invoice is already paid")]
+    InvoiceAlreadyPaid,
+    #[error("received plus TDS is {got}, but the invoice total is {expected}")]
+    PaymentMismatch { expected: String, got: String },
+    #[error("payment date is before the invoice date")]
+    PaymentBeforeInvoice,
 }
 
 /// Reject blank text fields

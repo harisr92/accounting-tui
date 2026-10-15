@@ -14,6 +14,24 @@ impl FiscalYear {
         let start_year = if date.month() >= 4 { year } else { year - 1 };
         Self { start_year }
     }
+
+    pub fn start_year(self) -> i32 {
+        self.start_year
+    }
+
+    /// `2026-27`
+    pub fn label(self) -> String {
+        format!("{}-{:02}", self.start_year, (self.start_year + 1) % 100)
+    }
+
+    /// `26-27`, as used in invoice numbers
+    pub fn short(self) -> String {
+        format!(
+            "{:02}-{:02}",
+            self.start_year % 100,
+            (self.start_year + 1) % 100
+        )
+    }
 }
 
 impl fmt::Display for FiscalYear {

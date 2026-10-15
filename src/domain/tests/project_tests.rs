@@ -2,7 +2,8 @@ use bigdecimal::{BigDecimal, Zero};
 use chrono::NaiveDate;
 
 use crate::domain::{
-    Billing, DomainError, MilestoneStatus, Project, ProjectStatus, ProjectSummary, TimeEntry,
+    Billing, ClientDetails, ClientRegion, DomainError, MilestoneStatus, Project, ProjectStatus,
+    ProjectSummary, TimeEntry,
 };
 
 const GSTIN: &str = "29AAPFU0939F1ZR";
@@ -33,7 +34,7 @@ fn rupees(amount: i64) -> Option<BigDecimal> {
 fn milestones_move_pending_invoiced_paid() {
     let mut p = fixed();
     let i = p.add_milestone("Design", date(), rupees(100)).unwrap();
-    p.invoice_milestone(i).unwrap();
+    p.invoice_milestone(i, "T-1").unwrap();
     assert_eq!(p.milestones()[i].status(), MilestoneStatus::Invoiced);
     p.record_payment(i).unwrap();
     assert_eq!(p.milestones()[i].status(), MilestoneStatus::Paid);
@@ -50,9 +51,9 @@ fn transitions_cannot_be_skipped_or_repeated() {
             to: MilestoneStatus::Paid
         })
     ));
-    p.invoice_milestone(0).unwrap();
+    p.invoice_milestone(0, "T-1").unwrap();
     assert!(matches!(
-        p.invoice_milestone(0),
+        p.invoice_milestone(0, "T-1"),
         Err(DomainError::InvalidTransition { .. })
     ));
     assert!(matches!(
@@ -60,7 +61,7 @@ fn transitions_cannot_be_skipped_or_repeated() {
         Err(DomainError::MilestoneLocked)
     ));
     assert!(matches!(
-        p.invoice_milestone(5),
+        p.invoice_milestone(5, "T-1"),
         Err(DomainError::MilestoneNotFound(5))
     ));
 }
@@ -71,9 +72,9 @@ fn status_is_derived_from_milestones() {
     assert_eq!(p.status(), ProjectStatus::Active);
     p.add_milestone("A", date(), rupees(100)).unwrap();
     p.add_milestone("B", date(), rupees(200)).unwrap();
-    p.invoice_milestone(0).unwrap();
+    p.invoice_milestone(0, "T-1").unwrap();
     assert_eq!(p.status(), ProjectStatus::Active);
-    p.invoice_milestone(1).unwrap();
+    p.invoice_milestone(1, "T-1").unwrap();
     assert_eq!(p.status(), ProjectStatus::Completed);
     p.record_payment(0).unwrap();
     assert_eq!(p.paid_amount(), BigDecimal::from(100));
@@ -89,7 +90,7 @@ fn hourly_time_drives_amounts() {
     let mut p = hourly();
     p.add_milestone("Prototype", date(), None).unwrap();
     assert!(matches!(
-        p.invoice_milestone(0),
+        p.invoice_milestone(0, "T-1"),
         Err(DomainError::NothingToInvoice)
     ));
     p.log_time(0, TimeEntry::new(date(), 60, "setup").unwrap())
@@ -100,7 +101,7 @@ fn hourly_time_drives_amounts() {
     assert_eq!(p.milestones()[0].amount(), &BigDecimal::from(2250));
     assert_eq!(p.total_amount(), &BigDecimal::from(2250));
 
-    p.invoice_milestone(0).unwrap();
+    p.invoice_milestone(0, "T-1").unwrap();
     let entry = TimeEntry::new(date(), 15, "late").unwrap();
     assert!(matches!(
         p.log_time(0, entry),
@@ -185,7 +186,7 @@ fn rate_change_only_reprices_pending_milestones() {
         .unwrap();
     p.log_time(1, TimeEntry::new(date(), 60, "").unwrap())
         .unwrap();
-    p.invoice_milestone(0).unwrap();
+    p.invoice_milestone(0, "T-1").unwrap();
 
     let mut json = serde_json::to_value(&p).unwrap();
     json["billing"]["rate"] = "2000".into();
@@ -201,7 +202,7 @@ fn loading_rejects_billed_milestone_without_amount() {
     p.add_milestone("A", date(), None).unwrap();
     p.log_time(0, TimeEntry::new(date(), 60, "").unwrap())
         .unwrap();
-    p.invoice_milestone(0).unwrap();
+    p.invoice_milestone(0, "T-1").unwrap();
     let mut json = serde_json::to_value(&p).unwrap();
     json["milestones"][0]["amount"] = "0".into();
     assert!(serde_json::from_value::<Project>(json).is_err());
@@ -238,7 +239,7 @@ fn fixed_amounts_round_to_paise_before_validation() {
 fn summary_mirrors_project() {
     let mut p = fixed();
     p.add_milestone("A", date(), rupees(100)).unwrap();
-    p.invoice_milestone(0).unwrap();
+    p.invoice_milestone(0, "T-1").unwrap();
     let summary = ProjectSummary::from(&p);
     assert_eq!(summary.id(), p.id());
     assert_eq!(summary.name(), "Site");
@@ -265,7 +266,7 @@ fn edits_pending_milestones_only() {
         p.edit_milestone(0, "X", due, None),
         Err(DomainError::BillingMismatch)
     ));
-    p.invoice_milestone(0).unwrap();
+    p.invoice_milestone(0, "T-1").unwrap();
     assert!(matches!(
         p.edit_milestone(0, "X", due, rupees(1)),
         Err(DomainError::MilestoneLocked)
@@ -292,11 +293,13 @@ fn undo_last_time_entry() {
 #[test]
 fn update_details_is_all_or_nothing() {
     let mut p = fixed();
-    p.update_details("Shop", "Globex", None).unwrap();
+    p.update_details("Shop", ClientDetails::named("Globex", None))
+        .unwrap();
     assert_eq!((p.name(), p.client_name()), ("Shop", "Globex"));
     assert!(p.client_gstin().is_none());
 
-    assert!(p.update_details("New", "Client", Some("bad")).is_err());
+    let bad = ClientDetails::named("Client", Some("bad"));
+    assert!(p.update_details("New", bad).is_err());
     assert_eq!((p.name(), p.client_name()), ("Shop", "Globex"));
 }
 
@@ -309,7 +312,7 @@ fn rate_change_reprices_pending_only_and_type_is_locked_by_milestones() {
         .unwrap();
     p.log_time(1, TimeEntry::new(date(), 60, "").unwrap())
         .unwrap();
-    p.invoice_milestone(0).unwrap();
+    p.invoice_milestone(0, "T-1").unwrap();
 
     p.set_billing(Billing::hourly(BigDecimal::from(2000)).unwrap())
         .unwrap();
@@ -331,9 +334,53 @@ fn only_unbilled_projects_can_be_deleted() {
     assert!(p.ensure_deletable().is_ok());
     p.add_milestone("A", date(), rupees(100)).unwrap();
     assert!(p.ensure_deletable().is_ok());
-    p.invoice_milestone(0).unwrap();
+    p.invoice_milestone(0, "T-1").unwrap();
     assert!(matches!(
         p.ensure_deletable(),
         Err(DomainError::HasBilledMilestones)
     ));
+}
+
+#[test]
+fn foreign_clients_have_a_country_and_no_gstin() {
+    let abroad = |country: &str, gstin: Option<&str>| ClientDetails {
+        name: "Initrode GmbH".to_owned(),
+        gstin: gstin.map(str::to_owned),
+        address: vec!["Hauptstr. 1".to_owned(), "  ".to_owned()],
+        region: ClientRegion::Abroad {
+            country: country.to_owned(),
+        },
+    };
+    let p = Project::for_client("Audit", abroad("Germany", None), Billing::Fixed).unwrap();
+    assert!(p.client_region().is_abroad());
+    assert_eq!(p.client_address(), ["Hauptstr. 1"]);
+
+    assert!(matches!(
+        Project::for_client("Audit", abroad("Germany", Some(GSTIN)), Billing::Fixed),
+        Err(DomainError::ForeignClientWithGstin)
+    ));
+    assert!(matches!(
+        Project::for_client("Audit", abroad(" ", None), Billing::Fixed),
+        Err(DomainError::EmptyField("client country"))
+    ));
+}
+
+#[test]
+fn milestones_keep_their_id_and_invoice_number() {
+    let mut p = fixed();
+    p.add_milestone("A", date(), rupees(100)).unwrap();
+    p.add_milestone("B", date(), rupees(200)).unwrap();
+    let id = p.milestones()[1].id();
+    p.remove_milestone(0).unwrap();
+    assert_eq!(p.milestone_index(id), Some(0));
+
+    p.invoice_milestone(0, "INV/26-27/001").unwrap();
+    assert_eq!(p.milestones()[0].invoice_number(), Some("INV/26-27/001"));
+    let json = serde_json::to_string(&p).unwrap();
+    let loaded: Project = serde_json::from_str(&json).unwrap();
+    assert_eq!(loaded.milestones()[0].id(), id);
+    assert_eq!(
+        loaded.milestones()[0].invoice_number(),
+        Some("INV/26-27/001")
+    );
 }

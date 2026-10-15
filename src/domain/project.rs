@@ -1,6 +1,6 @@
 use std::fmt;
 
-use accounting_core::Gstin;
+use accounting_core::{Gstin, StateCode};
 use bigdecimal::{BigDecimal, RoundingMode, Zero};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use super::billing::amount_for;
 use super::error::require;
-use super::{Billing, DomainError, Milestone, MilestoneStatus, TimeEntry};
+use super::{Billing, DomainError, Milestone, MilestoneId, MilestoneStatus, TimeEntry};
 
 /// Lifecycle state of a project, derived from its milestones
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -52,6 +52,54 @@ impl fmt::Display for ProjectStatus {
     }
 }
 
+/// Where a client is, which decides how they are taxed
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ClientRegion {
+    /// In India. `state` is the place of supply for a client without a GSTIN; a registered
+    /// client's state comes from their GSTIN.
+    India {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        state: Option<StateCode>,
+    },
+    /// Outside India: services to them are exports
+    Abroad { country: String },
+}
+
+impl Default for ClientRegion {
+    fn default() -> Self {
+        Self::India { state: None }
+    }
+}
+
+impl ClientRegion {
+    pub fn is_abroad(&self) -> bool {
+        matches!(self, Self::Abroad { .. })
+    }
+}
+
+/// Everything about a project's client, as entered; validated by [`Project`]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ClientDetails {
+    pub name: String,
+    /// `None` for an unregistered or foreign client
+    pub gstin: Option<String>,
+    /// Address lines, top to bottom; blank lines are dropped
+    pub address: Vec<String>,
+    pub region: ClientRegion,
+}
+
+impl ClientDetails {
+    /// An Indian client known only by name and (optionally) GSTIN
+    pub fn named(name: impl Into<String>, gstin: Option<&str>) -> Self {
+        Self {
+            name: name.into(),
+            gstin: gstin.map(str::to_owned),
+            ..Self::default()
+        }
+    }
+}
+
 /// Stable project identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -85,6 +133,10 @@ pub struct Project {
     name: String,
     client_name: String,
     client_gstin: Option<Gstin>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    client_address: Vec<String>,
+    #[serde(default)]
+    client_region: ClientRegion,
     billing: Billing,
     milestones: Vec<Milestone>,
     total_amount: BigDecimal,
@@ -98,6 +150,10 @@ struct RawProject {
     name: String,
     client_name: String,
     client_gstin: Option<Gstin>,
+    #[serde(default)]
+    client_address: Vec<String>,
+    #[serde(default)]
+    client_region: ClientRegion,
     billing: Billing,
     #[serde(default)]
     milestones: Vec<Milestone>,
@@ -112,6 +168,8 @@ impl TryFrom<RawProject> for Project {
             name: raw.name,
             client_name: raw.client_name,
             client_gstin: raw.client_gstin,
+            client_address: raw.client_address,
+            client_region: raw.client_region,
             billing: raw.billing,
             milestones: raw.milestones,
             total_amount: BigDecimal::zero(),
@@ -170,23 +228,39 @@ impl From<&Project> for ProjectSummary {
 }
 
 impl Project {
-    /// A new project with no milestones; `client_gstin` is `None` for an unregistered client
+    /// A new project for an Indian client; `client_gstin` is `None` for an unregistered client
     pub fn new(
         name: impl Into<String>,
         client_name: impl Into<String>,
         client_gstin: Option<&str>,
         billing: Billing,
     ) -> Result<Self, DomainError> {
-        let project = Self {
+        Self::for_client(
+            name,
+            ClientDetails::named(client_name, client_gstin),
+            billing,
+        )
+    }
+
+    /// A new project with no milestones
+    pub fn for_client(
+        name: impl Into<String>,
+        client: ClientDetails,
+        billing: Billing,
+    ) -> Result<Self, DomainError> {
+        let mut project = Self {
             id: ProjectId::generate(),
-            name: name.into(),
-            client_name: client_name.into(),
-            client_gstin: client_gstin.map(Gstin::parse).transpose()?,
+            name: String::new(),
+            client_name: String::new(),
+            client_gstin: None,
+            client_address: Vec::new(),
+            client_region: ClientRegion::default(),
             billing,
             milestones: Vec::new(),
             total_amount: BigDecimal::zero(),
             status: ProjectStatus::Active,
         };
+        project.update_details(name, client)?;
         project.validate()?;
         Ok(project)
     }
@@ -205,6 +279,29 @@ impl Project {
 
     pub fn client_gstin(&self) -> Option<&Gstin> {
         self.client_gstin.as_ref()
+    }
+
+    pub fn client_address(&self) -> &[String] {
+        &self.client_address
+    }
+
+    pub fn client_region(&self) -> &ClientRegion {
+        &self.client_region
+    }
+
+    /// The client as entered, for prefilling an edit form
+    pub fn client_details(&self) -> ClientDetails {
+        ClientDetails {
+            name: self.client_name.clone(),
+            gstin: self.client_gstin.as_ref().map(|g| g.as_str().to_owned()),
+            address: self.client_address.clone(),
+            region: self.client_region.clone(),
+        }
+    }
+
+    /// Position of the milestone with this id
+    pub fn milestone_index(&self, id: MilestoneId) -> Option<usize> {
+        self.milestones.iter().position(|m| m.id() == id)
     }
 
     pub fn billing(&self) -> &Billing {
@@ -290,16 +387,24 @@ impl Project {
     pub fn update_details(
         &mut self,
         name: impl Into<String>,
-        client_name: impl Into<String>,
-        client_gstin: Option<&str>,
+        client: ClientDetails,
     ) -> Result<(), DomainError> {
-        let (name, client_name) = (name.into(), client_name.into());
+        let name = name.into();
         require(&name, "project name")?;
-        require(&client_name, "client name")?;
-        let client_gstin = client_gstin.map(Gstin::parse).transpose()?;
+        require(&client.name, "client name")?;
+        let gstin = client.gstin.as_deref().map(Gstin::parse).transpose()?;
+        validate_region(&client.region, gstin.as_ref())?;
+        let address = client
+            .address
+            .into_iter()
+            .map(|line| line.trim().to_owned())
+            .filter(|line| !line.is_empty())
+            .collect();
         self.name = name;
-        self.client_name = client_name;
-        self.client_gstin = client_gstin;
+        self.client_name = client.name;
+        self.client_gstin = gstin;
+        self.client_address = address;
+        self.client_region = client.region;
         Ok(())
     }
 
@@ -356,16 +461,19 @@ impl Project {
         Ok(entry)
     }
 
-    pub fn invoice_milestone(&mut self, index: usize) -> Result<(), DomainError> {
-        self.advance(index, MilestoneStatus::Invoiced)
+    /// Mark a pending milestone as billed by invoice `number`
+    pub fn invoice_milestone(
+        &mut self,
+        index: usize,
+        number: impl Into<String>,
+    ) -> Result<(), DomainError> {
+        self.milestone_mut(index)?.invoice(number.into())?;
+        self.refresh();
+        Ok(())
     }
 
     pub fn record_payment(&mut self, index: usize) -> Result<(), DomainError> {
-        self.advance(index, MilestoneStatus::Paid)
-    }
-
-    fn advance(&mut self, index: usize, to: MilestoneStatus) -> Result<(), DomainError> {
-        self.milestone_mut(index)?.advance(to)?;
+        self.milestone_mut(index)?.advance(MilestoneStatus::Paid)?;
         self.refresh();
         Ok(())
     }
@@ -403,6 +511,7 @@ impl Project {
     fn validate(&self) -> Result<(), DomainError> {
         require(&self.name, "project name")?;
         require(&self.client_name, "client name")?;
+        validate_region(&self.client_region, self.client_gstin.as_ref())?;
         self.billing.validate()?;
         for milestone in &self.milestones {
             milestone.validate()?;
@@ -420,5 +529,19 @@ impl Project {
             }
         }
         Ok(())
+    }
+}
+
+/// A foreign client has a country and no GSTIN
+fn validate_region(region: &ClientRegion, gstin: Option<&Gstin>) -> Result<(), DomainError> {
+    match region {
+        ClientRegion::Abroad { country } => {
+            require(country, "client country")?;
+            if gstin.is_some() {
+                return Err(DomainError::ForeignClientWithGstin);
+            }
+            Ok(())
+        }
+        ClientRegion::India { .. } => Ok(()),
     }
 }

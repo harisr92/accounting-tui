@@ -3,6 +3,7 @@ use std::fmt;
 use bigdecimal::{BigDecimal, Zero};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::error::require;
 use super::{DomainError, TimeEntry};
@@ -32,27 +33,57 @@ impl fmt::Display for MilestoneStatus {
     }
 }
 
+/// Stable milestone identifier; invoices refer to milestones by id, never by position
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct MilestoneId(Uuid);
+
+impl MilestoneId {
+    pub fn generate() -> Self {
+        Self(Uuid::new_v4())
+    }
+
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl fmt::Display for MilestoneId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 /// A billable unit of work inside a project. Changed only through [`super::Project`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(try_from = "RawMilestone")]
 pub struct Milestone {
+    id: MilestoneId,
     name: String,
     amount: BigDecimal,
     due_date: NaiveDate,
     status: MilestoneStatus,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     time_entries: Vec<TimeEntry>,
+    /// Set when the milestone is invoiced; absent on records from before invoicing existed
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    invoice_number: Option<String>,
 }
 
 /// Unvalidated shape of a [`Milestone`]; project-level rules are checked by [`super::Project`]
 #[derive(Deserialize)]
 struct RawMilestone {
+    /// Records saved before ids existed get a fresh one, kept from their next save on
+    #[serde(default = "MilestoneId::generate")]
+    id: MilestoneId,
     name: String,
     amount: BigDecimal,
     due_date: NaiveDate,
     status: MilestoneStatus,
     #[serde(default)]
     time_entries: Vec<TimeEntry>,
+    #[serde(default)]
+    invoice_number: Option<String>,
 }
 
 impl TryFrom<RawMilestone> for Milestone {
@@ -60,11 +91,13 @@ impl TryFrom<RawMilestone> for Milestone {
 
     fn try_from(raw: RawMilestone) -> Result<Self, Self::Error> {
         let milestone = Self {
+            id: raw.id,
             name: raw.name,
             amount: raw.amount,
             due_date: raw.due_date,
             status: raw.status,
             time_entries: raw.time_entries,
+            invoice_number: raw.invoice_number,
         };
         milestone.validate()?;
         Ok(milestone)
@@ -74,12 +107,22 @@ impl TryFrom<RawMilestone> for Milestone {
 impl Milestone {
     pub(super) fn new(name: String, due_date: NaiveDate, amount: BigDecimal) -> Self {
         Self {
+            id: MilestoneId::generate(),
             name,
             amount,
             due_date,
             status: MilestoneStatus::Pending,
             time_entries: Vec::new(),
+            invoice_number: None,
         }
+    }
+
+    pub fn id(&self) -> MilestoneId {
+        self.id
+    }
+
+    pub fn invoice_number(&self) -> Option<&str> {
+        self.invoice_number.as_deref()
     }
 
     pub fn name(&self) -> &str {
@@ -144,6 +187,14 @@ impl Milestone {
 
     pub(super) fn set_amount(&mut self, amount: BigDecimal) {
         self.amount = amount;
+    }
+
+    /// Pending → Invoiced, recording the invoice that billed it
+    pub(super) fn invoice(&mut self, number: String) -> Result<(), DomainError> {
+        require(&number, "invoice number")?;
+        self.advance(MilestoneStatus::Invoiced)?;
+        self.invoice_number = Some(number);
+        Ok(())
     }
 
     /// Move one step along Pending → Invoiced → Paid
