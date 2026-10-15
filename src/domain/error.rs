@@ -44,10 +44,14 @@ pub enum DomainError {
     NegativeAmount,
     #[error("this invoice is already paid")]
     InvoiceAlreadyPaid,
-    #[error("received plus TDS is {got}, but the invoice total is {expected}")]
-    PaymentMismatch { expected: String, got: String },
+    #[error("received plus TDS is {got}, more than the {balance} still due")]
+    PaymentExceedsBalance { balance: String, got: String },
+    #[error("this invoice record is in the old (v1) format; the database needs its upgrade")]
+    OutdatedInvoiceFormat,
     #[error("payment date is before the invoice date")]
     PaymentBeforeInvoice,
+    #[error("GST credit must be less than the amount paid")]
+    GstCreditTooLarge,
 }
 
 /// Reject blank text fields

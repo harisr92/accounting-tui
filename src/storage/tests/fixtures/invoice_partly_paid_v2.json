@@ -1,0 +1,95 @@
+{
+  "number": "NDC/26-27/004",
+  "date": "2026-10-05",
+  "kind": "tax",
+  "project_id": "5adff496-244d-421b-875e-a99c32ed1fac",
+  "milestone_id": "0078aa26-a53b-44a2-88ac-5be753084064",
+  "client_name": "Acme Pvt Ltd",
+  "milestone_name": "Frontend",
+  "amounts": {
+    "taxable_value": "60000.00",
+    "cgst": "5400.00",
+    "sgst": "5400.00",
+    "igst": "0",
+    "total": "70800.00"
+  },
+  "print": {
+    "title": "Tax Invoice",
+    "invoice_number": "NDC/26-27/004",
+    "invoice_date": "05-10-2026",
+    "place_of_supply": "27",
+    "is_inter_state": false,
+    "seller": {
+      "name": "Nila Design & Code",
+      "address": [
+        "12 FC Road",
+        "Pune 411004"
+      ],
+      "gstin": "27AAPFU0939F1ZV"
+    },
+    "buyer": {
+      "name": "Acme Pvt Ltd",
+      "address": [
+        "Plot 7, MIDC",
+        "Pune 411019"
+      ],
+      "gstin": "27AAPFU0939F2ZU"
+    },
+    "rows": [
+      {
+        "serial": 1,
+        "hsn_sac": "998314",
+        "description": "Website Revamp - Frontend",
+        "quantity": "1",
+        "rate": "60,000.00",
+        "taxable_value": "60,000.00",
+        "gst_rate": "18%",
+        "tax": "10,800.00",
+        "amount": "70,800.00"
+      }
+    ],
+    "taxable_value": "60,000.00",
+    "tax_lines": [
+      {
+        "label": "CGST",
+        "amount": "5,400.00"
+      },
+      {
+        "label": "SGST",
+        "amount": "5,400.00"
+      }
+    ],
+    "total_tax": "10,800.00",
+    "total": "70,800.00",
+    "total_in_words": "Rupees Seventy Thousand Eight Hundred Only"
+  },
+  "terms": [
+    "Bank: HDFC Bank, A/c 50100012345678, IFSC HDFC0000123",
+    "Payment due within 15 days"
+  ],
+  "gst": {
+    "invoice_number": "NDC/26-27/004",
+    "invoice_date": "2026-10-05",
+    "seller_gstin": "27AAPFU0939F1ZV",
+    "buyer": {
+      "registered": "27AAPFU0939F2ZU"
+    },
+    "line_items": [
+      {
+        "hsn_sac": "998314",
+        "description": "Website Revamp - Frontend",
+        "quantity": "1",
+        "unit_price": "60000.00",
+        "gst_rate": "18",
+        "treatment": "taxable"
+      }
+    ]
+  },
+  "payments": [
+    {
+      "date": "2026-10-12",
+      "received": "35400.00",
+      "tds": "0"
+    }
+  ]
+}

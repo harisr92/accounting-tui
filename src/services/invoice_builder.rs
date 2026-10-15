@@ -27,7 +27,7 @@ pub const PLAIN_NOTE: &str = "Supplier not registered under GST: no GST is charg
 /// Why a milestone can't be invoiced yet; each says what to fix
 #[derive(Debug, thiserror::Error)]
 pub enum InvoicingError {
-    #[error("set up your business details in Settings (tab 5) first")]
+    #[error("set up your business details in the Settings tab first")]
     NoProfile,
     #[error("add the client's state code (place of supply) to invoice a client without a GSTIN")]
     MissingClientState,

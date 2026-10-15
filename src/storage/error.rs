@@ -27,6 +27,8 @@ pub enum StorageError {
     ProjectNotFound(ProjectId),
     #[error("invoice {0} not found")]
     InvoiceNotFound(String),
+    #[error("expense {0} not found")]
+    ExpenseNotFound(crate::domain::ExpenseId),
     #[error("invoice {0} already exists")]
     DuplicateInvoice(String),
     #[error("ledger transaction {0} already exists")]

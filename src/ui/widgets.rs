@@ -6,7 +6,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear};
+use ratatui::widgets::{Block, Clear, Paragraph, Row};
 
 use super::theme::{Theme, Tone};
 use crate::domain::{MilestoneStatus, ProjectStatus};
@@ -25,7 +25,11 @@ pub fn panel<'a>(title: &'a str, focused: bool, theme: &Theme) -> Block<'a> {
 
 /// Rupee amount with Indian digit grouping
 pub fn money(amount: &BigDecimal) -> String {
-    format!("₹{}", format_inr(amount))
+    let formatted = format_inr(amount);
+    match formatted.strip_prefix('-') {
+        Some(magnitude) => format!("-₹{magnitude}"),
+        None => format!("₹{formatted}"),
+    }
 }
 
 /// Logged time as `6h 30m`
@@ -52,6 +56,34 @@ pub fn modal(frame: &mut Frame, title: &str, width: u16, height: u16, theme: &Th
     frame.render_widget(Clear, area);
     frame.render_widget(block, area);
     inner
+}
+
+/// A table header lined up with its cells: `right` lists the columns whose cells are
+/// right-aligned (amounts), so their titles sit over the numbers' right edge
+pub fn header<'a>(titles: &[&'a str], right: &[usize], theme: &Theme) -> Row<'a> {
+    let cells = titles.iter().enumerate().map(|(index, title)| {
+        let line = Line::raw(*title);
+        if right.contains(&index) {
+            line.right_aligned()
+        } else {
+            line
+        }
+    });
+    Row::new(cells).style(theme.key())
+}
+
+/// A row of equal-width "label over value" figures
+pub fn stat_tiles(frame: &mut Frame, area: Rect, stats: &[(&str, String)], theme: &Theme) {
+    let cells = Layout::horizontal(vec![Constraint::Fill(1); stats.len()])
+        .spacing(1)
+        .split(area);
+    for ((label, value), cell) in stats.iter().zip(cells.iter()) {
+        let stat = Paragraph::new(vec![
+            Line::styled(*label, theme.dim()),
+            Line::styled(value.as_str(), theme.key()),
+        ]);
+        frame.render_widget(stat, *cell);
+    }
 }
 
 /// A status that renders as a coloured badge

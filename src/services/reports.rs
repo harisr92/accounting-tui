@@ -1,0 +1,199 @@
+//! A financial year in numbers: income, 44ADA vs books, GST by quarter, TDS and clients.
+//! Pure: built from invoices and expenses, no storage.
+
+use std::collections::BTreeMap;
+
+use bigdecimal::{BigDecimal, Zero};
+
+use crate::domain::{Expense, ExpenseCategory, FiscalYear, Invoice, InvoiceKind, Quarter};
+
+/// Share of gross receipts deemed to be profit under section 44ADA
+pub const PRESUMPTIVE_PERCENT: u32 = 50;
+/// Gross receipts limit for 44ADA when cash receipts are at most 5% (all compter receipts are
+/// bank receipts)
+pub const PRESUMPTIVE_LIMIT_RUPEES: u64 = 7_500_000; // ₹75 lakh
+
+/// GST charged on invoices and claimed on expenses in one quarter
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuarterGst {
+    pub quarter: Quarter,
+    pub cgst: BigDecimal,
+    pub sgst: BigDecimal,
+    pub igst: BigDecimal,
+    pub input_credit: BigDecimal,
+}
+
+impl QuarterGst {
+    fn new(quarter: Quarter) -> Self {
+        Self {
+            quarter,
+            cgst: BigDecimal::zero(),
+            sgst: BigDecimal::zero(),
+            igst: BigDecimal::zero(),
+            input_credit: BigDecimal::zero(),
+        }
+    }
+
+    pub fn output(&self) -> BigDecimal {
+        &self.cgst + &self.sgst + &self.igst
+    }
+
+    /// Output tax less input credit; negative means credit carried forward
+    pub fn net(&self) -> BigDecimal {
+        self.output() - &self.input_credit
+    }
+}
+
+/// One client's year
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientYear {
+    pub client: String,
+    /// Taxable value invoiced in the year
+    pub invoiced: BigDecimal,
+    /// Received in the bank in the year
+    pub received: BigDecimal,
+    /// Withheld by the client on payments in the year (match with Form 26AS)
+    pub tds: BigDecimal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct YearReport {
+    pub year: FiscalYear,
+    pub invoice_count: usize,
+    /// Taxable value of invoices dated in the year: the gross receipts for income tax
+    pub gross_receipts: BigDecimal,
+    /// Part of `gross_receipts` from clients abroad
+    pub export_receipts: BigDecimal,
+    /// Invoice totals including GST, for invoices dated in the year
+    pub invoiced_total: BigDecimal,
+    /// Payments (whole or part) dated in the year that reached the bank
+    pub received: BigDecimal,
+    /// TDS on payments dated in the year
+    pub tds: BigDecimal,
+    /// What is still due on invoices dated in the year, GST included
+    pub outstanding: BigDecimal,
+    /// Expenses dated in the year, net of GST claimed back
+    pub expenses: BigDecimal,
+    pub expenses_by_category: Vec<(ExpenseCategory, BigDecimal)>,
+    pub quarters: [QuarterGst; 4],
+    /// Sorted by amount invoiced, largest first
+    pub clients: Vec<ClientYear>,
+}
+
+impl YearReport {
+    /// Income under 44ADA: 50% of gross receipts
+    pub fn presumptive_income(&self) -> BigDecimal {
+        (&self.gross_receipts * BigDecimal::from(PRESUMPTIVE_PERCENT) / BigDecimal::from(100))
+            .with_scale_round(2, bigdecimal::RoundingMode::HalfUp)
+    }
+
+    /// Profit from the books: gross receipts less expenses
+    pub fn books_profit(&self) -> BigDecimal {
+        &self.gross_receipts - &self.expenses
+    }
+
+    pub fn within_presumptive_limit(&self) -> bool {
+        self.gross_receipts <= PRESUMPTIVE_LIMIT_RUPEES
+    }
+}
+
+/// Accumulates a [`YearReport`] one invoice at a time
+pub struct YearReportBuilder {
+    report: YearReport,
+    clients: BTreeMap<String, ClientYear>,
+}
+
+impl YearReportBuilder {
+    pub fn new(year: FiscalYear) -> Self {
+        let zero = BigDecimal::zero;
+        Self {
+            report: YearReport {
+                year,
+                invoice_count: 0,
+                gross_receipts: zero(),
+                export_receipts: zero(),
+                invoiced_total: zero(),
+                received: zero(),
+                tds: zero(),
+                outstanding: zero(),
+                expenses: zero(),
+                expenses_by_category: Vec::new(),
+                quarters: year.quarters().map(QuarterGst::new),
+                clients: Vec::new(),
+            },
+            clients: BTreeMap::new(),
+        }
+    }
+
+    fn client(&mut self, name: &str) -> &mut ClientYear {
+        self.clients
+            .entry(name.to_owned())
+            .or_insert_with(|| ClientYear {
+                client: name.to_owned(),
+                invoiced: BigDecimal::zero(),
+                received: BigDecimal::zero(),
+                tds: BigDecimal::zero(),
+            })
+    }
+
+    /// Count an invoice: its billing if dated in the year, its payment if paid in the year
+    pub fn add_invoice(&mut self, invoice: &Invoice) {
+        let year = self.report.year;
+        let amounts = invoice.amounts();
+        if year.contains(invoice.date()) {
+            let r = &mut self.report;
+            r.invoice_count += 1;
+            r.gross_receipts += &amounts.taxable_value;
+            r.invoiced_total += &amounts.total;
+            if invoice.kind() == InvoiceKind::Export {
+                r.export_receipts += &amounts.taxable_value;
+            }
+            r.outstanding += invoice.balance();
+            if let Some(q) = r
+                .quarters
+                .iter_mut()
+                .find(|q| q.quarter.contains(invoice.date()))
+            {
+                q.cgst += &amounts.cgst;
+                q.sgst += &amounts.sgst;
+                q.igst += &amounts.igst;
+            }
+            self.client(invoice.client_name()).invoiced += &amounts.taxable_value;
+        }
+        for payment in invoice.payments().iter().filter(|p| year.contains(p.date)) {
+            self.report.received += &payment.received;
+            self.report.tds += &payment.tds;
+            let client = self.client(invoice.client_name());
+            client.received += &payment.received;
+            client.tds += &payment.tds;
+        }
+    }
+
+    pub fn add_expenses(&mut self, expenses: &[Expense]) {
+        let mut by_category: BTreeMap<ExpenseCategory, BigDecimal> = BTreeMap::new();
+        for expense in expenses
+            .iter()
+            .filter(|e| self.report.year.contains(e.date()))
+        {
+            let cost = expense.cost();
+            self.report.expenses += &cost;
+            *by_category.entry(expense.category()).or_default() += cost;
+            if let Some(q) = self
+                .report
+                .quarters
+                .iter_mut()
+                .find(|q| q.quarter.contains(expense.date()))
+            {
+                q.input_credit += expense.gst_credit();
+            }
+        }
+        self.report.expenses_by_category = by_category.into_iter().collect();
+    }
+
+    pub fn finish(mut self) -> YearReport {
+        let mut clients: Vec<ClientYear> = self.clients.into_values().collect();
+        clients.sort_by(|a, b| b.invoiced.cmp(&a.invoiced).then(a.client.cmp(&b.client)));
+        self.report.clients = clients;
+        self.report
+    }
+}

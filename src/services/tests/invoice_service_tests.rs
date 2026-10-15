@@ -101,7 +101,7 @@ fn numbers_run_in_sequence_and_milestones_are_billed_once() {
 }
 
 #[test]
-fn payment_with_tds_settles_the_ledger() {
+fn part_payments_with_tds_settle_the_ledger() {
     let (store, mut service, project) = setup();
     let milestone = project.milestones()[0].id();
     let number = service
@@ -111,14 +111,26 @@ fn payment_with_tds_settles_the_ledger() {
         .number()
         .clone();
 
+    // First half, with TDS on the taxable part of it
+    let first = service
+        .record_payment(&number, date(), rupees(27_000), rupees(2_500))
+        .unwrap();
+    assert_eq!(first.status(), InvoiceStatus::PartlyPaid);
+    assert_eq!(first.balance(), rupees(29_500));
+    assert_eq!(balance(&store, chart::RECEIVABLE), rupees(29_500));
+    let stored = store.repository().load(project.id()).unwrap();
+    assert_eq!(stored.milestones()[0].status(), MilestoneStatus::Invoiced);
+
     assert!(matches!(
-        service.record_payment(&number, date(), rupees(50_000), rupees(5_000)),
-        Err(ServiceError::Domain(DomainError::PaymentMismatch { .. }))
+        service.record_payment(&number, date(), rupees(30_000), rupees(0)),
+        Err(ServiceError::Domain(
+            DomainError::PaymentExceedsBalance { .. }
+        ))
     ));
     let paid = service
-        .record_payment(&number, date(), rupees(54_000), rupees(5_000))
+        .record_payment(&number, date(), rupees(27_000), rupees(2_500))
         .unwrap();
-    assert!(matches!(paid.status(), InvoiceStatus::Paid { .. }));
+    assert_eq!(paid.status(), InvoiceStatus::Paid);
 
     assert_eq!(balance(&store, chart::RECEIVABLE), rupees(0));
     assert_eq!(balance(&store, chart::BANK), rupees(54_000));
@@ -126,7 +138,6 @@ fn payment_with_tds_settles_the_ledger() {
     let stored = store.repository().load(project.id()).unwrap();
     assert_eq!(stored.milestones()[0].status(), MilestoneStatus::Paid);
     assert_eq!(stored.status(), ProjectStatus::Paid);
-    assert!(stored.ensure_deletable().is_err());
     assert!(store.repository().list_invoices().unwrap()[0].is_paid());
 }
 

@@ -7,6 +7,8 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use termion::event::Key;
 
+use std::collections::BTreeSet;
+
 use bigdecimal::Zero;
 use chrono::Local;
 
@@ -40,6 +42,7 @@ const MILESTONE_HINTS: &[KeyHint] = &[
     KeyHint::new("e", "edit"),
     KeyHint::new("x", "delete"),
     KeyHint::new("t", "log time"),
+    KeyHint::new("o", "time log"),
     KeyHint::new("u", "undo time"),
     KeyHint::new("i", "invoice"),
     KeyHint::new("p", "paid"),
@@ -90,6 +93,8 @@ pub struct ProjectsView<R> {
     selected: Option<Project>,
     project_sel: Selection,
     milestone_sel: Selection,
+    /// Milestones whose time log is shown under them (`o`)
+    open_logs: BTreeSet<MilestoneId>,
     focus: Focus,
     modal: Option<Modal>,
 }
@@ -104,6 +109,7 @@ impl<R: Repository> ProjectsView<R> {
             selected: None,
             project_sel: Selection::default(),
             milestone_sel: Selection::default(),
+            open_logs: BTreeSet::new(),
             focus: Focus::Projects,
             modal: None,
         };
@@ -232,6 +238,23 @@ impl<R: Repository> ProjectsView<R> {
         }
     }
 
+    /// `o`: show or hide the milestone's time entries under it
+    fn toggle_log(&mut self, milestone: MilestoneId) -> Action {
+        let hourly = self
+            .selected
+            .as_ref()
+            .is_some_and(|p| p.billing().rate().is_some());
+        if !hourly {
+            return Action::Notify(Notice::info(
+                "Fixed-price milestones have no time log; time is logged on hourly projects",
+            ));
+        }
+        if !self.open_logs.remove(&milestone) {
+            self.open_logs.insert(milestone);
+        }
+        Action::Handled
+    }
+
     /// `p`: record the payment for the invoice that billed this milestone
     fn open_payment(&mut self, milestone: &Milestone) -> Action {
         if milestone.status() != MilestoneStatus::Invoiced {
@@ -288,7 +311,7 @@ impl<R: Repository> ProjectsView<R> {
                 None => Action::Notify(Notice::info("Select a project first")),
             },
             (Focus::Milestones, Key::Char('a')) => self.open_form(FormKind::AddMilestone),
-            (Focus::Milestones, Key::Char(c @ ('e' | 'x' | 't' | 'u' | 'i' | 'p'))) => {
+            (Focus::Milestones, Key::Char(c @ ('e' | 'x' | 't' | 'u' | 'i' | 'p' | 'o'))) => {
                 self.milestone_action(c)
             }
             (Focus::Projects, Key::Char('i' | 'p')) => {
@@ -303,6 +326,7 @@ impl<R: Repository> ProjectsView<R> {
             Focus::Projects => {
                 self.project_sel.move_by(nav, self.summaries.len());
                 self.milestone_sel.reset();
+                self.open_logs.clear();
                 if let Err(error) = self.load_selected() {
                     return Action::Notify(Notice::error(error.to_string()));
                 }
@@ -324,6 +348,10 @@ impl<R: Repository> ProjectsView<R> {
         if key == 'p' {
             let milestone = milestone.clone();
             return self.open_payment(&milestone);
+        }
+        if key == 'o' {
+            let milestone = milestone.id();
+            return self.toggle_log(milestone);
         }
         if key == 'i' && milestone.status() == MilestoneStatus::Pending {
             let milestone = milestone.id();

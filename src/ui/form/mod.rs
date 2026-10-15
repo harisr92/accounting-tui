@@ -135,10 +135,15 @@ impl Form {
             lines.push(self.field_line(field, index == self.focus, theme));
         }
         lines.push(Line::default());
-        lines.push(match &self.error {
-            Some(error) => Line::styled(format!("  {error}"), theme.tone(Tone::Error)),
-            None => Line::styled("  Enter save · Esc cancel", theme.dim()),
-        });
+        match &self.error {
+            Some(error) => {
+                let width = usize::from(WIDTH).saturating_sub(6);
+                for part in wrap_words(error, width) {
+                    lines.push(Line::styled(format!("  {part}"), theme.tone(Tone::Error)));
+                }
+            }
+            None => lines.push(Line::styled("  Enter save · Esc cancel", theme.dim())),
+        }
 
         let height = u16::try_from(lines.len())
             .unwrap_or(u16::MAX)
@@ -156,4 +161,24 @@ impl Form {
         spans.extend(field.spans(focused, theme));
         Line::from(spans)
     }
+}
+
+/// Break `text` into lines of at most `width` characters, at spaces where possible
+fn wrap_words(text: &str, width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        let fits = line.chars().count() + 1 + word.chars().count() <= width;
+        if !line.is_empty() && !fits {
+            lines.push(std::mem::take(&mut line));
+        }
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        line.push_str(word);
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines
 }

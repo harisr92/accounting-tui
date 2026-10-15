@@ -7,16 +7,16 @@ use redb::{
 
 use super::codec::{decode, encode};
 use super::tables::{
-    ACCOUNTS, INVOICE_COUNTERS, INVOICE_SUMMARIES, INVOICES, PROFILE_KEY, PROJECT_SUMMARIES,
-    PROJECTS, SETTINGS, TRANSACTIONS,
+    ACCOUNTS, EXPENSES, INVOICE_COUNTERS, INVOICE_SUMMARIES, INVOICES, PROFILE_KEY,
+    PROJECT_SUMMARIES, PROJECTS, SETTINGS, TRANSACTIONS,
 };
 use super::{
-    InvoiceRepository, IssueRecord, PaymentRecord, ProjectRepository, SettingsRepository,
-    StorageError,
+    ExpenseRecord, ExpenseRepository, InvoiceRepository, IssueRecord, PaymentRecord,
+    ProjectRepository, SettingsRepository, StorageError,
 };
 use crate::domain::{
-    BusinessProfile, FiscalYear, Invoice, InvoiceNumber, InvoiceSummary, Project, ProjectId,
-    ProjectSummary,
+    BusinessProfile, Expense, ExpenseId, FiscalYear, Invoice, InvoiceNumber, InvoiceSummary,
+    Project, ProjectId, ProjectSummary,
 };
 
 /// All of compter's records on redb. One type behind every repository trait, so a change that
@@ -45,7 +45,7 @@ fn put_project(txn: &WriteTransaction, project: &Project) -> Result<(), StorageE
 }
 
 /// Write an invoice and its summary
-fn put_invoice(txn: &WriteTransaction, invoice: &Invoice) -> Result<(), StorageError> {
+pub(super) fn put_invoice(txn: &WriteTransaction, invoice: &Invoice) -> Result<(), StorageError> {
     let key = invoice.number().as_str();
     let record = encode(INVOICES.name(), key, invoice)?;
     let summary = encode(
@@ -169,7 +169,9 @@ impl InvoiceRepository for RedbRepository {
             return Err(StorageError::InvoiceNotFound(number.to_owned()));
         }
         put_invoice(&txn, record.invoice)?;
-        put_project(&txn, record.project)?;
+        if let Some(project) = record.project {
+            put_project(&txn, project)?;
+        }
         put_missing_accounts(&txn, record.accounts)?;
         put_transaction(&txn, record.transaction)?;
         txn.commit()?;
@@ -201,6 +203,55 @@ impl InvoiceRepository for RedbRepository {
             .get(number.as_str())?
             .ok_or_else(|| StorageError::InvoiceNotFound(number.to_string()))?;
         decode(INVOICES.name(), number, row.value())
+    }
+
+    fn scan_invoices(&self, visit: &mut dyn FnMut(Invoice)) -> Result<(), StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(INVOICES)?;
+        for row in table.iter()? {
+            let (key, value) = row?;
+            visit(decode(INVOICES.name(), key.value(), value.value())?);
+        }
+        Ok(())
+    }
+}
+
+impl ExpenseRepository for RedbRepository {
+    fn add_expense(&mut self, record: &ExpenseRecord<'_>) -> Result<(), StorageError> {
+        let id = record.expense.id();
+        let bytes = encode(EXPENSES.name(), id, record.expense)?;
+        let txn = self.db.begin_write()?;
+        txn.open_table(EXPENSES)?
+            .insert(id.as_uuid(), bytes.as_slice())?;
+        put_missing_accounts(&txn, record.accounts)?;
+        put_transaction(&txn, record.transaction)?;
+        txn.commit()?;
+        Ok(())
+    }
+
+    fn delete_expense(&mut self, id: ExpenseId, transaction_id: &str) -> Result<(), StorageError> {
+        let txn = self.db.begin_write()?;
+        if txn.open_table(EXPENSES)?.remove(id.as_uuid())?.is_none() {
+            return Err(StorageError::ExpenseNotFound(id));
+        }
+        txn.open_table(TRANSACTIONS)?.remove(transaction_id)?;
+        txn.commit()?;
+        Ok(())
+    }
+
+    fn list_expenses(&self, year: FiscalYear) -> Result<Vec<Expense>, StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(EXPENSES)?;
+        let mut expenses = Vec::new();
+        for row in table.iter()? {
+            let (key, value) = row?;
+            let expense: Expense = decode(EXPENSES.name(), key.value(), value.value())?;
+            if year.contains(expense.date()) {
+                expenses.push(expense);
+            }
+        }
+        expenses.sort_by(|a, b| b.date().cmp(&a.date()).then(a.id().cmp(&b.id())));
+        Ok(expenses)
     }
 }
 

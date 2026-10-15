@@ -31,6 +31,7 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - Once a milestone is invoiced its amount is the billed record: it is frozen and never recomputed (e.g. after a rate change).
 - Deserialisation goes through a `Raw*` struct + `TryFrom` (`#[serde(try_from = ...)]`) that runs the same `validate()` as the constructors.
 - Status changes go through the explicit transition methods (`invoice_milestone`, `record_payment`). No status setters.
+- Schema history: v2 replaced an invoice's `status` with `payments` (`storage/migrations.rs::payments_list`). Domain decoding refuses a v1 invoice (`OutdatedInvoiceFormat`) rather than read a paid one as unpaid.
 - Billing records are never destroyed: invoiced or paid milestones can't be edited or removed, and a project containing any can't be deleted (`Project::ensure_deletable`, checked in the service). New delete paths must respect this.
 - Money is `BigDecimal`, rounded with `with_scale_round(2, RoundingMode::HalfUp)`. Durations are whole minutes (`u32`).
 - Reuse accounting-core value types (`Gstin`) instead of re-validating strings.
@@ -56,13 +57,25 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 
 ## Invoicing
 
-- Invoices are billing records: **immutable once issued**. Only `Invoice::record_payment` changes one. Corrections will be credit notes (step 7); never edit or delete an invoice.
+- Invoices are billing records: **immutable once issued**. Only `Invoice::record_payment` changes one, by appending to its payments. Corrections will be credit notes (step 7); never edit or delete an invoice.
 - Numbers come only from `InvoiceRepository::next_sequence` + `InvoiceNumber::new`, and `issue` refuses a stale sequence. Never build a number by hand or reuse one.
 - The kind (tax / export / plain) is decided in one place, `services::invoice_builder::build`, from the seller's GSTIN and the client's region. Tax invoices go through accounting-core (`GstInvoice`, `validate_invoice`, `InvoicePrint::from_invoice`, `to_entries`). Don't recompute GST in compter.
 - An invoice stores its `InvoicePrint` and `terms`. PDFs are rendered from those (`render_pdf`), never rebuilt from the current project or settings.
 - Render the PDF **before** saving an invoice, so an unprintable document is never issued. Write the file after the commit; a failed write is reported, never rolled back.
 - Ledger account ids live only in `services/chart.rs`. Every posting is checked with `DefaultTransactionValidator`, and its accounts are passed along so storage creates any that are missing.
-- Payments settle in full: received + TDS = total (`Invoice::record_payment`). TDS goes to `1250 TDS Receivable`.
+- Payments may be partial: each is `{date, received, tds}`, and their sum never exceeds the total (`Invoice::record_payment`, checked again on load). Invoice status (Issued / PartlyPaid / Paid) is derived from the payments, never stored. The milestone is marked paid only by the payment that settles the invoice.
+- Each payment posts its own ledger transaction, `pay-<number>-<n>`: Dr Bank (received), Dr `1250 TDS Receivable` (tds), Cr Receivable (both). Payments from schema v1 kept their original id `pay-<number>`.
+
+## Reports and returns
+
+- Reports are computed on demand and never stored. `services::reports` is pure (a `YearReportBuilder` fed one invoice at a time). `ReportService` streams invoices with `InvoiceRepository::scan_invoices`, so it never holds them all in memory.
+- Year-bound figures use `FiscalYear` / `Quarter`. Don't compare month numbers by hand. Billing counts by invoice date; payments and TDS count by payment date.
+- Don't use accounting-core's `generate_income_statement` for a year: it sums balances *as of* the end date, so earlier years leak in. Build year figures from invoice and expense records.
+- GSTR-1 is quarterly (QRMP): `services::gstr1` builds each month with accounting-core's `Gstr1Return::build` and merges them. compter adds only what accounting-core lacks: 6A exports and table 13. When accounting-core gains quarters or exports, delete compter's version.
+- Returns are written under `<data dir>/returns/<year>/` with `write_file`. Plain invoices never go into a return.
+- Expenses post like invoices: one transaction (`exp-<id>`) with the expense, written together through `ExpenseRepository`. Input credit needs a GSTIN in the profile. Deleting an expense removes its posting in the same write.
+- Tabs that show a year use `ui::views::year::YearPicker` (`[` / `]`). Rows of figures use `widgets::stat_tiles`.
+- Table headers come from `widgets::header(titles, right_aligned_columns, theme)`. Amount and duration cells are right-aligned, and their titles must be too, so they line up (checked by `ui/tests/alignment_tests.rs`).
 
 ## SOLID
 

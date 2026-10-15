@@ -7,6 +7,8 @@ use crate::ui::theme::Theme;
 
 /// Longest text a field accepts; plenty for names, notes and amounts
 const MAX_INPUT: usize = 120;
+/// Choices with more options than this show only the selected one, to fit the line
+const INLINE_CHOICES: usize = 3;
 
 /// Describes how a text field's current input will be read, e.g. `= 1h 30m`
 pub type Preview = fn(&str) -> String;
@@ -145,6 +147,13 @@ impl Field {
                     spans.push(Span::styled(format!("  {}", describe(value)), theme.dim()));
                 }
                 spans
+            }
+            Kind::Choice { options, selected } if options.len() > INLINE_CHOICES => {
+                let label = options.get(*selected).copied().unwrap_or("");
+                vec![
+                    Span::styled(format!(" ‹ {label} › "), theme.selected),
+                    Span::styled(format!("  {}/{}", selected + 1, options.len()), theme.dim()),
+                ]
             }
             Kind::Choice { options, selected } => options
                 .iter()

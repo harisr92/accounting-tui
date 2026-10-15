@@ -77,3 +77,32 @@ fn confirm_answers() {
     assert_eq!(Confirm::answer(Key::Esc), Some(false));
     assert_eq!(Confirm::answer(Key::Char('q')), None);
 }
+
+#[test]
+fn long_choices_show_one_option_and_errors_wrap() {
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    use crate::ui::theme::Theme;
+
+    const MANY: &[&str] = &["One", "Two", "Three", "Four"];
+    let mut form = Form::new("Test", vec![Field::choice("Pick", MANY).with_choice(1)]);
+    form.set_error(
+        "a very long explanation that certainly does not fit on one line of the form at all",
+    );
+    let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
+    terminal
+        .draw(|frame| form.render(frame, &Theme::default()))
+        .unwrap();
+    let screen: String = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|c| c.symbol())
+        .collect();
+    assert!(screen.contains("‹ Two ›"));
+    assert!(screen.contains("2/4"));
+    assert!(!screen.contains("Three"));
+    assert!(screen.contains("of the form at all"));
+}

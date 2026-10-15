@@ -24,7 +24,7 @@ Tab focus · j/k move · n new · i invoice · 1-9/←→ tabs · ? help · q qu
 
 ## Status
 
-**Steps 1–5 of 7 are done.** Track projects, milestones and hours; issue GST tax invoices, export invoices under LUT or plain invoices as PDFs; record payments including TDS. Everything is posted to an accounting-core ledger and saved as you go. Tax reports arrive in step 6.
+**Steps 1–6 of 7 are done.** Track projects, milestones and hours. Issue GST tax invoices, export invoices under LUT or plain invoices as PDFs, and record payments including TDS. Record business expenses. See each financial year for income tax (44ADA and regular books) and GST, and export the quarterly GSTR-1. Everything is posted to an accounting-core ledger and saved as you go.
 
 ## Build and run
 
@@ -62,11 +62,18 @@ Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Un
 | milestones | `a` | add a milestone |
 | milestones | `e` / `x` | edit / delete a pending milestone (delete asks first) |
 | milestones | `t` | log time on an hourly milestone |
+| milestones | `o` | open or close the milestone's time log: its entries (date, note, time) are listed under it |
 | milestones | `u` | undo the last time entry (asks first) |
 | milestones | `i` | invoice a pending milestone: shows the number, total and tax, then asks |
-| milestones | `p` | record the payment for an invoiced milestone |
+| milestones | `p` | record a payment, whole or part, for an invoiced milestone |
 
-**Invoices tab**: `j`/`k` move, `o` opens the PDF in your viewer (it's regenerated if the file is missing), `p` records a payment. The title shows the total still outstanding.
+**Invoices tab**: `j`/`k` move, `o` opens the PDF in your viewer (it's regenerated if the file is missing), `p` records a payment, whole or part. The list shows each invoice's amount due and status (ISSUED, PART PAID, PAID); below it, the selected invoice's payments. The title shows the total still outstanding.
+
+**Dashboard tab**: this financial year's invoiced, received, outstanding, TDS, expenses and books profit, plus every unpaid invoice and how long it has been waiting (red after 30 days).
+
+**Expenses tab**: `a` adds an expense (date, category, description, amount paid including GST, and the GST you claim back as input credit), `x` deletes one (asks first), `[`/`]` change the year.
+
+**Reports tab**: `[`/`]` change the year, `g` exports the GSTR-1 for a quarter. See [Reports](#reports).
 
 **Settings tab**: `e` edits your business details: name, address, GSTIN, SAC code, invoice prefix, LUT ARN, and terms such as bank details. They must be filled in before the first invoice.
 
@@ -82,7 +89,7 @@ Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Un
 | GSTIN | 15 characters, any case; blank for an unregistered client |
 | state code | 2-digit GST code for an unregistered Indian client (`29` = Karnataka; the field names the state as you type) |
 | SAC code | must be in the GST rate list; the field shows its description and rate |
-| payment | received + TDS must equal the invoice total; TDS is prefilled 0, and the hint shows 10% of the taxable value |
+| payment | received + TDS can be any part of what is still due, never more. Received is prefilled with the balance and TDS with 0; the hint shows 10% of the taxable value |
 
 An invoiced milestone is locked: it can't be edited, deleted or have time added. A project with any invoiced or paid milestone can't be deleted either, because those milestones are the billing records your tax and GST filings come from. Changing an hourly rate re-prices only pending milestones. Fixed and hourly billing can only be switched while a project has no milestones.
 
@@ -120,7 +127,7 @@ Fields are private. All changes go through `Project` methods, which validate the
 | From | To | Method | Rule |
 |------|----|--------|------|
 | PENDING | INVOICED | `invoice_milestone` | amount must be > 0 |
-| INVOICED | PAID | `record_payment` | |
+| INVOICED | PAID | `record_payment` | when the invoice's payments add up to its total |
 
 Once a milestone is invoiced it is locked: no more time entries and it can't be removed. Any other transition returns `DomainError::InvalidTransition`.
 
@@ -163,10 +170,37 @@ The financial year is the Indian April–March year (`FY 2026-27`).
 | 2300 / 2310 / 2320 CGST / SGST / IGST Output | liability | GST on tax invoices |
 | 4100 Service Revenue | income | invoices to Indian clients |
 | 4110 Export Revenue | income | invoices to clients abroad |
+| 1300 Input GST | asset | GST on expenses claimed as input credit |
+| 5100–5190 expense accounts | expense | one per category: software, equipment, internet & phone, travel, rent & coworking, professional fees, other |
 
-**Payments** are recorded in full: the amount that reached your bank plus any TDS the client withheld must equal the invoice total. Part payments aren't supported yet.
+**Payments** can come in parts. Each payment records the amount that reached your bank and any TDS the client withheld on it, and is posted to the ledger on its own (`pay-INV/26-27/004-1`, `-2`, …). An invoice is ISSUED until the first payment, PART PAID while a balance remains, and PAID when the payments add up to its total. A payment larger than the balance is refused. The milestone turns PAID only with the final payment. Reports count each payment, and its TDS, on its own date.
 
 **Known limitation**: accounting-core's PDF layout always prints a GST supply line ("Intra-state (CGST + SGST)") and a seller GSTIN line, even on a plain invoice. compter adds "no GST is charged on this invoice" as the first term so the document is unambiguous.
+
+## Reports
+
+The Reports tab shows one financial year (April–March). All figures are computed when you open it, from the invoices and expenses on record:
+
+| Section | What it shows |
+|---------|---------------|
+| Income | invoices dated in the year; **gross receipts** (their value excl. GST) and how much of that is exports; money **received** and **TDS** withheld on payments dated in the year; what is still **outstanding** |
+| Income tax | **44ADA income**, 50% of gross receipts, next to **books profit** (gross receipts − expenses). It flags receipts over the ₹75 lakh 44ADA limit, and a books profit below 44ADA income, since declaring the lower figure needs a tax audit (44AB) when income is over the basic exemption |
+| GST | per quarter: CGST, SGST and IGST charged, input credit from expenses, and the net payable (or credit carried forward) |
+| Clients | per client: invoiced, received and TDS, to match against Form 26AS |
+
+compter doesn't calculate the tax you owe: slab rates change every budget.
+
+Assumptions:
+- **Gross receipts** count invoices by invoice date (accrual).
+- **TDS** is counted on the payment date. A client may deposit TDS in an earlier quarter, at the time they booked your invoice, so check against Form 26AS.
+
+**GSTR-1 (quarterly, QRMP)**: `g`, pick the quarter, and compter writes the GST portal JSON to `<data dir>/returns/2026-27/GSTR1-Q3-2026-27.json` with the quarter's last month as the return period. Upload it with the GST offline tool or the portal.
+- accounting-core builds each month's return (B2B, B2CL, B2CS, nil, HSN). compter merges the three months, then adds:
+  - **6A exports** under LUT (`WOPAY`), which accounting-core doesn't cover
+  - **Table 13**, the documents-issued summary, covering tax and export invoices
+- Plain invoices are not reported: they are issued while unregistered.
+- Exports are added to the HSN summary's B2C section at 0%. **Confirm this against the current portal rules before filing.** The shipping-bill fields are left out, since services have no shipping bill.
+- Monthly IFF uploads for B2B invoices aren't generated. Everything is in the quarterly return.
 
 ## Architecture
 
@@ -189,7 +223,7 @@ The financial year is the Indian April–March year (`FY 2026-27`).
 
 ```
 src/
-├── main.rs              binary: args, panic hook, store, five tabs, event loop
+├── main.rs              binary: args, panic hook, store, six tabs, event loop
 ├── lib.rs               library root; everything below is the `compter_tui` crate
 ├── app.rs               App state, global keys, tab switching (on_activate)
 ├── event.rs             termion input and tick threads
@@ -198,6 +232,10 @@ src/
 │   ├── project_service.rs  ProjectService, ProjectDraft, MilestoneDraft
 │   ├── invoice_service.rs  InvoiceService: profile, preview, issue, pay, PDFs
 │   ├── invoice_builder.rs  milestone → invoice document + ledger entries (pure)
+│   ├── expense_service.rs  ExpenseService: add and delete expenses with their posting
+│   ├── reports.rs       YearReport: a financial year in numbers (pure)
+│   ├── report_service.rs  ReportService: year reports, GSTR-1 export
+│   ├── gstr1.rs         quarterly GSTR-1: merge months, exports (6A), table 13
 │   ├── chart.rs         compter's ledger accounts
 │   └── error.rs         ServiceError
 ├── storage/             redb persistence
@@ -217,9 +255,10 @@ src/
 │   ├── billing.rs       Billing, TimeEntry, hourly amount calculation
 │   ├── invoice.rs       Invoice, InvoiceNumber, InvoiceKind, InvoiceStatus, payment rules
 │   ├── profile.rs       BusinessProfile (seller details, GSTIN, SAC, prefix, LUT)
+│   ├── expense.rs       Expense, ExpenseCategory, ExpenseId
 │   ├── states.rs        GST state code names
 │   ├── error.rs         DomainError
-│   └── fiscal_year.rs   Indian April–March year
+│   └── fiscal_year.rs   Indian April–March year and its quarters
 └── ui/
     ├── mod.rs           draw(): header / body / footer, help overlay
     ├── view.rs          View trait (render, keys, hints, on_activate), Action, Notice
@@ -233,7 +272,11 @@ src/
         ├── invoices/    InvoicesView: list, open PDF, record payment
         ├── settings/    SettingsView: business profile
         ├── payment.rs   the payment form shared by Projects and Invoices
-        └── placeholder.rs  Dashboard, Reports until step 6
+        ├── dashboard/   DashboardView: this year and unpaid invoices
+        ├── expenses/    ExpensesView: add, delete, by year
+        ├── reports/     ReportsView: income, 44ADA vs books, GST, clients, GSTR-1 export
+        ├── year.rs      YearPicker: [ and ] through financial years
+        └── placeholder.rs  a tab that only shows a message
 ```
 
 Unit tests sit in a `tests/` folder beside the code they cover (`src/domain/tests/`, `src/storage/tests/`, `src/ui/tests/`, and `src/tests/` for `app.rs`), one `<file>_tests.rs` per source file. Integration tests that reopen a real database file are in the top-level `tests/` directory.
@@ -250,21 +293,22 @@ Everything lives in one [redb](https://www.redb.org) database file, `compter.red
 
 | Table | Key | Value |
 |-------|-----|-------|
-| `meta` | `"schema_version"` | `1` |
+| `meta` | `"schema_version"` | `2` |
 | `projects` | project UUID | full project with milestones and time entries |
 | `project_summaries` | project UUID | id, name, client, status, total, for list views |
 | `accounts` | account id | accounting-core `Account` |
 | `transactions` | transaction id | accounting-core `Transaction` (`inv-…` / `pay-…` per invoice) |
-| `invoices` | invoice number | issued invoice with its printed document and payment |
-| `invoice_summaries` | invoice number | number, date, client, total, paid, for the list |
+| `invoices` | invoice number | issued invoice with its printed document and its payments |
+| `invoice_summaries` | invoice number | number, date, client, total, balance, status, for the list |
 | `invoice_counters` | financial year (`2026-27`) | last sequence used |
 | `settings` | `"business_profile"` | your business details |
+| `expenses` | expense UUID | an expense (its posting is transaction `exp-<id>`) |
 
 - **Atomic**: a project and its summary are written in one transaction, and issuing or paying an invoice writes every affected table in one transaction. The lists can never disagree with the records, and a crash leaves the last committed state.
 - **Low memory**: nothing is cached. Lists read only the small summary rows; a full project is read when you open it. The ledger store answers each query from the database.
 - **Validated on load**: values are stored as JSON bytes and decoded through the same checks as the domain constructors. A hand-edited bad record fails with its table and key instead of loading.
 - **Single process**: redb locks the file, so a second `compter` is refused with a clear error instead of corrupting data.
-- **Versioned, with upgrades**: the `meta` table records the schema version. Opening an older database runs the upgrade steps in `storage/migrations.rs` within one transaction. A database from a *newer* compter is refused rather than guessed at. Saved-format fixtures (`storage/tests/fixtures/`) are loaded on every `cargo test`, so a change that would stop existing records from loading fails the build first.
+- **Versioned, with upgrades**: the `meta` table records the schema version. Opening an older database runs the upgrade steps in `storage/migrations.rs` within one transaction. A database from a *newer* compter is refused rather than guessed at. Saved-format fixtures (`storage/tests/fixtures/`) are loaded on every `cargo test`, so a change that would stop existing records from loading fails the build first. Version 2 turned an invoice's single paid status into a list of payments; a version 1 database is upgraded on first open.
 
 `Store::open(&DataDir)` opens the file, and `Store::in_memory()` gives the same database in memory for tests. From a store you get:
 - `store.repository()`: a `RedbRepository`, which implements `ProjectRepository`, `InvoiceRepository` and `SettingsRepository`
@@ -279,5 +323,5 @@ The app opens the file on start, before the terminal is taken over, so an error 
 3. ✅ **Storage**: redb database, project repository, ledger storage for `accounting-core`
 4. ✅ **Wire storage into the TUI**: load and save, forms to create and edit projects and milestones, log hours
 5. ✅ **Invoicing & payments**: tax, export (LUT) and plain invoices, PDFs, ledger posting, payments with TDS, Invoices and Settings tabs
-6. **Tax and reports**: dashboard, income statement per FY, receivables, TDS summary, GSTR-1 JSON export (incl. exports), per-client income summary for ITR (incl. 44ADA view)
-7. **Polish**: archive finished projects (hidden from the list, kept for tax records), credit notes, part payments, search and filter, settings screen, error toasts, theming, integration tests
+6. ✅ **Tax and reports**: dashboard, expenses, year report (income, 44ADA vs books, GST by quarter, TDS and income by client), quarterly GSTR-1 JSON with exports
+7. **Polish**: archive finished projects (hidden from the list, kept for tax records), credit notes, editing expenses, IFF, search and filter, theming

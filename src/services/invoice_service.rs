@@ -134,7 +134,8 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         })
     }
 
-    /// Settle an invoice in full: `received` reached the bank, `tds` was withheld by the client
+    /// Record all or part of what the client owes: `received` reached the bank, `tds` was withheld.
+    /// The milestone becomes paid once nothing is left to pay.
     pub fn record_payment(
         &mut self,
         number: &InvoiceNumber,
@@ -143,34 +144,44 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         tds: BigDecimal,
     ) -> Result<Invoice, ServiceError> {
         let mut invoice = self.repo.load_invoice(number)?;
-        let (received, tds) = invoice.record_payment(date, received, tds)?;
+        let payment = invoice.record_payment(date, received, tds)?;
 
-        let mut project = self.repo.load(invoice.project_id())?;
-        let index = project
-            .milestone_index(invoice.milestone_id())
-            .ok_or_else(|| ServiceError::MissingMilestone(number.to_string()))?;
-        project.record_payment(index)?;
+        let project = if invoice.is_paid() {
+            let mut project = self.repo.load(invoice.project_id())?;
+            let index = project
+                .milestone_index(invoice.milestone_id())
+                .ok_or_else(|| ServiceError::MissingMilestone(number.to_string()))?;
+            project.record_payment(index)?;
+            Some(project)
+        } else {
+            None
+        };
 
+        // One posting per payment: pay-INV/26-27/004-1, -2, …
         let mut builder = TransactionBuilder::new(
-            format!("pay-{number}"),
+            format!("pay-{number}-{}", invoice.payments().len()),
             date,
             format!("Payment for {number} from {}", invoice.client_name()),
         )
         .reference(number.as_str());
-        if received > BigDecimal::zero() {
-            builder = builder.debit(chart::BANK, received, None);
+        if payment.received > BigDecimal::zero() {
+            builder = builder.debit(chart::BANK, payment.received.clone(), None);
         }
-        if tds > BigDecimal::zero() {
-            builder = builder.debit(chart::TDS_RECEIVABLE, tds, Some("TDS withheld".to_owned()));
+        if payment.tds > BigDecimal::zero() {
+            builder = builder.debit(
+                chart::TDS_RECEIVABLE,
+                payment.tds.clone(),
+                Some("TDS withheld".to_owned()),
+            );
         }
         let transaction = builder
-            .credit(chart::RECEIVABLE, invoice.amounts().total.clone(), None)
+            .credit(chart::RECEIVABLE, payment.settled(), None)
             .build()?;
         DefaultTransactionValidator.validate_transaction(&transaction)?;
 
         self.repo.record_payment(&PaymentRecord {
             invoice: &invoice,
-            project: &project,
+            project: project.as_ref(),
             transaction: &transaction,
             accounts: &chart::accounts(),
         })?;

@@ -4,14 +4,17 @@
 use bigdecimal::BigDecimal;
 
 use crate::domain::{
-    Billing, BusinessProfile, ClientRegion, Invoice, InvoiceKind, InvoiceStatus, MilestoneStatus,
-    Project, ProjectStatus,
+    Billing, BusinessProfile, ClientRegion, Expense, ExpenseCategory, Invoice, InvoiceKind,
+    InvoiceStatus, MilestoneStatus, Project, ProjectStatus,
 };
 use crate::storage::codec::decode;
+use crate::storage::migrations::invoice_v1_to_v2;
 
 const HOURLY_V1: &str = include_str!("fixtures/project_v1.json");
 const FIXED_V1: &str = include_str!("fixtures/project_fixed_v1.json");
 const CLIENT_V1: &str = include_str!("fixtures/project_client_v1.json");
+const EXPENSE_V1: &str = include_str!("fixtures/expense_v1.json");
+const PARTLY_PAID_V2: &str = include_str!("fixtures/invoice_partly_paid_v2.json");
 const PROFILE_V1: &str = include_str!("fixtures/business_profile_v1.json");
 const TAX_INVOICE_V1: &str = include_str!("fixtures/invoice_tax_v1.json");
 const EXPORT_INVOICE_V1: &str = include_str!("fixtures/invoice_export_v1.json");
@@ -65,22 +68,51 @@ fn business_profile_v1_still_loads() {
     assert!(profile.lut_arn().is_some());
 }
 
-#[test]
-fn invoices_v1_of_every_kind_still_load() {
-    let load = |json: &str| -> Invoice { decode("invoices", "fixture", json.as_bytes()).unwrap() };
+/// v1 invoices are upgraded by the v1 → v2 migration before they load
+fn upgrade_v1(json: &str) -> Invoice {
+    let v1: serde_json::Value = serde_json::from_str(json).unwrap();
+    let v2 = serde_json::to_vec(&invoice_v1_to_v2(v1)).unwrap();
+    decode("invoices", "fixture", &v2).unwrap()
+}
 
-    let tax = load(TAX_INVOICE_V1);
+#[test]
+fn invoices_v1_of_every_kind_upgrade_and_load() {
+    let tax = upgrade_v1(TAX_INVOICE_V1);
     assert_eq!(tax.kind(), InvoiceKind::Tax);
     assert!(tax.gst().is_some());
     assert_eq!(tax.print().title, "Tax Invoice");
+    assert_eq!(tax.status(), InvoiceStatus::Issued);
 
-    let export = load(EXPORT_INVOICE_V1);
+    let export = upgrade_v1(EXPORT_INVOICE_V1);
     assert_eq!(export.kind(), InvoiceKind::Export);
     assert!(export.terms()[0].contains("export under LUT"));
-    assert!(matches!(export.status(), InvoiceStatus::Paid { .. }));
+    assert!(export.is_paid());
 
-    let plain = load(PLAIN_INVOICE_V1);
+    let plain = upgrade_v1(PLAIN_INVOICE_V1);
     assert_eq!(plain.kind(), InvoiceKind::Plain);
     assert!(plain.print().seller.gstin.is_none());
-    assert!(matches!(plain.status(), InvoiceStatus::Paid { tds, .. } if *tds == 4_500));
+    assert!(plain.is_paid());
+    assert_eq!(plain.payments()[0].tds, 4_500);
+}
+
+#[test]
+fn v1_invoices_are_never_read_without_the_upgrade() {
+    // A paid v1 invoice read as v2 would look unpaid; it must be refused instead
+    let result = decode::<Invoice>("invoices", "fixture", PLAIN_INVOICE_V1.as_bytes());
+    assert!(result.is_err());
+}
+
+#[test]
+fn expense_v1_still_loads() {
+    let expense: Expense = decode("expenses", "fixture", EXPENSE_V1.as_bytes()).unwrap();
+    assert_eq!(expense.category(), ExpenseCategory::Equipment);
+    assert_eq!(expense.cost(), BigDecimal::from(150_000));
+}
+
+#[test]
+fn partly_paid_invoice_v2_still_loads() {
+    let invoice: Invoice = decode("invoices", "fixture", PARTLY_PAID_V2.as_bytes()).unwrap();
+    assert_eq!(invoice.status(), InvoiceStatus::PartlyPaid);
+    assert_eq!(invoice.payments()[0].received, 35_400);
+    assert_eq!(invoice.balance(), BigDecimal::from(35_400));
 }

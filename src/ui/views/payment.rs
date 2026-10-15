@@ -17,19 +17,23 @@ const TDS: usize = 2;
 /// TDS on professional fees under section 194J
 const TDS_PERCENT: u32 = 10;
 
-/// Prefilled with the full total received and no TDS; the hint shows what 10% TDS would be
+/// Prefilled with the whole balance received and no TDS; a smaller amount is a part payment
 pub fn payment_form(invoice: &Invoice) -> Form {
     let amounts = invoice.amounts();
+    let balance = invoice.balance();
     let tds_hint = format!(
         "withheld by the client; 10% of taxable is {}",
         money(&(&amounts.taxable_value * BigDecimal::from(TDS_PERCENT) / BigDecimal::from(100)))
+    );
+    let received_hint = format!(
+        "reached your bank; {} due, part payments are fine",
+        money(&balance)
     );
     Form::new(
         "Record payment",
         vec![
             Field::text("Date", "YYYY-MM-DD, blank for today"),
-            Field::text("Received", "amount that reached your bank")
-                .with_value(amounts.total.to_string()),
+            Field::text("Received", received_hint).with_value(balance.to_string()),
             Field::text("TDS", tds_hint).with_value("0"),
         ],
     )
@@ -48,5 +52,13 @@ pub fn submit_payment<R: Repository>(
     let invoice = service
         .record_payment(number, date, received, tds)
         .map_err(|e| e.to_string())?;
-    Ok(Notice::success(format!("{} marked paid", invoice.number())))
+    Ok(Notice::success(if invoice.is_paid() {
+        format!("{} paid in full", invoice.number())
+    } else {
+        format!(
+            "Payment recorded on {}; {} still due",
+            invoice.number(),
+            money(&invoice.balance())
+        )
+    }))
 }

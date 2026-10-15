@@ -5,12 +5,14 @@ use ratatui::backend::TestBackend;
 use termion::event::Key;
 
 use crate::app::App;
-use crate::services::InvoiceService;
+use crate::services::{ExpenseService, InvoiceService, ReportService};
 use crate::storage::Store;
 use crate::ui::draw;
 use crate::ui::theme::Theme;
 use crate::ui::view::View;
-use crate::ui::views::{InvoicesView, ProjectsView, SettingsView};
+use crate::ui::views::{
+    DashboardView, ExpensesView, InvoicesView, ProjectsView, ReportsView, SettingsView,
+};
 
 /// An app whose only tab is Projects on `store`
 pub fn projects_app(store: &Store) -> App {
@@ -28,6 +30,33 @@ pub fn invoicing_app(store: &Store) -> App {
         Box::new(SettingsView::new(InvoiceService::new(repo, None)).unwrap()),
     ];
     App::new(views, Theme::default())
+}
+
+/// Dashboard (1), Expenses (2) and Reports (3) on `store`, writing no files
+pub fn reporting_app(store: &Store) -> App {
+    let repo = store.repository();
+    let views: Vec<Box<dyn View>> = vec![
+        Box::new(
+            DashboardView::new(
+                ReportService::new(repo.clone(), None),
+                InvoiceService::new(repo.clone(), None),
+            )
+            .unwrap(),
+        ),
+        Box::new(ExpensesView::new(ExpenseService::new(repo.clone())).unwrap()),
+        Box::new(ReportsView::new(ReportService::new(repo, None)).unwrap()),
+    ];
+    App::new(views, Theme::default())
+}
+
+/// Press `[` or `]` until a tab with a year picker shows `start_year`'s financial year
+pub fn go_to_year(app: &mut App, start_year: i32) {
+    let current = crate::domain::FiscalYear::containing(chrono::Local::now().date_naive());
+    let steps = start_year - current.start_year();
+    let key = if steps < 0 { '[' } else { ']' };
+    for _ in 0..steps.abs() {
+        app.handle_key(Key::Char(key));
+    }
 }
 
 /// Press each character as a key (`\t` is Tab, `\n` is Enter)

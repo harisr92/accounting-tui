@@ -21,6 +21,14 @@ pub enum ServiceError {
     MissingMilestone(String),
     #[error("PDFs are not saved in demo mode")]
     NoPdfFolder,
+    #[error("GST input credit can only be claimed once your GSTIN is in Settings")]
+    CreditWithoutGstin,
+    #[error("returns are not saved in demo mode")]
+    NoReturnsFolder,
+    #[error("GSTR-1 needs your GSTIN in Settings")]
+    NotRegistered,
+    #[error(transparent)]
+    Gstr1(#[from] accounting_core::Gstr1Error),
     #[error("could not open {path} in a PDF viewer")]
     OpenPdf {
         path: std::path::PathBuf,

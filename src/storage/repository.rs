@@ -2,8 +2,8 @@ use accounting_core::{Account, Transaction};
 
 use super::StorageError;
 use crate::domain::{
-    BusinessProfile, FiscalYear, Invoice, InvoiceNumber, InvoiceSummary, Project, ProjectId,
-    ProjectSummary,
+    BusinessProfile, Expense, ExpenseId, FiscalYear, Invoice, InvoiceNumber, InvoiceSummary,
+    Project, ProjectId, ProjectSummary,
 };
 
 /// Where projects live. The app depends on this trait, not on redb.
@@ -32,10 +32,12 @@ pub struct IssueRecord<'a> {
     pub accounts: &'a [Account],
 }
 
-/// Everything that changes when an invoice is paid, saved together or not at all
+/// Everything that changes when a payment is recorded, saved together or not at all
 pub struct PaymentRecord<'a> {
+    /// The invoice with the payment added
     pub invoice: &'a Invoice,
-    pub project: &'a Project,
+    /// The project, when this payment settled the invoice and its milestone is now paid
+    pub project: Option<&'a Project>,
     pub transaction: &'a Transaction,
     pub accounts: &'a [Account],
 }
@@ -53,6 +55,27 @@ pub trait InvoiceRepository {
     fn list_invoices(&self) -> Result<Vec<InvoiceSummary>, StorageError>;
 
     fn load_invoice(&self, number: &InvoiceNumber) -> Result<Invoice, StorageError>;
+
+    /// Hand every invoice to `visit`, one at a time, so reports never hold them all
+    fn scan_invoices(&self, visit: &mut dyn FnMut(Invoice)) -> Result<(), StorageError>;
+}
+
+/// An expense and its ledger posting, saved together
+pub struct ExpenseRecord<'a> {
+    pub expense: &'a Expense,
+    pub transaction: &'a Transaction,
+    pub accounts: &'a [Account],
+}
+
+/// Business expenses, each posted to the ledger
+pub trait ExpenseRepository {
+    fn add_expense(&mut self, record: &ExpenseRecord<'_>) -> Result<(), StorageError>;
+
+    /// Remove an expense and the ledger transaction `transaction_id` that posted it
+    fn delete_expense(&mut self, id: ExpenseId, transaction_id: &str) -> Result<(), StorageError>;
+
+    /// Expenses dated in `year`, newest first
+    fn list_expenses(&self, year: FiscalYear) -> Result<Vec<Expense>, StorageError>;
 }
 
 /// The freelancer's business details
@@ -64,6 +87,12 @@ pub trait SettingsRepository {
 }
 
 /// All of the repositories at once, as the app's views use them
-pub trait Repository: ProjectRepository + InvoiceRepository + SettingsRepository + Clone {}
+pub trait Repository:
+    ProjectRepository + InvoiceRepository + SettingsRepository + ExpenseRepository + Clone
+{
+}
 
-impl<T: ProjectRepository + InvoiceRepository + SettingsRepository + Clone> Repository for T {}
+impl<T> Repository for T where
+    T: ProjectRepository + InvoiceRepository + SettingsRepository + ExpenseRepository + Clone
+{
+}

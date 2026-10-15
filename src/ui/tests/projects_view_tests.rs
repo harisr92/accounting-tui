@@ -158,3 +158,75 @@ fn typing_in_a_form_never_triggers_shortcuts() {
     app.handle_key(Key::Ctrl('c'));
     assert!(!app.is_running());
 }
+
+/// Demo project "Mobile App" (third by name), milestones focused
+fn mobile_app(store: &Store) -> crate::app::App {
+    let mut app = projects_app(store);
+    type_keys(&mut app, "jj\t");
+    app
+}
+
+#[test]
+fn o_shows_and_hides_a_milestones_time_log() {
+    let store = demo::store().unwrap();
+    let mut app = mobile_app(&store);
+    assert!(!screen(&app, W, H).contains("Wireframes"));
+
+    app.handle_key(Key::Char('o'));
+    let open = screen(&app, W, H);
+    for expected in [
+        "06 Oct",
+        "Wireframes",
+        "6h 00m",
+        "Navigation shell",
+        "4h 30m",
+    ] {
+        assert!(open.contains(expected), "missing {expected:?}\n{open}");
+    }
+    // The log sits under Prototype, above Beta
+    let line = |text: &str| open.lines().position(|l| l.contains(text)).unwrap();
+    assert!(line("Prototype") < line("Wireframes"));
+    assert!(line("Navigation shell") < line("Beta"));
+
+    app.handle_key(Key::Char('o'));
+    assert!(!screen(&app, W, H).contains("Wireframes"));
+}
+
+#[test]
+fn selection_steps_over_open_logs() {
+    let store = demo::store().unwrap();
+    let mut app = mobile_app(&store);
+    type_keys(&mut app, "oj");
+    let screen = screen(&app, W, H);
+    assert!(screen.contains("> Beta"), "{screen}");
+    assert!(!screen.contains("> Prototype"));
+    assert!(screen.contains("Wireframes"));
+}
+
+#[test]
+fn time_log_follows_undo() {
+    let store = Store::in_memory().unwrap();
+    let mut app = projects_app(&store);
+    create_project(&mut app, &hourly_project_keys("App", "Globex", "1500"));
+    app.handle_key(Key::Char('\t'));
+    app.handle_key(Key::Char('a'));
+    type_keys(&mut app, "Prototype\n");
+    app.handle_key(Key::Char('o'));
+    assert!(screen(&app, W, H).contains("no time logged yet"));
+
+    app.handle_key(Key::Char('t'));
+    type_keys(&mut app, "\t2h\tspike\n");
+    assert!(screen(&app, W, H).contains("spike"));
+    type_keys(&mut app, "uy");
+    let after = screen(&app, W, H);
+    assert!(!after.contains("spike"), "{after}");
+    assert!(after.contains("no time logged yet"));
+}
+
+#[test]
+fn fixed_price_milestones_have_no_log() {
+    let store = demo::store().unwrap();
+    let mut app = projects_app(&store);
+    type_keys(&mut app, "\to");
+    assert!(screen(&app, W, H).contains("Fixed-price milestones have no time log"));
+}

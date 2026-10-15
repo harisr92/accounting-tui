@@ -3,7 +3,8 @@
 use redb::TableDefinition;
 use uuid::Uuid;
 
-pub(super) const SCHEMA_VERSION: u32 = 1;
+/// 1: first release · 2: invoices record a list of payments instead of a single paid status
+pub(super) const SCHEMA_VERSION: u32 = 2;
 pub(super) const SCHEMA_KEY: &str = "schema_version";
 
 pub(super) const META: TableDefinition<&str, u32> = TableDefinition::new("meta");
@@ -30,6 +31,9 @@ pub(super) const INVOICE_SUMMARIES: TableDefinition<&str, &[u8]> =
 /// Last invoice sequence used in each financial year, keyed by `2026-27`
 pub(super) const INVOICE_COUNTERS: TableDefinition<&str, u32> =
     TableDefinition::new("invoice_counters");
+
+/// Business expenses, keyed by `ExpenseId`
+pub(super) const EXPENSES: TableDefinition<Uuid, &[u8]> = TableDefinition::new("expenses");
 
 /// Single-row settings, keyed by name (`business_profile`)
 pub(super) const SETTINGS: TableDefinition<&str, &[u8]> = TableDefinition::new("settings");

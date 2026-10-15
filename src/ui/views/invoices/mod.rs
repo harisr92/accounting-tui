@@ -2,12 +2,12 @@
 
 use bigdecimal::BigDecimal;
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Rect};
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Row, Table};
 use termion::event::Key;
 
-use crate::domain::InvoiceSummary;
+use crate::domain::{Invoice, InvoiceStatus, InvoiceSummary};
 use crate::services::{InvoiceService, ServiceError};
 use crate::storage::Repository;
 use crate::ui::form::Form;
@@ -15,7 +15,7 @@ use crate::ui::selection::{Nav, Selection};
 use crate::ui::theme::{Theme, Tone};
 use crate::ui::view::{Action, KeyHint, Notice, View};
 use crate::ui::views::payment::{payment_form, submit_payment};
-use crate::ui::widgets::{money, panel};
+use crate::ui::widgets::{header, money, panel};
 
 const HINTS: &[KeyHint] = &[
     KeyHint::new("j/k", "move"),
@@ -27,24 +27,37 @@ pub struct InvoicesView<R> {
     service: InvoiceService<R>,
     summaries: Vec<InvoiceSummary>,
     selection: Selection,
+    /// The selected invoice in full, for its payment history; the only one held in memory
+    current: Option<Invoice>,
     /// Payment form for the selected invoice
     form: Option<Form>,
 }
 
 impl<R: Repository> InvoicesView<R> {
     pub fn new(service: InvoiceService<R>) -> Result<Self, ServiceError> {
-        let summaries = service.list()?;
-        Ok(Self {
+        let mut view = Self {
             service,
-            summaries,
+            summaries: Vec::new(),
             selection: Selection::default(),
+            current: None,
             form: None,
-        })
+        };
+        view.reload()?;
+        Ok(view)
     }
 
     fn reload(&mut self) -> Result<(), ServiceError> {
         self.summaries = self.service.list()?;
         self.selection.clamp(self.summaries.len());
+        self.load_current()
+    }
+
+    /// Load the invoice under the cursor, dropping the previous one first
+    fn load_current(&mut self) -> Result<(), ServiceError> {
+        self.current = None;
+        if let Some(summary) = self.summaries.get(self.selection.index()) {
+            self.current = Some(self.service.load(summary.number())?);
+        }
         Ok(())
     }
 
@@ -53,11 +66,7 @@ impl<R: Repository> InvoicesView<R> {
     }
 
     fn outstanding(&self) -> BigDecimal {
-        self.summaries
-            .iter()
-            .filter(|s| !s.is_paid())
-            .map(InvoiceSummary::total)
-            .sum()
+        self.summaries.iter().map(InvoiceSummary::balance).sum()
     }
 
     fn open_payment(&mut self) -> Action {
@@ -98,6 +107,23 @@ impl<R: Repository> View for InvoicesView<R> {
             self.summaries.len(),
             money(&self.outstanding())
         );
+        let history_height = self.current.as_ref().map_or(0, |i| {
+            u16::try_from(i.payments().len())
+                .unwrap_or(u16::MAX)
+                .saturating_add(3)
+        });
+        let [area, history_area] = Layout::vertical([
+            Constraint::Min(3),
+            Constraint::Length(if history_height > 3 {
+                history_height
+            } else {
+                0
+            }),
+        ])
+        .areas(area);
+        if let Some(invoice) = &self.current {
+            render_payments(frame, history_area, invoice, theme);
+        }
         let block = panel(&title, true, theme);
         if self.summaries.is_empty() {
             let empty = Paragraph::new(
@@ -108,10 +134,15 @@ impl<R: Repository> View for InvoicesView<R> {
             frame.render_widget(empty, area);
         } else {
             let rows = self.summaries.iter().map(|s| {
-                let (status, tone) = if s.is_paid() {
-                    ("PAID", Tone::Success)
+                let tone = match s.status() {
+                    InvoiceStatus::Paid => Tone::Success,
+                    InvoiceStatus::PartlyPaid => Tone::Info,
+                    InvoiceStatus::Issued => Tone::Warning,
+                };
+                let due = if s.is_paid() {
+                    "-".to_owned()
                 } else {
-                    ("ISSUED", Tone::Warning)
+                    money(s.balance())
                 };
                 Row::new(vec![
                     Line::raw(s.number().as_str()),
@@ -120,7 +151,8 @@ impl<R: Repository> View for InvoicesView<R> {
                     Line::raw(s.milestone_name()),
                     Line::raw(s.kind().label()),
                     Line::raw(money(s.total())).right_aligned(),
-                    Line::styled(status, theme.tone(tone)),
+                    Line::raw(due).right_aligned(),
+                    Line::styled(s.status().label(), theme.tone(tone)),
                 ])
             });
             let widths = [
@@ -130,21 +162,24 @@ impl<R: Repository> View for InvoicesView<R> {
                 Constraint::Fill(1),
                 Constraint::Length(6),
                 Constraint::Length(14),
-                Constraint::Length(6),
+                Constraint::Length(14),
+                Constraint::Length(9),
             ];
             let table = Table::new(rows, widths)
-                .header(
-                    Row::new([
+                .header(header(
+                    &[
                         "Number",
                         "Date",
                         "Client",
                         "Milestone",
                         "Kind",
                         "Total",
+                        "Due",
                         "Status",
-                    ])
-                    .style(theme.key()),
-                )
+                    ],
+                    &[5, 6],
+                    theme,
+                ))
                 .column_spacing(1)
                 .block(block)
                 .row_highlight_style(theme.selected)
@@ -174,7 +209,10 @@ impl<R: Repository> View for InvoicesView<R> {
         }
         if let Some(nav) = Nav::from_key(key) {
             self.selection.move_by(nav, self.summaries.len());
-            return Action::Handled;
+            return match self.load_current() {
+                Ok(()) => Action::Handled,
+                Err(error) => Action::Notify(Notice::error(error.to_string())),
+            };
         }
         match key {
             Key::Char('p') => self.open_payment(),
@@ -194,4 +232,36 @@ impl<R: Repository> View for InvoicesView<R> {
     fn on_activate(&mut self) -> Option<Notice> {
         self.reload().err().map(|e| Notice::error(e.to_string()))
     }
+}
+
+/// Every payment received against the selected invoice
+fn render_payments(frame: &mut Frame, area: Rect, invoice: &Invoice, theme: &Theme) {
+    let title = format!(
+        "Payments for {} · {} due",
+        invoice.number(),
+        money(&invoice.balance())
+    );
+    let rows = invoice.payments().iter().map(|p| {
+        Row::new(vec![
+            Line::raw(p.date.format("%d-%m-%Y").to_string()),
+            Line::raw(money(&p.received)).right_aligned(),
+            Line::raw(money(&p.tds)).right_aligned(),
+            Line::raw(money(&p.settled())).right_aligned(),
+        ])
+    });
+    let widths = [
+        Constraint::Length(10),
+        Constraint::Length(14),
+        Constraint::Length(14),
+        Constraint::Length(14),
+    ];
+    let table = Table::new(rows, widths)
+        .header(header(
+            &["Date", "Received", "TDS", "Settled"],
+            &[1, 2, 3],
+            theme,
+        ))
+        .column_spacing(2)
+        .block(panel(&title, false, theme));
+    frame.render_widget(table, area);
 }

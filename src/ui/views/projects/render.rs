@@ -1,12 +1,12 @@
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Row, Table};
+use ratatui::widgets::{Paragraph, Row, Table, TableState};
 
 use super::{Focus, ProjectsView};
 use crate::domain::{Billing, Milestone, Project};
 use crate::ui::theme::Theme;
-use crate::ui::widgets::{duration, money, panel, status_span};
+use crate::ui::widgets::{duration, header, money, panel, stat_tiles, status_span};
 
 /// Wide enough for the longest status label
 const STATUS_WIDTH: u16 = 9;
@@ -16,6 +16,8 @@ const HOURS_WIDTH: u16 = 8;
 const AMOUNT_WIDTH: u16 = 13;
 /// Below this the milestone table drops its Due column
 const WIDE_TABLE: u16 = 56;
+/// Below this the Due column also gives way while a time log is open
+const WIDE_WITH_LOG: u16 = 80;
 
 #[derive(Debug, Clone, Copy)]
 enum Column {
@@ -35,6 +37,11 @@ impl Column {
             Self::Due => "Due",
             Self::Status => "Status",
         }
+    }
+
+    /// Amounts and durations line up on the right
+    fn right_aligned(self) -> bool {
+        matches!(self, Self::Hours | Self::Amount)
     }
 
     fn width(self) -> Constraint {
@@ -106,31 +113,84 @@ impl<R> ProjectsView<R> {
         }
 
         let hourly = project.billing().rate().is_some();
-        // Hours only matter on hourly work; the due date gives way on narrow screens
+        // Hours only matter on hourly work. The due date gives way on narrow screens, and on
+        // medium ones while a time log is open, so its notes have room.
+        let log_open = project
+            .milestones()
+            .iter()
+            .any(|m| self.open_logs.contains(&m.id()));
+        let show_due = area.width >= WIDE_TABLE && !(log_open && area.width < WIDE_WITH_LOG);
         let columns: Vec<Column> = [
             Some(Column::Name),
             hourly.then_some(Column::Hours),
             Some(Column::Amount),
-            (area.width >= WIDE_TABLE).then_some(Column::Due),
+            show_due.then_some(Column::Due),
             Some(Column::Status),
         ]
         .into_iter()
         .flatten()
         .collect();
 
-        let rows = project
-            .milestones()
-            .iter()
-            .map(|m| Row::new(columns.iter().map(|column| column.cell(m, theme))));
+        let titles: Vec<&str> = columns.iter().map(|c| c.title()).collect();
+        let right: Vec<usize> = (0..columns.len())
+            .filter(|&i| columns[i].right_aligned())
+            .collect();
+        // Each open milestone is followed by its time entries, so the selected milestone's
+        // display row is its index plus the entry rows shown above it
+        let mut rows = Vec::with_capacity(project.milestones().len());
+        let mut selected_row = None;
+        for (index, m) in project.milestones().iter().enumerate() {
+            if index == self.milestone_sel.index() {
+                selected_row = Some(rows.len());
+            }
+            rows.push(Row::new(columns.iter().map(|column| column.cell(m, theme))));
+            if self.open_logs.contains(&m.id()) {
+                rows.extend(time_log_rows(m, &columns, theme));
+            }
+        }
         let table = Table::new(rows, columns.iter().map(|c| c.width()))
-            .header(Row::new(columns.iter().map(|c| c.title())).style(theme.key()))
+            .header(header(&titles, &right, theme))
             .column_spacing(1)
             .block(block)
             .row_highlight_style(theme.selected)
             .highlight_symbol("> ");
-        let mut state = self.milestone_sel.table_state(project.milestones().len());
+        let mut state = TableState::default().with_selected(selected_row);
         frame.render_stateful_widget(table, area, &mut state);
     }
+}
+
+/// The time log under an open milestone: one row per entry with its date (`06 Oct`, to leave
+/// room for the note), note and duration
+fn time_log_rows<'a>(milestone: &'a Milestone, columns: &[Column], theme: &Theme) -> Vec<Row<'a>> {
+    let entries = milestone.time_entries();
+    if entries.is_empty() {
+        let cells = columns.iter().map(|column| match column {
+            Column::Name => Line::styled("└ no time logged yet; t logs some", theme.dim()),
+            _ => Line::default(),
+        });
+        return vec![Row::new(cells)];
+    }
+    let last = entries.len() - 1;
+    entries
+        .iter()
+        .enumerate()
+        .map(|(i, entry)| {
+            let branch = if i == last { "└ " } else { "├ " };
+            let cells = columns.iter().map(|column| match column {
+                Column::Name => Line::from(vec![
+                    Span::styled(branch, theme.dim()),
+                    Span::styled(entry.date().format("%d %b").to_string(), theme.dim()),
+                    Span::raw(" "),
+                    Span::raw(entry.note()),
+                ]),
+                Column::Hours => {
+                    Line::styled(duration(entry.minutes()), theme.dim()).right_aligned()
+                }
+                _ => Line::default(),
+            });
+            Row::new(cells)
+        })
+        .collect()
 }
 
 fn render_summary(frame: &mut Frame, area: Rect, project: &Project, theme: &Theme) {
@@ -174,12 +234,5 @@ fn render_summary(frame: &mut Frame, area: Rect, project: &Project, theme: &Them
         ("Paid", money(&project.paid_amount())),
         ("Outstanding", money(&project.outstanding_amount())),
     ];
-    let cells = Layout::horizontal([Constraint::Fill(1); 3]).split(stats_area);
-    for ((label, value), cell) in stats.into_iter().zip(cells.iter()) {
-        let stat = Paragraph::new(vec![
-            Line::styled(label, theme.dim()),
-            Line::styled(value, theme.key()),
-        ]);
-        frame.render_widget(stat, *cell);
-    }
+    stat_tiles(frame, stats_area, &stats, theme);
 }

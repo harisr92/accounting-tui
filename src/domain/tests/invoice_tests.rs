@@ -62,12 +62,39 @@ fn numbers_follow_the_financial_year() {
 }
 
 #[test]
-fn payment_must_settle_the_total_exactly() {
+fn payments_may_come_in_parts_up_to_the_total() {
+    let mut inv = invoice();
+    let rupees = BigDecimal::from;
+    assert_eq!(inv.status(), InvoiceStatus::Issued);
+
+    inv.record_payment(date(5), rupees(400), rupees(100))
+        .unwrap();
+    assert_eq!(inv.status(), InvoiceStatus::PartlyPaid);
+    assert_eq!(inv.balance(), rupees(500));
+    let summary = InvoiceSummary::from(&inv);
+    assert!(!summary.is_paid());
+    assert_eq!(summary.balance(), &rupees(500));
+
+    assert!(matches!(
+        inv.record_payment(date(6), rupees(600), rupees(0)),
+        Err(DomainError::PaymentExceedsBalance { .. })
+    ));
+    inv.record_payment(date(6), rupees(500), rupees(0)).unwrap();
+    assert!(inv.is_paid());
+    assert_eq!(inv.payments().len(), 2);
+    assert!(matches!(
+        inv.record_payment(date(7), rupees(1), rupees(0)),
+        Err(DomainError::InvoiceAlreadyPaid)
+    ));
+}
+
+#[test]
+fn a_payment_must_be_positive_and_not_before_the_invoice() {
     let mut inv = invoice();
     let rupees = BigDecimal::from;
     assert!(matches!(
-        inv.record_payment(date(5), rupees(800), rupees(100)),
-        Err(DomainError::PaymentMismatch { .. })
+        inv.record_payment(date(5), rupees(0), rupees(0)),
+        Err(DomainError::NonPositiveAmount)
     ));
     assert!(matches!(
         inv.record_payment(date(5), rupees(1100), rupees(-100)),
@@ -78,21 +105,13 @@ fn payment_must_settle_the_total_exactly() {
         inv.record_payment(too_early, rupees(1000), rupees(0)),
         Err(DomainError::PaymentBeforeInvoice)
     ));
-
-    inv.record_payment(date(5), rupees(900), rupees(100))
-        .unwrap();
-    assert!(matches!(inv.status(), InvoiceStatus::Paid { tds, .. } if *tds == rupees(100)));
-    assert!(InvoiceSummary::from(&inv).is_paid());
-    assert!(matches!(
-        inv.record_payment(date(6), rupees(1000), rupees(0)),
-        Err(DomainError::InvoiceAlreadyPaid)
-    ));
+    assert!(inv.payments().is_empty());
 }
 
 #[test]
-fn stored_payment_must_add_up() {
+fn stored_payments_must_not_exceed_the_total() {
     let mut inv = invoice();
-    inv.record_payment(date(5), BigDecimal::from(1000), BigDecimal::from(0))
+    inv.record_payment(date(5), BigDecimal::from(600), BigDecimal::from(0))
         .unwrap();
     let json = serde_json::to_value(&inv).unwrap();
     assert_eq!(
@@ -100,7 +119,14 @@ fn stored_payment_must_add_up() {
         inv
     );
 
-    let mut tampered = json;
-    tampered["status"]["received"] = "1".into();
+    let mut tampered = json.clone();
+    tampered["payments"][0]["received"] = "5000".into();
     assert!(serde_json::from_value::<Invoice>(tampered).is_err());
+
+    let mut v1 = json;
+    v1["status"] = serde_json::json!({"state": "issued"});
+    assert!(matches!(
+        serde_json::from_value::<Invoice>(v1).map_err(|e| e.to_string()),
+        Err(message) if message.contains("old (v1) format")
+    ));
 }

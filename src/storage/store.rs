@@ -6,8 +6,8 @@ use redb::{Database, DatabaseError, ReadableTable};
 
 use super::migrations;
 use super::tables::{
-    ACCOUNTS, INVOICE_COUNTERS, INVOICE_SUMMARIES, INVOICES, META, PROJECT_SUMMARIES, PROJECTS,
-    SCHEMA_KEY, SCHEMA_VERSION, SETTINGS, TRANSACTIONS,
+    ACCOUNTS, EXPENSES, INVOICE_COUNTERS, INVOICE_SUMMARIES, INVOICES, META, PROJECT_SUMMARIES,
+    PROJECTS, SCHEMA_KEY, SCHEMA_VERSION, SETTINGS, TRANSACTIONS,
 };
 use super::{DataDir, RedbLedgerStorage, RedbRepository, StorageError};
 
@@ -76,6 +76,7 @@ impl Store {
             txn.open_table(INVOICE_SUMMARIES)?;
             txn.open_table(INVOICE_COUNTERS)?;
             txn.open_table(SETTINGS)?;
+            txn.open_table(EXPENSES)?;
         }
         txn.commit()?;
         Ok(Self { db: Arc::new(db) })

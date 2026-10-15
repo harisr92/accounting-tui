@@ -7,14 +7,19 @@
 //!
 //! Adding a field with `#[serde(default)]` needs no migration.
 
-use redb::WriteTransaction;
+use redb::{ReadableTable, TableHandle, WriteTransaction};
+use serde_json::{Value, json};
 
 use super::StorageError;
+use super::codec::decode;
+use super::redb_repository::put_invoice;
+use super::tables::INVOICES;
+use crate::domain::Invoice;
 
 pub(super) type Migration = fn(&WriteTransaction) -> Result<(), StorageError>;
 
 /// `MIGRATIONS[i]` upgrades schema version `i + 1` to `i + 2`
-pub(super) const MIGRATIONS: &[Migration] = &[];
+pub(super) const MIGRATIONS: &[Migration] = &[payments_list];
 
 /// Run every step from `from` up to the current version, inside the caller's transaction
 pub(super) fn upgrade(txn: &WriteTransaction, from: u32) -> Result<(), StorageError> {
@@ -23,4 +28,51 @@ pub(super) fn upgrade(txn: &WriteTransaction, from: u32) -> Result<(), StorageEr
         migration(txn)?;
     }
     Ok(())
+}
+
+/// v1 → v2: an invoice's single `status` (issued, or paid in full) becomes a list of payments.
+/// Every invoice is rewritten with its summary, which now carries status and balance.
+fn payments_list(txn: &WriteTransaction) -> Result<(), StorageError> {
+    let rows: Vec<(String, Vec<u8>)> = {
+        let table = txn.open_table(INVOICES)?;
+        let mut rows = Vec::new();
+        for row in table.iter()? {
+            let (key, value) = row?;
+            rows.push((key.value().to_owned(), value.value().to_vec()));
+        }
+        rows
+    };
+    for (key, bytes) in rows {
+        let codec = |source| StorageError::Codec {
+            table: INVOICES.name(),
+            key: key.clone(),
+            source,
+        };
+        let v1: Value = serde_json::from_slice(&bytes).map_err(codec)?;
+        let v2 = serde_json::to_vec(&invoice_v1_to_v2(v1)).map_err(codec)?;
+        let invoice: Invoice = decode(INVOICES.name(), &key, &v2)?;
+        put_invoice(txn, &invoice)?;
+    }
+    Ok(())
+}
+
+/// `"status": {"state": "paid", date, received, tds}` → `"payments": [{date, received, tds}]`;
+/// an issued invoice simply loses its status
+pub(super) fn invoice_v1_to_v2(mut invoice: Value) -> Value {
+    let Some(fields) = invoice.as_object_mut() else {
+        return invoice;
+    };
+    if let Some(status) = fields.remove("status")
+        && status["state"] == "paid"
+    {
+        fields.insert(
+            "payments".to_owned(),
+            json!([{
+                "date": status["date"],
+                "received": status["received"],
+                "tds": status["tds"],
+            }]),
+        );
+    }
+    invoice
 }

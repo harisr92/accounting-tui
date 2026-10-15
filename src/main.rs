@@ -12,9 +12,11 @@ use termion::screen::IntoAlternateScreen;
 use compter_tui::app::App;
 use compter_tui::demo;
 use compter_tui::event::{Event, Events};
-use compter_tui::services::InvoiceService;
+use compter_tui::services::{ExpenseService, InvoiceService, ReportService};
 use compter_tui::storage::{DataDir, Store};
-use compter_tui::ui::views::{InvoicesView, PlaceholderView, ProjectsView, SettingsView};
+use compter_tui::ui::views::{
+    DashboardView, ExpensesView, InvoicesView, ProjectsView, ReportsView, SettingsView,
+};
 use compter_tui::ui::{self, theme::Theme, view::View};
 
 const TICK_RATE: Duration = Duration::from_millis(250);
@@ -48,25 +50,24 @@ fn main() -> Result<ExitCode> {
     let invoices = || InvoiceService::new(repo.clone(), data_dir.clone());
     let projects =
         ProjectsView::new(repo.clone(), data_dir.clone()).wrap_err("could not load projects")?;
+    let reports = || ReportService::new(repo.clone(), data_dir.clone());
+    let dashboard =
+        DashboardView::new(reports(), invoices()).wrap_err("could not load the dashboard")?;
     let invoice_list = InvoicesView::new(invoices()).wrap_err("could not load invoices")?;
+    let expenses =
+        ExpensesView::new(ExpenseService::new(repo.clone())).wrap_err("could not load expenses")?;
+    let report_view = ReportsView::new(reports()).wrap_err("could not load reports")?;
     let settings = SettingsView::new(invoices()).wrap_err("could not load settings")?;
 
     let views: Vec<Box<dyn View>> = vec![
-        Box::new(PlaceholderView::new(
-            "Dashboard",
-            "Earnings overview arrives in step 6",
-        )),
+        Box::new(dashboard),
         Box::new(projects),
         Box::new(invoice_list),
-        Box::new(PlaceholderView::new(
-            "Reports",
-            "Income tax and GSTR-1 reports arrive in step 6",
-        )),
+        Box::new(expenses),
+        Box::new(report_view),
         Box::new(settings),
     ];
     let mut app = App::new(views, Theme::default());
-    // Open on Projects, the only live tab so far
-    app.handle_key(termion::event::Key::Char('2'));
 
     let stdout = io::stdout().into_raw_mode()?.into_alternate_screen()?;
     let mut terminal = Terminal::new(TermionBackend::new(stdout))?;

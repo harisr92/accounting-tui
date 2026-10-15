@@ -6,10 +6,10 @@ use chrono::NaiveDate;
 use accounting_core::StateCode;
 
 use crate::domain::{
-    Billing, ClientDetails, ClientRegion, DEFAULT_SAC, DomainError, MilestoneId, ProfileDraft,
-    Project, TimeEntry,
+    Billing, ClientDetails, ClientRegion, DEFAULT_SAC, DomainError, ExpenseCategory, MilestoneId,
+    ProfileDraft, Project, TimeEntry,
 };
-use crate::services::{InvoiceService, ServiceError};
+use crate::services::{ExpenseService, InvoiceService, ServiceError};
 use crate::storage::{ProjectRepository, Store};
 
 fn date(year: i32, month: u32, day: u32) -> NaiveDate {
@@ -216,7 +216,45 @@ pub fn store() -> Result<Store, ServiceError> {
     let design = design.invoice.number().clone();
     invoices.record_payment(&design, date(2026, 9, 20), rupee(54_000), rupee(5_000))?;
     invoices.issue(pipeline.id(), pipeline_ms[1], date(2026, 9, 25))?;
-    invoices.issue(website.id(), website_ms[1], date(2026, 10, 5))?;
+    let frontend = invoices.issue(website.id(), website_ms[1], date(2026, 10, 5))?;
+    // Half paid so far
+    let frontend = frontend.invoice.number().clone();
+    invoices.record_payment(&frontend, date(2026, 10, 12), rupee(35_400), rupee(0))?;
     invoices.issue(app.id(), app_ms[0], date(2026, 10, 10))?;
+
+    // Business expenses, GST claimed back as input credit
+    let mut expenses = ExpenseService::new(store.repository());
+    for (day, category, what, amount, credit) in [
+        (
+            date(2026, 7, 5),
+            ExpenseCategory::Software,
+            "Figma, annual plan",
+            1_180,
+            180,
+        ),
+        (
+            date(2026, 8, 20),
+            ExpenseCategory::Equipment,
+            "Laptop",
+            177_000,
+            27_000,
+        ),
+        (
+            date(2026, 9, 1),
+            ExpenseCategory::Workspace,
+            "Coworking desk, September",
+            11_800,
+            1_800,
+        ),
+        (
+            date(2026, 10, 1),
+            ExpenseCategory::Internet,
+            "Fibre broadband",
+            1_180,
+            180,
+        ),
+    ] {
+        expenses.add(day, category, what, rupee(amount), rupee(credit))?;
+    }
     Ok(store)
 }

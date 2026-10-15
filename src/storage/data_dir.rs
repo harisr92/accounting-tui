@@ -48,6 +48,14 @@ impl DataDir {
         self.root.join(DATABASE_FILE)
     }
 
+    /// `<root>/returns/2026-27/GSTR1-Q2-2026-27.json`
+    pub fn return_path(&self, year_label: &str, file_stem: &str) -> PathBuf {
+        self.root
+            .join("returns")
+            .join(year_label)
+            .join(format!("{file_stem}.json"))
+    }
+
     /// `<root>/invoices/2026-27/INV-26-27-004.pdf`
     pub fn invoice_pdf_path(&self, year_label: &str, file_stem: &str) -> PathBuf {
         self.root

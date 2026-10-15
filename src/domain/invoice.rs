@@ -88,29 +88,43 @@ impl InvoiceAmounts {
     }
 }
 
-/// Whether the client has settled the invoice
+/// One receipt against an invoice. A client may pay in parts; each part can have TDS withheld.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "state", rename_all = "snake_case")]
+pub struct Payment {
+    pub date: NaiveDate,
+    /// Amount that reached the bank
+    pub received: BigDecimal,
+    /// Tax the client withheld on this payment, claimable in the ITR
+    pub tds: BigDecimal,
+}
+
+impl Payment {
+    /// How much of the invoice this payment settles
+    pub fn settled(&self) -> BigDecimal {
+        &self.received + &self.tds
+    }
+}
+
+/// How far an invoice has been paid, derived from its payments
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum InvoiceStatus {
     Issued,
-    /// `received` reached the bank; `tds` was withheld by the client and is claimable in the ITR
-    Paid {
-        date: NaiveDate,
-        received: BigDecimal,
-        tds: BigDecimal,
-    },
+    PartlyPaid,
+    Paid,
 }
 
 impl InvoiceStatus {
-    pub const fn label(&self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::Issued => "ISSUED",
-            Self::Paid { .. } => "PAID",
+            Self::PartlyPaid => "PART PAID",
+            Self::Paid => "PAID",
         }
     }
 }
 
-/// An issued invoice: the billing record. Only its payment status ever changes.
+/// An issued invoice: the billing record. Only its list of payments ever grows.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(try_from = "RawInvoice")]
 pub struct Invoice {
@@ -130,7 +144,8 @@ pub struct Invoice {
     /// The GST invoice behind a tax invoice, for GSTR-1
     #[serde(default, skip_serializing_if = "Option::is_none")]
     gst: Option<GstInvoice>,
-    status: InvoiceStatus,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    payments: Vec<Payment>,
 }
 
 #[derive(Deserialize)]
@@ -148,7 +163,11 @@ struct RawInvoice {
     terms: Vec<String>,
     #[serde(default)]
     gst: Option<GstInvoice>,
-    status: InvoiceStatus,
+    #[serde(default)]
+    payments: Vec<Payment>,
+    /// The v1 format's single payment status; v2 records list `payments` instead
+    #[serde(default)]
+    status: Option<serde::de::IgnoredAny>,
 }
 
 impl TryFrom<RawInvoice> for Invoice {
@@ -156,8 +175,19 @@ impl TryFrom<RawInvoice> for Invoice {
 
     fn try_from(raw: RawInvoice) -> Result<Self, Self::Error> {
         require(raw.number.as_str(), "invoice number")?;
-        if let InvoiceStatus::Paid { received, tds, .. } = &raw.status {
-            check_payment(&raw.amounts.total, received, tds)?;
+        if raw.status.is_some() {
+            return Err(DomainError::OutdatedInvoiceFormat);
+        }
+        let mut settled = BigDecimal::zero();
+        for payment in &raw.payments {
+            check_payment(raw.date, payment)?;
+            settled += payment.settled();
+        }
+        if settled > raw.amounts.total {
+            return Err(DomainError::PaymentExceedsBalance {
+                balance: raw.amounts.total.to_string(),
+                got: settled.to_string(),
+            });
         }
         Ok(Self {
             number: raw.number,
@@ -171,7 +201,7 @@ impl TryFrom<RawInvoice> for Invoice {
             print: raw.print,
             terms: raw.terms,
             gst: raw.gst,
-            status: raw.status,
+            payments: raw.payments,
         })
     }
 }
@@ -207,7 +237,7 @@ impl Invoice {
             print: parts.print,
             terms: parts.terms,
             gst: parts.gst,
-            status: InvoiceStatus::Issued,
+            payments: Vec::new(),
         }
     }
 
@@ -259,50 +289,74 @@ impl Invoice {
         self.gst.as_ref()
     }
 
-    pub fn status(&self) -> &InvoiceStatus {
-        &self.status
+    pub fn payments(&self) -> &[Payment] {
+        &self.payments
     }
 
-    /// Settle in full: `received` in the bank plus `tds` withheld must equal the total.
-    /// Returns both amounts as recorded (rounded to paise).
+    /// Received plus TDS across every payment
+    pub fn settled(&self) -> BigDecimal {
+        self.payments.iter().map(Payment::settled).sum()
+    }
+
+    /// What the client still owes
+    pub fn balance(&self) -> BigDecimal {
+        &self.amounts.total - self.settled()
+    }
+
+    pub fn status(&self) -> InvoiceStatus {
+        if self.payments.is_empty() {
+            InvoiceStatus::Issued
+        } else if self.balance() > BigDecimal::zero() {
+            InvoiceStatus::PartlyPaid
+        } else {
+            InvoiceStatus::Paid
+        }
+    }
+
+    pub fn is_paid(&self) -> bool {
+        self.status() == InvoiceStatus::Paid
+    }
+
+    /// Record a payment of all or part of the balance; `received` reached the bank and `tds`
+    /// was withheld. Returns the payment as recorded (rounded to paise).
     pub fn record_payment(
         &mut self,
         date: NaiveDate,
         received: BigDecimal,
         tds: BigDecimal,
-    ) -> Result<(BigDecimal, BigDecimal), DomainError> {
-        if matches!(self.status, InvoiceStatus::Paid { .. }) {
+    ) -> Result<Payment, DomainError> {
+        if self.is_paid() {
             return Err(DomainError::InvoiceAlreadyPaid);
         }
-        if date < self.date {
-            return Err(DomainError::PaymentBeforeInvoice);
-        }
-        let received = received.with_scale_round(2, bigdecimal::RoundingMode::HalfUp);
-        let tds = tds.with_scale_round(2, bigdecimal::RoundingMode::HalfUp);
-        check_payment(&self.amounts.total, &received, &tds)?;
-        self.status = InvoiceStatus::Paid {
+        let round = |value: BigDecimal| value.with_scale_round(2, bigdecimal::RoundingMode::HalfUp);
+        let payment = Payment {
             date,
-            received: received.clone(),
-            tds: tds.clone(),
+            received: round(received),
+            tds: round(tds),
         };
-        Ok((received, tds))
+        check_payment(self.date, &payment)?;
+        let balance = self.balance();
+        if payment.settled() > balance {
+            return Err(DomainError::PaymentExceedsBalance {
+                balance: balance.to_string(),
+                got: payment.settled().to_string(),
+            });
+        }
+        self.payments.push(payment.clone());
+        Ok(payment)
     }
 }
 
-fn check_payment(
-    total: &BigDecimal,
-    received: &BigDecimal,
-    tds: &BigDecimal,
-) -> Result<(), DomainError> {
-    if *received < BigDecimal::zero() || *tds < BigDecimal::zero() {
+/// A payment on its own: not before the invoice, nothing negative, something paid
+fn check_payment(invoice_date: NaiveDate, payment: &Payment) -> Result<(), DomainError> {
+    if payment.date < invoice_date {
+        return Err(DomainError::PaymentBeforeInvoice);
+    }
+    if payment.received < BigDecimal::zero() || payment.tds < BigDecimal::zero() {
         return Err(DomainError::NegativeAmount);
     }
-    let paid = received + tds;
-    if paid != *total {
-        return Err(DomainError::PaymentMismatch {
-            expected: total.to_string(),
-            got: paid.to_string(),
-        });
+    if payment.settled() <= BigDecimal::zero() {
+        return Err(DomainError::NonPositiveAmount);
     }
     Ok(())
 }
@@ -316,7 +370,8 @@ pub struct InvoiceSummary {
     client_name: Box<str>,
     milestone_name: Box<str>,
     total: BigDecimal,
-    paid: bool,
+    balance: BigDecimal,
+    status: InvoiceStatus,
 }
 
 impl InvoiceSummary {
@@ -344,8 +399,17 @@ impl InvoiceSummary {
         &self.total
     }
 
+    /// What the client still owes
+    pub fn balance(&self) -> &BigDecimal {
+        &self.balance
+    }
+
+    pub fn status(&self) -> InvoiceStatus {
+        self.status
+    }
+
     pub fn is_paid(&self) -> bool {
-        self.paid
+        self.status == InvoiceStatus::Paid
     }
 }
 
@@ -358,7 +422,8 @@ impl From<&Invoice> for InvoiceSummary {
             client_name: invoice.client_name.as_str().into(),
             milestone_name: invoice.milestone_name.as_str().into(),
             total: invoice.amounts.total.clone(),
-            paid: matches!(invoice.status, InvoiceStatus::Paid { .. }),
+            balance: invoice.balance(),
+            status: invoice.status(),
         }
     }
 }

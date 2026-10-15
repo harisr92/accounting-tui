@@ -51,7 +51,7 @@ fn invoicing_before_settings_says_where_to_go() {
     let mut app = invoicing_app(&store);
     type_keys(&mut app, "\ti");
     let screen = screen(&app, W, H);
-    assert!(screen.contains("Settings (tab 5) first"), "{screen}");
+    assert!(screen.contains("Settings tab first"), "{screen}");
 }
 
 #[test]
@@ -136,4 +136,37 @@ fn locked_milestones_still_take_the_payment_key() {
     assert!(screen(&app, W, H).contains("Invoice the milestone first"));
     type_keys(&mut app, "iyp");
     assert!(screen(&app, W, H).contains("Record payment"));
+}
+
+#[test]
+fn part_payments_show_their_history_and_balance() {
+    let (store, project) = store_with_milestone(true);
+    let mut app = invoicing_app(&store);
+    type_keys(&mut app, "\tiy");
+    app.handle_key(Key::Char('2'));
+
+    // ₹59,000 due: receive 20,000 now
+    app.handle_key(Key::Char('p'));
+    app.handle_key(Key::Char('\t'));
+    app.handle_key(Key::Ctrl('u'));
+    type_keys(&mut app, "20000\n");
+    let screen_after = screen(&app, W, H);
+    assert!(
+        screen_after.contains("₹39,000.00 still due"),
+        "{screen_after}"
+    );
+    assert!(screen_after.contains("PART PAID"));
+    assert!(screen_after.contains("Payments for INV/"));
+    assert!(screen_after.contains("₹20,000.00"));
+    assert_eq!(
+        milestone_status(&store, &project),
+        MilestoneStatus::Invoiced
+    );
+
+    // The form now offers the balance; accepting it settles the invoice
+    app.handle_key(Key::Char('p'));
+    assert!(screen(&app, W, H).contains("39000"));
+    app.handle_key(Key::Char('\n'));
+    assert!(screen(&app, W, H).contains("paid in full"));
+    assert_eq!(milestone_status(&store, &project), MilestoneStatus::Paid);
 }
