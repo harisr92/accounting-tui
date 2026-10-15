@@ -15,7 +15,7 @@ The crate is a library (`src/lib.rs`, `compter_tui`) plus a thin binary (`src/ma
 
 ```
 domain/    pure types and rules: no I/O, no UI, no termion/ratatui imports
-storage/   redb database behind ProjectRepository and the ledger store
+storage/   redb database behind the repository traits and the ledger store
 services/  use-cases (ProjectService; invoicing, payments, tax later); generic over repository traits
 app.rs     application state and global key handling
 event.rs   input and tick threads
@@ -37,7 +37,9 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 
 ## Storage (redb)
 
-- One database file, `compter.redb`, opened once via `storage::Store`. Code outside `storage/` never touches redb types; it uses `ProjectRepository` or the ledger store.
+- One database file, `compter.redb`, opened once via `storage::Store`. Code outside `storage/` never touches redb types; it uses the repository traits (via `store.repository()`) or the ledger store.
+- One `RedbRepository` implements every repository trait, so a change spanning several records shares one write transaction. Services and views name only the traits they need (`R: ProjectRepository`), or `R: Repository` when they need all three.
+- Multi-table writes go through a record struct (`IssueRecord`, `PaymentRecord`) and one trait method that writes everything with the shared helpers in `redb_repository.rs` (`put_project`, `put_invoice`, `put_transaction`, `put_missing_accounts`). Don't chain separate repository calls for one logical change.
 - Every `TableDefinition` lives in `storage/tables.rs`. A new table also goes into `Store::init`.
 - Users' real records live in this file, so **stored types evolve compatibly**. This covers any type that is serialised into a table: `Project`, `Milestone`, `TimeEntry`, `Billing`, `ProjectSummary`, and later invoices and settings.
   - **Adding a field**: give it `#[serde(default)]` (or `Option<_>`) so older records still load. No version bump.
@@ -52,10 +54,20 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - accounting-core's store traits are async; we implement them with sync redb calls and drive them with `pollster::block_on`. Don't add an async runtime.
 - Tests use `Store::in_memory()`. Tests that reopen the file use `tempfile` and go in the top-level `tests/`.
 
+## Invoicing
+
+- Invoices are billing records: **immutable once issued**. Only `Invoice::record_payment` changes one. Corrections will be credit notes (step 7); never edit or delete an invoice.
+- Numbers come only from `InvoiceRepository::next_sequence` + `InvoiceNumber::new`, and `issue` refuses a stale sequence. Never build a number by hand or reuse one.
+- The kind (tax / export / plain) is decided in one place, `services::invoice_builder::build`, from the seller's GSTIN and the client's region. Tax invoices go through accounting-core (`GstInvoice`, `validate_invoice`, `InvoicePrint::from_invoice`, `to_entries`). Don't recompute GST in compter.
+- An invoice stores its `InvoicePrint` and `terms`. PDFs are rendered from those (`render_pdf`), never rebuilt from the current project or settings.
+- Render the PDF **before** saving an invoice, so an unprintable document is never issued. Write the file after the commit; a failed write is reported, never rolled back.
+- Ledger account ids live only in `services/chart.rs`. Every posting is checked with `DefaultTransactionValidator`, and its accounts are passed along so storage creates any that are missing.
+- Payments settle in full: received + TDS = total (`Invoice::record_payment`). TDS goes to `1250 TDS Receivable`.
+
 ## SOLID
 
 - **Single responsibility**: one concern per module and per type. Rendering, state changes and persistence never share a function.
-- **Views call services, never storage.** A view holds a service (`ProjectService<R>`), not a repository, and never calls domain mutators on its loaded copy. Every change is load → domain method → save inside the service (`ProjectService::update`), so a rejected change is never saved and the view re-reads what was stored.
+- **Views call services, never storage.** A view holds services (`ProjectService<R>`, `InvoiceService<R>`), not a repository, and never calls domain mutators on its loaded copy. Every change is load → domain method → save inside the service (`ProjectService::update`), so a rejected change is never saved and the view re-reads what was stored.
 - **Open/closed**: every tab is a `ui::view::View`. Add a screen by implementing `View` and registering it in `main.rs`. Don't add per-tab `match` arms to `App` or `ui::draw`.
 - **Liskov**: any `View` must work through `&dyn View`. A view returns `Action::Ignored` for keys it doesn't own so global bindings still work.
 - **Interface segregation**: narrow traits (`ProjectRepository`, `InvoiceRepository`, `SettingsRepository`), not one god storage trait.
@@ -70,7 +82,9 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - All input goes through `ui::form`: build a `Form` from `Field::text` / `Field::choice`, and use `Confirm` before anything irreversible. Don't write another text-input widget.
 - Parse what the user typed only in `ui/form/parse.rs` (money, dates, durations, optional text). Give a field a live `with_preview` when its input could be misread (durations).
 - Modals belong to the view that opened them. While one is open the view takes **every** key, so typing never triggers shortcuts. Only `Ctrl-c` is handled by `App` first.
-- A failed submit keeps the form open: put the reason in `Form::set_error` and keep the input. Errors outside forms go to the footer as `Notice::error`.
+- Run forms through `Form::step(key, submit)`: it handles cancel, submit, and keeping the form open with the error on a failed submit. Errors outside forms go to the footer as `Notice::error`.
+- A form shared by two tabs (payment) lives in `ui/views/payment.rs`; don't copy form builders between views.
+- A view that shows data another tab can change re-reads it in `View::on_activate`.
 - Status labels live once on the enum (`label()` / `Display`).
 
 ## Memory

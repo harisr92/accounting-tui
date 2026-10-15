@@ -5,17 +5,28 @@ use ratatui::backend::TestBackend;
 use termion::event::Key;
 
 use crate::app::App;
-use crate::services::ProjectService;
+use crate::services::InvoiceService;
 use crate::storage::Store;
 use crate::ui::draw;
 use crate::ui::theme::Theme;
 use crate::ui::view::View;
-use crate::ui::views::ProjectsView;
+use crate::ui::views::{InvoicesView, ProjectsView, SettingsView};
 
 /// An app whose only tab is Projects on `store`
 pub fn projects_app(store: &Store) -> App {
-    let view = ProjectsView::new(ProjectService::new(store.projects())).unwrap();
+    let view = ProjectsView::new(store.repository(), None).unwrap();
     let views: Vec<Box<dyn View>> = vec![Box::new(view)];
+    App::new(views, Theme::default())
+}
+
+/// Projects (tab 1), Invoices (tab 2) and Settings (tab 3) on `store`, writing no PDFs
+pub fn invoicing_app(store: &Store) -> App {
+    let repo = store.repository();
+    let views: Vec<Box<dyn View>> = vec![
+        Box::new(ProjectsView::new(repo.clone(), None).unwrap()),
+        Box::new(InvoicesView::new(InvoiceService::new(repo.clone(), None)).unwrap()),
+        Box::new(SettingsView::new(InvoiceService::new(repo, None)).unwrap()),
+    ];
     App::new(views, Theme::default())
 }
 

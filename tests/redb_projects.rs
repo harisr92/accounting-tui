@@ -11,7 +11,7 @@ fn projects_persist_across_reopen() {
 
     let saved_list = {
         let store = Store::open(&data_dir).unwrap();
-        let mut repo = store.projects();
+        let mut repo = store.repository();
         for project in &projects {
             repo.save(project).unwrap();
         }
@@ -19,7 +19,7 @@ fn projects_persist_across_reopen() {
     };
 
     let store = Store::open(&data_dir).unwrap();
-    let repo = store.projects();
+    let repo = store.repository();
     assert_eq!(repo.list().unwrap(), saved_list);
     for project in &projects {
         assert_eq!(&repo.load(project.id()).unwrap(), project);
@@ -34,7 +34,7 @@ fn deletes_persist_across_reopen() {
     let removed = projects[0].id();
     {
         let store = Store::open(&data_dir).unwrap();
-        let mut repo = store.projects();
+        let mut repo = store.repository();
         for project in &projects {
             repo.save(project).unwrap();
         }
@@ -42,7 +42,7 @@ fn deletes_persist_across_reopen() {
     }
 
     let store = Store::open(&data_dir).unwrap();
-    let repo = store.projects();
+    let repo = store.repository();
     assert_eq!(repo.list().unwrap().len(), projects.len() - 1);
     assert!(matches!(
         repo.load(removed),

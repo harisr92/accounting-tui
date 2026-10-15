@@ -24,7 +24,7 @@ Tab focus · j/k move · n new · i invoice · 1-9/←→ tabs · ? help · q qu
 
 ## Status
 
-**Steps 1–4 of 7 are done.** compter saves to its database: create, edit and delete projects and milestones, and log hours on hourly work. Every change is saved as you make it. Invoicing and payments arrive in step 5.
+**Steps 1–5 of 7 are done.** Track projects, milestones and hours; issue GST tax invoices, export invoices under LUT or plain invoices as PDFs; record payments including TDS. Everything is posted to an accounting-core ledger and saved as you go. Tax reports arrive in step 6.
 
 ## Build and run
 
@@ -63,7 +63,12 @@ Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Un
 | milestones | `e` / `x` | edit / delete a pending milestone (delete asks first) |
 | milestones | `t` | log time on an hourly milestone |
 | milestones | `u` | undo the last time entry (asks first) |
-| milestones | `i` | invoice *(step 5)* |
+| milestones | `i` | invoice a pending milestone: shows the number, total and tax, then asks |
+| milestones | `p` | record the payment for an invoiced milestone |
+
+**Invoices tab**: `j`/`k` move, `o` opens the PDF in your viewer (it's regenerated if the file is missing), `p` records a payment. The title shows the total still outstanding.
+
+**Settings tab**: `e` edits your business details: name, address, GSTIN, SAC code, invoice prefix, LUT ARN, and terms such as bank details. They must be filled in before the first invoice.
 
 **Forms**: type to edit, `Backspace` deletes, `Ctrl-u` clears the field. `Tab`/`↓` and `Shift-Tab`/`↑` move between fields, and `Space`/`←→` change a choice. `Enter` saves and `Esc` cancels. If something is wrong, the form stays open with the reason shown in red and your input kept.
 
@@ -75,6 +80,9 @@ Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Un
 | dates | `2026-10-31`; blank means today |
 | time | `1h30m`, `2h`, `45m`, `1:30`, or a plain number of **hours** (`1.5` = 1h 30m). The field shows what it will log as you type (`= 1h 30m`). One entry can be at most 24 hours, so `90` is refused rather than logged as 90 hours. |
 | GSTIN | 15 characters, any case; blank for an unregistered client |
+| state code | 2-digit GST code for an unregistered Indian client (`29` = Karnataka; the field names the state as you type) |
+| SAC code | must be in the GST rate list; the field shows its description and rate |
+| payment | received + TDS must equal the invoice total; TDS is prefilled 0, and the hint shows 10% of the taxable value |
 
 An invoiced milestone is locked: it can't be edited, deleted or have time added. A project with any invoiced or paid milestone can't be deleted either, because those milestones are the billing records your tax and GST filings come from. Changing an hourly rate re-prices only pending milestones. Fixed and hourly billing can only be switched while a project has no milestones.
 
@@ -128,6 +136,38 @@ Once a milestone is invoiced it is locked: no more time entries and it can't be 
 
 The financial year is the Indian April–March year (`FY 2026-27`).
 
+## Invoicing
+
+`i` on a pending milestone issues one invoice for it, numbered `PREFIX/26-27/001` (≤ 16 characters, as Rule 46 requires). The sequence restarts every April and never skips or repeats. The kind is chosen for you:
+
+| You | Client | Invoice | Tax |
+|-----|--------|---------|-----|
+| GST-registered | in India, registered | Tax invoice | CGST + SGST in your state, IGST across states (18% for SAC 998314) |
+| GST-registered | in India, unregistered | Tax invoice | as above, by the client's state code (place of supply) |
+| GST-registered | abroad | Tax invoice, export of services | zero-rated under your LUT, endorsed on the invoice |
+| not registered | anyone | Invoice | none; the invoice says so |
+
+- Tax invoices are built and checked by accounting-core (`GstInvoice`, `validate_invoice`). Compliance errors block issuing, and warnings appear in the confirmation.
+- Unregistered clients need a name and address from ₹50,000, and clients abroad always need one.
+- The PDF is rendered before anything is saved, so an invoice that can't be printed is never issued. It is written to `<data dir>/invoices/2026-27/PREFIX-26-27-001.pdf`.
+- An invoice keeps its own copy of the printed document and terms, so its PDF comes out identical later, even after you change Settings.
+- Issuing writes the invoice, the milestone's new status, the invoice counter and the ledger posting in **one transaction**.
+
+**Ledger** (accounting-core, created on first use):
+
+| Account | | Posted by |
+|---------|-|-----------|
+| 1100 Bank | asset | payments received |
+| 1200 Accounts Receivable | asset | invoice totals, cleared by payments |
+| 1250 TDS Receivable | asset | TDS clients withheld (claim it in your ITR) |
+| 2300 / 2310 / 2320 CGST / SGST / IGST Output | liability | GST on tax invoices |
+| 4100 Service Revenue | income | invoices to Indian clients |
+| 4110 Export Revenue | income | invoices to clients abroad |
+
+**Payments** are recorded in full: the amount that reached your bank plus any TDS the client withheld must equal the invoice total. Part payments aren't supported yet.
+
+**Known limitation**: accounting-core's PDF layout always prints a GST supply line ("Intra-state (CGST + SGST)") and a seller GSTIN line, even on a plain invoice. compter adds "no GST is charged on this invoice" as the first term so the document is unambiguous.
+
 ## Architecture
 
 ```
@@ -149,41 +189,51 @@ The financial year is the Indian April–March year (`FY 2026-27`).
 
 ```
 src/
-├── main.rs              binary: panic hook, terminal, view registration, event loop
+├── main.rs              binary: args, panic hook, store, five tabs, event loop
 ├── lib.rs               library root; everything below is the `compter_tui` crate
-├── app.rs               App state and global key bindings
+├── app.rs               App state, global keys, tab switching (on_activate)
 ├── event.rs             termion input and tick threads
-├── demo.rs              sample projects for --demo and tests
+├── demo.rs              in-memory sample business for --demo; fixture projects for tests
 ├── services/            use-cases: load → domain change → save
 │   ├── project_service.rs  ProjectService, ProjectDraft, MilestoneDraft
+│   ├── invoice_service.rs  InvoiceService: profile, preview, issue, pay, PDFs
+│   ├── invoice_builder.rs  milestone → invoice document + ledger entries (pure)
+│   ├── chart.rs         compter's ledger accounts
 │   └── error.rs         ServiceError
 ├── storage/             redb persistence
-│   ├── store.rs         Store: open/in-memory, schema check, hands out repositories
-│   ├── repository.rs    ProjectRepository trait
-│   ├── projects.rs      RedbProjectRepository
+│   ├── store.rs         Store: open/in-memory, schema check, hands out the repository
+│   ├── repository.rs    Project/Invoice/Settings repository traits, IssueRecord, PaymentRecord
+│   ├── redb_repository.rs  RedbRepository: all three traits; issue/payment in one transaction
 │   ├── ledger.rs        RedbLedgerStorage (accounting-core AccountStore + TransactionStore)
 │   ├── tables.rs        every table definition
 │   ├── codec.rs         JSON encode/decode of values
 │   ├── migrations.rs    upgrade steps between schema versions
-│   ├── data_dir.rs      where compter.redb lives
+│   ├── files.rs         atomic file writes (invoice PDFs)
+│   ├── data_dir.rs      where compter.redb and invoices/ live
 │   └── error.rs         StorageError
 ├── domain/              pure types and rules
-│   ├── project.rs       Project, ProjectId, ProjectStatus, mutations, validated serde
-│   ├── milestone.rs     Milestone, MilestoneStatus, transitions
+│   ├── project.rs       Project, ClientDetails/ClientRegion, ProjectStatus, mutations
+│   ├── milestone.rs     Milestone, MilestoneId, MilestoneStatus, transitions
 │   ├── billing.rs       Billing, TimeEntry, hourly amount calculation
+│   ├── invoice.rs       Invoice, InvoiceNumber, InvoiceKind, InvoiceStatus, payment rules
+│   ├── profile.rs       BusinessProfile (seller details, GSTIN, SAC, prefix, LUT)
+│   ├── states.rs        GST state code names
 │   ├── error.rs         DomainError
 │   └── fiscal_year.rs   Indian April–March year
 └── ui/
     ├── mod.rs           draw(): header / body / footer, help overlay
-    ├── view.rs          View trait, Action, KeyHint
+    ├── view.rs          View trait (render, keys, hints, on_activate), Action, Notice
     ├── theme.rs         every colour and style
     ├── widgets.rs       panel, modal, money, duration, status_span
     ├── selection.rs     wrap-around Selection and j/k Nav
-    ├── form/            reusable modal Form (text and choice fields), Confirm, input parsers
+    ├── form/            reusable modal Form (Form::step), Confirm, input parsers
     ├── header.rs  footer.rs  popup.rs
     └── views/
-        ├── projects/    ProjectsView: state and keys, rendering, forms
-        └── placeholder.rs  Dashboard, Invoices, Reports until their steps
+        ├── projects/    ProjectsView: state and keys, rendering, forms, issue/pay
+        ├── invoices/    InvoicesView: list, open PDF, record payment
+        ├── settings/    SettingsView: business profile
+        ├── payment.rs   the payment form shared by Projects and Invoices
+        └── placeholder.rs  Dashboard, Reports until step 6
 ```
 
 Unit tests sit in a `tests/` folder beside the code they cover (`src/domain/tests/`, `src/storage/tests/`, `src/ui/tests/`, and `src/tests/` for `app.rs`), one `<file>_tests.rs` per source file. Integration tests that reopen a real database file are in the top-level `tests/` directory.
@@ -204,16 +254,20 @@ Everything lives in one [redb](https://www.redb.org) database file, `compter.red
 | `projects` | project UUID | full project with milestones and time entries |
 | `project_summaries` | project UUID | id, name, client, status, total, for list views |
 | `accounts` | account id | accounting-core `Account` |
-| `transactions` | transaction id | accounting-core `Transaction` |
+| `transactions` | transaction id | accounting-core `Transaction` (`inv-…` / `pay-…` per invoice) |
+| `invoices` | invoice number | issued invoice with its printed document and payment |
+| `invoice_summaries` | invoice number | number, date, client, total, paid, for the list |
+| `invoice_counters` | financial year (`2026-27`) | last sequence used |
+| `settings` | `"business_profile"` | your business details |
 
-- **Atomic**: a project and its summary are written in one transaction, so the list can never disagree with the records. A crash leaves the last committed state.
+- **Atomic**: a project and its summary are written in one transaction, and issuing or paying an invoice writes every affected table in one transaction. The lists can never disagree with the records, and a crash leaves the last committed state.
 - **Low memory**: nothing is cached. Lists read only the small summary rows; a full project is read when you open it. The ledger store answers each query from the database.
 - **Validated on load**: values are stored as JSON bytes and decoded through the same checks as the domain constructors. A hand-edited bad record fails with its table and key instead of loading.
 - **Single process**: redb locks the file, so a second `compter` is refused with a clear error instead of corrupting data.
 - **Versioned, with upgrades**: the `meta` table records the schema version. Opening an older database runs the upgrade steps in `storage/migrations.rs` within one transaction. A database from a *newer* compter is refused rather than guessed at. Saved-format fixtures (`storage/tests/fixtures/`) are loaded on every `cargo test`, so a change that would stop existing records from loading fails the build first.
 
 `Store::open(&DataDir)` opens the file, and `Store::in_memory()` gives the same database in memory for tests. From a store you get:
-- `store.projects()`: a `ProjectRepository` (list, load, save, delete)
+- `store.repository()`: a `RedbRepository`, which implements `ProjectRepository`, `InvoiceRepository` and `SettingsRepository`
 - `store.ledger()`: an accounting-core `AccountStore` + `TransactionStore`, so `Ledger::new(store.ledger())` works directly
 
 The app opens the file on start, before the terminal is taken over, so an error like "already open" prints normally.
@@ -224,6 +278,6 @@ The app opens the file on start, before the terminal is taken over, so an error 
 2. ✅ **Domain model**: serde, hourly billing and time entries, status transitions, validation
 3. ✅ **Storage**: redb database, project repository, ledger storage for `accounting-core`
 4. ✅ **Wire storage into the TUI**: load and save, forms to create and edit projects and milestones, log hours
-5. **Invoicing** (+ invoice and settings tables): milestone → `GstInvoice` (SAC code, CGST+SGST or IGST), validation, preview, PDF export, ledger posting, record payment
-6. **Tax and reports**: dashboard, income statement per FY, receivables, GSTR-1 JSON export, per-client income summary for ITR (incl. 44ADA view)
-7. **Polish**: archive finished projects (hidden from the list, kept for tax records), search and filter, settings screen, error toasts, theming, integration tests
+5. ✅ **Invoicing & payments**: tax, export (LUT) and plain invoices, PDFs, ledger posting, payments with TDS, Invoices and Settings tabs
+6. **Tax and reports**: dashboard, income statement per FY, receivables, TDS summary, GSTR-1 JSON export (incl. exports), per-client income summary for ITR (incl. 44ADA view)
+7. **Polish**: archive finished projects (hidden from the list, kept for tax records), credit notes, part payments, search and filter, settings screen, error toasts, theming, integration tests

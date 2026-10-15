@@ -7,14 +7,23 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use termion::event::Key;
 
-use crate::domain::{Milestone, MilestoneStatus, Project, ProjectId, ProjectSummary};
-use crate::services::{ProjectService, ServiceError};
-use crate::storage::ProjectRepository;
-use crate::ui::form::{Confirm, Form, FormEvent};
+use bigdecimal::Zero;
+use chrono::Local;
+
+use crate::domain::{
+    InvoiceAmounts, InvoiceKind, InvoiceNumber, Milestone, MilestoneId, MilestoneStatus, Project,
+    ProjectId, ProjectSummary,
+};
+use crate::services::{InvoicePreview, InvoiceService, Issued, ProjectService, ServiceError};
+use crate::storage::{DataDir, Repository};
+use crate::ui::form::{Confirm, Form};
 use crate::ui::selection::{Nav, Selection};
 use crate::ui::theme::Theme;
 use crate::ui::view::{Action, KeyHint, Notice, View};
-use crate::ui::widgets::duration;
+use crate::ui::views::payment::payment_form;
+use accounting_core::utils::formatting::format_inr;
+
+use crate::ui::widgets::{duration, money};
 
 const PROJECT_HINTS: &[KeyHint] = &[
     KeyHint::new("j/k", "move"),
@@ -33,6 +42,7 @@ const MILESTONE_HINTS: &[KeyHint] = &[
     KeyHint::new("t", "log time"),
     KeyHint::new("u", "undo time"),
     KeyHint::new("i", "invoice"),
+    KeyHint::new("p", "paid"),
 ];
 
 /// Leaves about 18 columns for a project name next to its status
@@ -45,13 +55,15 @@ enum Focus {
 }
 
 /// Which form is open, and what it changes
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum FormKind {
     NewProject,
     EditProject,
     AddMilestone,
     EditMilestone(usize),
     LogTime(usize),
+    /// Payment for the invoice that billed a milestone
+    Payment(InvoiceNumber),
 }
 
 /// A change waiting for a yes
@@ -60,6 +72,7 @@ enum ConfirmAction {
     DeleteProject(ProjectId),
     DeleteMilestone(ProjectId, usize),
     UndoTime(ProjectId, usize),
+    Issue(ProjectId, MilestoneId),
 }
 
 enum Modal {
@@ -72,6 +85,7 @@ enum Modal {
 /// Holds only the summary rows and the one selected project; everything else stays on disk.
 pub struct ProjectsView<R> {
     service: ProjectService<R>,
+    invoices: InvoiceService<R>,
     summaries: Vec<ProjectSummary>,
     selected: Option<Project>,
     project_sel: Selection,
@@ -80,10 +94,12 @@ pub struct ProjectsView<R> {
     modal: Option<Modal>,
 }
 
-impl<R: ProjectRepository> ProjectsView<R> {
-    pub fn new(service: ProjectService<R>) -> Result<Self, ServiceError> {
+impl<R: Repository> ProjectsView<R> {
+    /// `data_dir` is where invoice PDFs are written; `None` keeps them in memory only
+    pub fn new(repo: R, data_dir: Option<DataDir>) -> Result<Self, ServiceError> {
         let mut view = Self {
-            service,
+            service: ProjectService::new(repo.clone()),
+            invoices: InvoiceService::new(repo, data_dir),
             summaries: Vec::new(),
             selected: None,
             project_sel: Selection::default(),
@@ -134,7 +150,7 @@ impl<R: ProjectRepository> ProjectsView<R> {
     }
 
     fn open_form(&mut self, kind: FormKind) -> Action {
-        match self.build_form(kind) {
+        match self.build_form(&kind) {
             Some(form) => {
                 self.modal = Some(Modal::Form(kind, form));
                 Action::Handled
@@ -150,21 +166,11 @@ impl<R: ProjectRepository> ProjectsView<R> {
 
     fn handle_modal(&mut self, modal: Modal, key: Key) -> Action {
         match modal {
-            Modal::Form(kind, mut form) => match form.handle_key(key) {
-                FormEvent::Cancel => Action::Handled,
-                FormEvent::Submit => match self.submit(kind, &form) {
-                    Ok(notice) => Action::Notify(notice),
-                    Err(error) => {
-                        form.set_error(error);
-                        self.modal = Some(Modal::Form(kind, form));
-                        Action::Handled
-                    }
-                },
-                FormEvent::Edited | FormEvent::Ignored => {
-                    self.modal = Some(Modal::Form(kind, form));
-                    Action::Handled
-                }
-            },
+            Modal::Form(kind, form) => {
+                let (form, action) = form.step(key, |form| self.submit(&kind, form));
+                self.modal = form.map(|form| Modal::Form(kind, form));
+                action
+            }
             Modal::Confirm(action, confirm) => match Confirm::answer(key) {
                 Some(true) => self.run_confirmed(action),
                 Some(false) => Action::Handled,
@@ -193,11 +199,64 @@ impl<R: ProjectRepository> ProjectsView<R> {
                 .remove_last_time_entry(id, index)
                 .and_then(|p| self.refresh(Some(p)))
                 .map(|()| "Time entry removed"),
+            ConfirmAction::Issue(id, milestone) => return self.issue(id, milestone),
         };
         Action::Notify(match result {
             Ok(done) => Notice::success(done),
             Err(error) => Notice::error(error.to_string()),
         })
+    }
+
+    fn issue(&mut self, id: ProjectId, milestone: MilestoneId) -> Action {
+        let today = Local::now().date_naive();
+        let issued = match self.invoices.issue(id, milestone, today) {
+            Ok(issued) => issued,
+            Err(error) => return Action::Notify(Notice::error(error.to_string())),
+        };
+        let reloaded = self.service.load(id).and_then(|p| self.refresh(Some(p)));
+        Action::Notify(match reloaded {
+            Ok(()) => issued_notice(&issued),
+            Err(error) => Notice::error(error.to_string()),
+        })
+    }
+
+    /// `i`: show what the invoice will be and ask before issuing it
+    fn confirm_issue(&mut self, id: ProjectId, milestone: MilestoneId) -> Action {
+        let today = Local::now().date_naive();
+        match self.invoices.preview(id, milestone, today) {
+            Ok(preview) => {
+                let message = issue_question(&preview);
+                self.ask(ConfirmAction::Issue(id, milestone), message)
+            }
+            Err(error) => Action::Notify(Notice::error(error.to_string())),
+        }
+    }
+
+    /// `p`: record the payment for the invoice that billed this milestone
+    fn open_payment(&mut self, milestone: &Milestone) -> Action {
+        if milestone.status() != MilestoneStatus::Invoiced {
+            let why = match milestone.status() {
+                MilestoneStatus::Paid => "This milestone is already paid",
+                _ => "Invoice the milestone first (i)",
+            };
+            return Action::Notify(Notice::info(why));
+        }
+        let Some(number) = milestone.invoice_number() else {
+            return Action::Notify(Notice::info(
+                "This milestone was invoiced outside compter; there is no invoice to settle",
+            ));
+        };
+        let number = InvoiceNumber::from_stored(number);
+        match self.invoices.load(&number) {
+            Ok(invoice) => {
+                self.modal = Some(Modal::Form(
+                    FormKind::Payment(number),
+                    payment_form(&invoice),
+                ));
+                Action::Handled
+            }
+            Err(error) => Action::Notify(Notice::error(error.to_string())),
+        }
     }
 
     fn handle_browse(&mut self, key: Key) -> Action {
@@ -229,8 +288,12 @@ impl<R: ProjectRepository> ProjectsView<R> {
                 None => Action::Notify(Notice::info("Select a project first")),
             },
             (Focus::Milestones, Key::Char('a')) => self.open_form(FormKind::AddMilestone),
-            (Focus::Milestones, Key::Char(c @ ('e' | 'x' | 't' | 'u'))) => self.milestone_action(c),
-            (_, Key::Char('i')) => Action::Notify(Notice::info("Invoicing arrives in step 5")),
+            (Focus::Milestones, Key::Char(c @ ('e' | 'x' | 't' | 'u' | 'i' | 'p'))) => {
+                self.milestone_action(c)
+            }
+            (Focus::Projects, Key::Char('i' | 'p')) => {
+                Action::Notify(Notice::info("Press Tab and select a milestone"))
+            }
             _ => Action::Ignored,
         }
     }
@@ -252,11 +315,20 @@ impl<R: ProjectRepository> ProjectsView<R> {
         Action::Handled
     }
 
-    /// `e` edit, `x` delete, `t` log time, `u` undo time on the milestone under the cursor
+    /// `e` edit, `x` delete, `t` log time, `u` undo time, `i` invoice, `p` paid on the
+    /// milestone under the cursor
     fn milestone_action(&mut self, key: char) -> Action {
         let Some((id, index, milestone)) = self.current_milestone() else {
             return Action::Notify(Notice::info("Select a milestone first"));
         };
+        if key == 'p' {
+            let milestone = milestone.clone();
+            return self.open_payment(&milestone);
+        }
+        if key == 'i' && milestone.status() == MilestoneStatus::Pending {
+            let milestone = milestone.id();
+            return self.confirm_issue(id, milestone);
+        }
         if milestone.status() != MilestoneStatus::Pending {
             return Action::Notify(Notice::info(
                 "Invoiced milestones are locked; only pending ones can change",
@@ -292,7 +364,7 @@ impl<R: ProjectRepository> ProjectsView<R> {
     }
 }
 
-impl<R: ProjectRepository> View for ProjectsView<R> {
+impl<R: Repository> View for ProjectsView<R> {
     fn title(&self) -> &'static str {
         "Projects"
     }
@@ -319,6 +391,21 @@ impl<R: ProjectRepository> View for ProjectsView<R> {
         }
     }
 
+    /// Pick up invoices issued or paid from other tabs, keeping the same project selected
+    fn on_activate(&mut self) -> Option<Notice> {
+        let current = self.selected.as_ref().map(Project::id);
+        let result = self.service.list().and_then(|summaries| {
+            self.summaries = summaries;
+            if let Some(index) =
+                current.and_then(|id| self.summaries.iter().position(|s| s.id() == id))
+            {
+                self.project_sel.select(index);
+            }
+            self.refresh(None)
+        });
+        result.err().map(|e| Notice::error(e.to_string()))
+    }
+
     fn key_hints(&self) -> &'static [KeyHint] {
         match (&self.modal, self.focus) {
             (Some(Modal::Form(..)), _) => Form::HINTS,
@@ -326,5 +413,54 @@ impl<R: ProjectRepository> View for ProjectsView<R> {
             (None, Focus::Projects) => PROJECT_HINTS,
             (None, Focus::Milestones) => MILESTONE_HINTS,
         }
+    }
+}
+
+/// "Issue INV/26-27/004 to Acme for Rs. 59,000.00 (50,000.00 + IGST 9,000.00)?"
+fn issue_question(preview: &InvoicePreview) -> String {
+    let a = &preview.amounts;
+    let mut question = format!(
+        "Issue {} to {} for {} ({})?",
+        preview.number,
+        preview.client_name,
+        money(&a.total),
+        tax_breakdown(preview.kind, a)
+    );
+    for warning in &preview.warnings {
+        question.push_str(&format!(" Note: {warning}."));
+    }
+    question
+}
+
+fn tax_breakdown(kind: InvoiceKind, a: &InvoiceAmounts) -> String {
+    let base = format_inr(&a.taxable_value);
+    match kind {
+        InvoiceKind::Export => format!("{base}, zero-rated export under LUT"),
+        InvoiceKind::Plain => format!("{base}, no GST"),
+        InvoiceKind::Tax if !a.igst.is_zero() => format!("{base} + IGST {}", format_inr(&a.igst)),
+        InvoiceKind::Tax => format!(
+            "{base} + CGST {} + SGST {}",
+            format_inr(&a.cgst),
+            format_inr(&a.sgst)
+        ),
+    }
+}
+
+fn issued_notice(issued: &Issued) -> Notice {
+    let number = issued.invoice.number();
+    match &issued.pdf {
+        Ok(Some(path)) => {
+            let file = path
+                .file_name()
+                .map(|f| f.to_string_lossy())
+                .unwrap_or_default();
+            Notice::success(format!(
+                "Issued {number}: saved {file} (o in Invoices opens it)"
+            ))
+        }
+        Ok(None) => Notice::success(format!("Issued {number}")),
+        Err(error) => Notice::error(format!(
+            "Issued {number}, but its PDF wasn't saved ({error}); press o in Invoices to retry"
+        )),
     }
 }

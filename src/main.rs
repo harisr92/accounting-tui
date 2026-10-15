@@ -12,11 +12,10 @@ use termion::screen::IntoAlternateScreen;
 use compter_tui::app::App;
 use compter_tui::demo;
 use compter_tui::event::{Event, Events};
-use compter_tui::services::ProjectService;
+use compter_tui::services::InvoiceService;
 use compter_tui::storage::{DataDir, Store};
-use compter_tui::ui::{
-    self, theme::Theme, view::View, views::PlaceholderView, views::ProjectsView,
-};
+use compter_tui::ui::views::{InvoicesView, PlaceholderView, ProjectsView, SettingsView};
+use compter_tui::ui::{self, theme::Theme, view::View};
 
 const TICK_RATE: Duration = Duration::from_millis(250);
 
@@ -44,9 +43,13 @@ fn main() -> Result<ExitCode> {
 
     install_hooks()?;
     // Open the database before raw mode, so errors like "already open" print normally
-    let store = open_store(demo_mode)?;
-    let projects = ProjectsView::new(ProjectService::new(store.projects()))
-        .wrap_err("could not load projects")?;
+    let (store, data_dir) = open_store(demo_mode)?;
+    let repo = store.repository();
+    let invoices = || InvoiceService::new(repo.clone(), data_dir.clone());
+    let projects =
+        ProjectsView::new(repo.clone(), data_dir.clone()).wrap_err("could not load projects")?;
+    let invoice_list = InvoicesView::new(invoices()).wrap_err("could not load invoices")?;
+    let settings = SettingsView::new(invoices()).wrap_err("could not load settings")?;
 
     let views: Vec<Box<dyn View>> = vec![
         Box::new(PlaceholderView::new(
@@ -54,14 +57,12 @@ fn main() -> Result<ExitCode> {
             "Earnings overview arrives in step 6",
         )),
         Box::new(projects),
-        Box::new(PlaceholderView::new(
-            "Invoices",
-            "GST invoices arrive in step 5",
-        )),
+        Box::new(invoice_list),
         Box::new(PlaceholderView::new(
             "Reports",
             "Income tax and GSTR-1 reports arrive in step 6",
         )),
+        Box::new(settings),
     ];
     let mut app = App::new(views, Theme::default());
     // Open on Projects, the only live tab so far
@@ -74,12 +75,16 @@ fn main() -> Result<ExitCode> {
     result.map(|()| ExitCode::SUCCESS)
 }
 
-fn open_store(demo_mode: bool) -> Result<Store> {
+/// The database, and the folder invoice PDFs go in (none in demo mode)
+fn open_store(demo_mode: bool) -> Result<(Store, Option<DataDir>)> {
     if demo_mode {
-        return demo::store().wrap_err("could not build the demo data");
+        let store = demo::store().wrap_err("could not build the demo data")?;
+        return Ok((store, None));
     }
     let dir = DataDir::from_env()?;
-    Store::open(&dir).wrap_err_with(|| format!("could not open {}", dir.database_path().display()))
+    let store = Store::open(&dir)
+        .wrap_err_with(|| format!("could not open {}", dir.database_path().display()))?;
+    Ok((store, Some(dir)))
 }
 
 fn run<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()>

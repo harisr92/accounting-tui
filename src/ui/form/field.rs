@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use ratatui::text::Span;
 use termion::event::Key;
 
@@ -13,7 +15,7 @@ pub type Preview = fn(&str) -> String;
 enum Kind {
     Text {
         value: String,
-        hint: &'static str,
+        hint: Cow<'static, str>,
         preview: Option<Preview>,
     },
     Choice {
@@ -31,12 +33,12 @@ pub struct Field {
 
 impl Field {
     /// Free text; `hint` is shown while the field is empty
-    pub fn text(label: &'static str, hint: &'static str) -> Self {
+    pub fn text(label: &'static str, hint: impl Into<Cow<'static, str>>) -> Self {
         Self {
             label,
             kind: Kind::Text {
                 value: String::new(),
-                hint,
+                hint: hint.into(),
                 preview: None,
             },
         }

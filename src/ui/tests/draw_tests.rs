@@ -1,6 +1,5 @@
 use crate::app::App;
 use crate::demo;
-use crate::services::ProjectService;
 use crate::ui::tests::support::screen;
 use crate::ui::theme::Theme;
 use crate::ui::view::View;
@@ -9,7 +8,7 @@ use crate::ui::views::{PlaceholderView, ProjectsView};
 #[test]
 fn renders_shell_at_80x24() {
     let store = demo::store().unwrap();
-    let projects = ProjectsView::new(ProjectService::new(store.projects())).unwrap();
+    let projects = ProjectsView::new(store.repository(), None).unwrap();
     let views: Vec<Box<dyn View>> = vec![
         Box::new(PlaceholderView::new("Dashboard", "")),
         Box::new(projects),

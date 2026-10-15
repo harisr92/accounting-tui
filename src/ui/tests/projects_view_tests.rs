@@ -9,15 +9,21 @@ const W: u16 = 110;
 const H: u16 = 30;
 
 fn names(store: &Store) -> Vec<String> {
-    let summaries = store.projects().list().unwrap();
+    let summaries = store.repository().list().unwrap();
     summaries.iter().map(|s| s.name().to_owned()).collect()
 }
 
-/// `n`, then name, client, GSTIN, billing (Space = hourly) and rate, then Enter
+/// `n`, type `fields` from the first field (Tab moves on), then Enter
 fn create_project(app: &mut crate::app::App, fields: &str) {
     app.handle_key(Key::Char('n'));
     type_keys(app, fields);
     app.handle_key(Key::Char('\n'));
+}
+
+/// Fields of the project form up to Billing: name, client, GSTIN, client in, state, country,
+/// two address lines
+fn hourly_project_keys(name: &str, client: &str, rate: &str) -> String {
+    format!("{name}\t{client}\t\t\t29\t\t\t\t \t{rate}")
 }
 
 #[test]
@@ -35,8 +41,8 @@ fn creating_a_project_saves_it() {
 
     assert_eq!(names(&store), ["Website"]);
     let project = store
-        .projects()
-        .load(store.projects().list().unwrap()[0].id())
+        .repository()
+        .load(store.repository().list().unwrap()[0].id())
         .unwrap();
     assert_eq!(
         project.client_gstin().map(|g| g.as_str()),
@@ -64,7 +70,7 @@ fn invalid_input_keeps_the_form_open_with_the_error() {
 fn hourly_project_logs_time_into_amounts() {
     let store = Store::in_memory().unwrap();
     let mut app = projects_app(&store);
-    create_project(&mut app, "App\tGlobex\t\t \t1500");
+    create_project(&mut app, &hourly_project_keys("App", "Globex", "1500"));
     app.handle_key(Key::Char('\t'));
     app.handle_key(Key::Char('a'));
     type_keys(&mut app, "Prototype\n");
@@ -75,7 +81,7 @@ fn hourly_project_logs_time_into_amounts() {
     assert!(preview.contains("= 1h 30m"), "{preview}");
     app.handle_key(Key::Char('\n'));
 
-    let summary = &store.projects().list().unwrap()[0];
+    let summary = &store.repository().list().unwrap()[0];
     assert_eq!(summary.total_amount(), &BigDecimal::from(2250));
     let screen = screen(&app, W, H);
     assert!(screen.contains("Logged 1h 30m on Prototype"), "{screen}");
@@ -86,7 +92,7 @@ fn hourly_project_logs_time_into_amounts() {
 fn a_plain_90_is_hours_and_is_refused_as_one_entry() {
     let store = Store::in_memory().unwrap();
     let mut app = projects_app(&store);
-    create_project(&mut app, "App\tGlobex\t\t \t1500");
+    create_project(&mut app, &hourly_project_keys("App", "Globex", "1500"));
     app.handle_key(Key::Char('\t'));
     app.handle_key(Key::Char('a'));
     type_keys(&mut app, "Prototype\n");
@@ -99,7 +105,7 @@ fn a_plain_90_is_hours_and_is_refused_as_one_entry() {
     let screen = screen(&app, W, H);
     assert!(screen.contains("at most 24 hours"), "{screen}");
     assert_eq!(
-        store.projects().list().unwrap()[0].total_amount(),
+        store.repository().list().unwrap()[0].total_amount(),
         &BigDecimal::from(0)
     );
 }

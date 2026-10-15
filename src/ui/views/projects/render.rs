@@ -170,7 +170,7 @@ fn render_summary(frame: &mut Frame, area: Rect, project: &Project, theme: &Them
     frame.render_widget(billing, billing_area);
 
     let stats = [
-        ("Total", money(project.total_amount())),
+        ("Total excl. GST", money(project.total_amount())),
         ("Paid", money(&project.paid_amount())),
         ("Outstanding", money(&project.outstanding_amount())),
     ];

@@ -72,4 +72,9 @@ pub trait View {
     fn key_hints(&self) -> &'static [KeyHint] {
         &[]
     }
+
+    /// Called when the tab becomes active, so it can re-read what other tabs changed
+    fn on_activate(&mut self) -> Option<Notice> {
+        None
+    }
 }

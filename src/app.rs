@@ -125,15 +125,26 @@ impl App {
         match key {
             Key::Char('q') => self.running = false,
             Key::Char('?') => self.show_help = true,
-            Key::Right | Key::Char('l') => self.active = (self.active + 1) % count,
-            Key::Left | Key::Char('h') => self.active = (self.active + count - 1) % count,
+            Key::Right | Key::Char('l') => self.activate((self.active + 1) % count),
+            Key::Left | Key::Char('h') => self.activate((self.active + count - 1) % count),
             Key::Char(c @ '1'..='9') => {
                 let index = c as usize - '1' as usize;
                 if index < count {
-                    self.active = index;
+                    self.activate(index);
                 }
             }
             _ => self.dirty = false,
+        }
+    }
+
+    /// Switch tabs and let the new tab refresh itself
+    fn activate(&mut self, index: usize) {
+        if index == self.active {
+            return;
+        }
+        self.active = index;
+        if let Some(notice) = self.views[index].on_activate() {
+            self.notice = Some((notice, NOTICE_TICKS));
         }
     }
 }

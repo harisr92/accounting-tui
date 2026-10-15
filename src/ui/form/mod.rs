@@ -13,7 +13,7 @@ use ratatui::widgets::Paragraph;
 use termion::event::Key;
 
 use super::theme::{Theme, Tone};
-use super::view::KeyHint;
+use super::view::{Action, KeyHint, Notice};
 use super::widgets::modal;
 
 const LABEL_WIDTH: usize = 12;
@@ -78,6 +78,26 @@ impl Form {
     /// Show why the submit was rejected; the form keeps its input
     pub fn set_error(&mut self, error: impl Into<String>) {
         self.error = Some(error.into());
+    }
+
+    /// Feed a key to an open form. `submit` runs on Enter: `Ok` closes the form with a notice,
+    /// `Err` keeps it open showing the message. Returns the form if it is still open.
+    pub fn step(
+        mut self,
+        key: Key,
+        submit: impl FnOnce(&Self) -> Result<Notice, String>,
+    ) -> (Option<Self>, Action) {
+        match self.handle_key(key) {
+            FormEvent::Cancel => (None, Action::Handled),
+            FormEvent::Submit => match submit(&self) {
+                Ok(notice) => (None, Action::Notify(notice)),
+                Err(error) => {
+                    self.set_error(error);
+                    (Some(self), Action::Handled)
+                }
+            },
+            FormEvent::Edited | FormEvent::Ignored => (Some(self), Action::Handled),
+        }
     }
 
     pub fn handle_key(&mut self, key: Key) -> FormEvent {
