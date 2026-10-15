@@ -1,12 +1,12 @@
 use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 
-use crate::domain::{Billing, DomainError, ProjectStatus, TimeEntry};
+use crate::domain::{Billing, ClientDetails, DomainError, ProjectStatus, TimeEntry};
 use crate::services::{MilestoneDraft, ProjectDraft, ProjectService, ServiceError};
-use crate::storage::{ProjectRepository, RedbProjectRepository, StorageError, Store};
+use crate::storage::{ProjectRepository, RedbRepository, StorageError, Store};
 
-fn service() -> ProjectService<RedbProjectRepository> {
-    ProjectService::new(Store::in_memory().unwrap().projects())
+fn service() -> ProjectService<RedbRepository> {
+    ProjectService::new(Store::in_memory().unwrap().repository())
 }
 
 fn date() -> NaiveDate {
@@ -16,8 +16,7 @@ fn date() -> NaiveDate {
 fn draft(name: &str, billing: Billing) -> ProjectDraft {
     ProjectDraft {
         name: name.to_owned(),
-        client_name: "Acme".to_owned(),
-        client_gstin: Some("29AAPFU0939F1ZR".to_owned()),
+        client: ClientDetails::named("Acme", Some("29AAPFU0939F1ZR")),
         billing,
     }
 }
@@ -50,7 +49,7 @@ fn rejected_changes_are_not_saved() {
     service.add_milestone(id, milestone(Some(500))).unwrap();
 
     let mut bad = draft("Renamed", Billing::hourly(BigDecimal::from(100)).unwrap());
-    bad.client_gstin = None;
+    bad.client.gstin = None;
     assert!(matches!(
         service.update_details(id, bad),
         Err(ServiceError::Domain(DomainError::BillingMismatch))
@@ -96,7 +95,7 @@ fn removing_milestones_and_projects() {
 fn invalid_draft_creates_nothing() {
     let mut service = service();
     let mut bad = draft("Site", Billing::Fixed);
-    bad.client_gstin = Some("nope".to_owned());
+    bad.client.gstin = Some("nope".to_owned());
     assert!(matches!(
         service.create(bad),
         Err(ServiceError::Domain(DomainError::InvalidGstin(_)))
@@ -107,14 +106,14 @@ fn invalid_draft_creates_nothing() {
 #[test]
 fn projects_with_invoiced_milestones_are_kept() {
     let store = Store::in_memory().unwrap();
-    let mut service = ProjectService::new(store.projects());
+    let mut service = ProjectService::new(store.repository());
     let id = service.create(draft("Site", Billing::Fixed)).unwrap().id();
     service.add_milestone(id, milestone(Some(500))).unwrap();
 
     // Invoicing gets a service method in step 5; until then invoice through the repository
-    let mut repo = store.projects();
+    let mut repo = store.repository();
     let mut project = repo.load(id).unwrap();
-    project.invoice_milestone(0).unwrap();
+    project.invoice_milestone(0, "T-1").unwrap();
     repo.save(&project).unwrap();
 
     assert!(matches!(

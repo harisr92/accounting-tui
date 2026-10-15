@@ -2,16 +2,14 @@ use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 
 use super::ServiceError;
-use crate::domain::{Billing, Project, ProjectId, ProjectSummary, TimeEntry};
+use crate::domain::{Billing, ClientDetails, Project, ProjectId, ProjectSummary, TimeEntry};
 use crate::storage::ProjectRepository;
 
 /// Input for creating or editing a project
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectDraft {
     pub name: String,
-    pub client_name: String,
-    /// `None` for an unregistered client
-    pub client_gstin: Option<String>,
+    pub client: ClientDetails,
     pub billing: Billing,
 }
 
@@ -42,12 +40,7 @@ impl<R: ProjectRepository> ProjectService<R> {
     }
 
     pub fn create(&mut self, draft: ProjectDraft) -> Result<Project, ServiceError> {
-        let project = Project::new(
-            draft.name,
-            draft.client_name,
-            draft.client_gstin.as_deref(),
-            draft.billing,
-        )?;
+        let project = Project::for_client(draft.name, draft.client, draft.billing)?;
         self.repo.save(&project)?;
         Ok(project)
     }
@@ -59,7 +52,7 @@ impl<R: ProjectRepository> ProjectService<R> {
         draft: ProjectDraft,
     ) -> Result<Project, ServiceError> {
         self.update(id, |p| {
-            p.update_details(draft.name, draft.client_name, draft.client_gstin.as_deref())?;
+            p.update_details(draft.name, draft.client)?;
             p.set_billing(draft.billing)
         })
     }

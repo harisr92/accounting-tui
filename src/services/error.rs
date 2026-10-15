@@ -1,11 +1,30 @@
+use accounting_core::{LedgerError, PdfError};
+
+use super::InvoicingError;
 use crate::domain::DomainError;
 use crate::storage::StorageError;
 
-/// A use-case failed: either the change broke a domain rule or storage failed
+/// A use-case failed: a domain rule, invoicing prerequisites, the ledger, PDF output or storage
 #[derive(Debug, thiserror::Error)]
 pub enum ServiceError {
     #[error(transparent)]
     Domain(#[from] DomainError),
     #[error(transparent)]
+    Invoicing(#[from] InvoicingError),
+    #[error(transparent)]
+    Ledger(#[from] LedgerError),
+    #[error("could not produce the PDF: {0}")]
+    Pdf(#[from] PdfError),
+    #[error(transparent)]
     Storage(#[from] StorageError),
+    #[error("the milestone billed by invoice {0} no longer exists")]
+    MissingMilestone(String),
+    #[error("PDFs are not saved in demo mode")]
+    NoPdfFolder,
+    #[error("could not open {path} in a PDF viewer")]
+    OpenPdf {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
 }
