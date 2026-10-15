@@ -24,7 +24,7 @@ Tab focus · j/k move · n new · i invoice · 1-9/←→ tabs · ? help · q qu
 
 ## Status
 
-**Step 1 of 7 is done: the layout shell.** It runs on built-in sample data. Nothing is saved yet.
+**Steps 1–2 of 7 are done**: the layout shell and the domain model (billing, time tracking, status transitions, validation, serde). The app still runs on built-in sample data. Nothing is saved yet.
 
 ## Build and run
 
@@ -52,27 +52,51 @@ Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Un
 
 ```rust
 pub struct Project {
-    id: String,
+    id: ProjectId,                  // UUID
     name: String,
-    client_gstin: Option<String>,   // None = unregistered client
     client_name: String,
+    client_gstin: Option<Gstin>,    // accounting-core's validated GSTIN; None = unregistered
+    billing: Billing,               // Fixed | Hourly { rate }
     milestones: Vec<Milestone>,
-    total_amount: BigDecimal,       // sum of milestone amounts
-    status: ProjectStatus,          // Active, Completed, Paid
+    total_amount: BigDecimal,       // derived: sum of milestone amounts
+    status: ProjectStatus,          // derived: ACTIVE | COMPLETED | PAID
 }
 
 pub struct Milestone {
     name: String,
-    amount: BigDecimal,
+    amount: BigDecimal,             // fixed: agreed amount; hourly: derived from time
     due_date: NaiveDate,
-    status: MilestoneStatus,        // Pending, Invoiced, Paid
+    status: MilestoneStatus,        // PENDING | INVOICED | PAID
+    time_entries: Vec<TimeEntry>,   // hourly only: date, minutes, note
 }
 ```
 
-- **Feature-based** work: each milestone has a fixed amount.
-- **Hourly** work *(step 2)*: a project carries an hourly rate, and logged time entries roll up into the milestone amount.
-- A milestone goes `Pending → Invoiced` when an invoice is raised and `Invoiced → Paid` when payment is recorded. A project becomes `Paid` once every milestone is paid.
-- The financial year is the Indian April–March year (`FY 2026-27`).
+Fields are private. All changes go through `Project` methods, which validate the input and then recompute the derived fields.
+
+**Billing** is set per project:
+- **Fixed** (feature-based): each milestone gets an agreed amount when it is added.
+- **Hourly**: milestones are added without an amount. Logged time sets it: `rate × minutes / 60`, rounded half-up to paise. Time is stored as whole minutes, so the arithmetic stays exact.
+
+**Milestone transitions**, one step at a time:
+
+| From | To | Method | Rule |
+|------|----|--------|------|
+| PENDING | INVOICED | `invoice_milestone` | amount must be > 0 |
+| INVOICED | PAID | `record_payment` | |
+
+Once a milestone is invoiced it is locked: no more time entries and it can't be removed. Any other transition returns `DomainError::InvalidTransition`.
+
+**Project status** is derived from the milestones:
+
+| Status | When |
+|--------|------|
+| ACTIVE | no milestones yet, or any milestone is pending |
+| COMPLETED | none pending, at least one invoiced but unpaid |
+| PAID | every milestone is paid |
+
+**Serialisation**: projects are serde types (JSON in step 3). Loading runs the same validation as the constructors (names, GSTIN, amounts, rate, billing consistency) and recomputes `total_amount`, `status` and the amounts of pending hourly milestones. Derived values in the file are never trusted. The exception is the amount of an invoiced or paid milestone: it is the billed record, so it is kept as stored (it must be > 0) and does not follow later rate changes.
+
+The financial year is the Indian April–March year (`FY 2026-27`).
 
 ## Architecture
 
@@ -86,7 +110,7 @@ pub struct Milestone {
                                           └─────┬─────┘
                                                 │ reads
    ┌────────────┐      ┌────────────┐     ┌─────▼─────┐
-   │  storage/  │ ───▶ │ services/  │ ──▶ │  domain/  │  Project, Milestone, statuses, FiscalYear
+   │  storage/  │ ───▶ │ services/  │ ──▶ │  domain/  │  Project, Milestone, Billing, DomainError
    │ (step 3)   │      │ (step 5+)  │     └───────────┘
    └────────────┘      └─────┬──────┘
                              ▼
@@ -95,11 +119,17 @@ pub struct Milestone {
 
 ```
 src/
-├── main.rs              wiring: panic hook, terminal, view registration, event loop
+├── main.rs              binary: panic hook, terminal, view registration, event loop
+├── lib.rs               library root; everything below is the `compter_tui` crate
 ├── app.rs               App state and global key bindings
 ├── event.rs             termion input and tick threads
 ├── mock.rs              sample data (removed in step 4)
-├── domain/              pure types: project, milestone, fiscal_year
+├── domain/              pure types and rules
+│   ├── project.rs       Project, ProjectId, ProjectStatus, mutations, validated serde
+│   ├── milestone.rs     Milestone, MilestoneStatus, transitions
+│   ├── billing.rs       Billing, TimeEntry, hourly amount calculation
+│   ├── error.rs         DomainError
+│   └── fiscal_year.rs   Indian April–March year
 └── ui/
     ├── mod.rs           draw(): header / body / footer, help overlay
     ├── view.rs          View trait, Action, KeyHint
@@ -109,6 +139,8 @@ src/
     ├── header.rs  footer.rs  popup.rs
     └── views/           projects (live), placeholder (Dashboard, Invoices, Reports)
 ```
+
+Unit tests sit in a `tests/` folder beside the code they cover (`src/domain/tests/`, `src/ui/tests/`, and `src/tests/` for `app.rs`), one `<file>_tests.rs` per source file.
 
 Each tab implements `View`. A new screen is a new `View` registered in `main.rs`; the core loop doesn't change. See `CLAUDE.md` for the SOLID, DRY and memory rules the code follows.
 
@@ -130,7 +162,7 @@ Writes are atomic (temp file, then rename). The ledger files back an `accounting
 ## Roadmap
 
 1. ✅ **TUI layout shell**: tabs, project list and milestone table, footer hints, help popup
-2. **Domain model**: serde, hourly billing and time entries, status transitions, validation
+2. ✅ **Domain model**: serde, hourly billing and time entries, status transitions, validation
 3. **File storage**: JSON repositories, ledger storage for `accounting-core`
 4. **Wire storage into the TUI**: load and save, forms to create and edit projects and milestones, log hours
 5. **Invoicing**: milestone → `GstInvoice` (SAC code, CGST+SGST or IGST), validation, preview, PDF export, ledger posting, record payment

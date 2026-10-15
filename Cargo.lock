@@ -328,7 +328,11 @@ dependencies = [
  "chrono",
  "color-eyre",
  "ratatui",
+ "serde",
+ "serde_json",
  "termion",
+ "thiserror",
+ "uuid",
 ]
 
 [[package]]

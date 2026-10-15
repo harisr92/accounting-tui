@@ -11,6 +11,8 @@ Engineering rules for `compter-tui`. Follow them for every change. See `README.m
 
 ## Module boundaries
 
+The crate is a library (`src/lib.rs`, `compter_tui`) plus a thin binary (`src/main.rs`). Public domain APIs live in the library, so items the UI doesn't use yet aren't dead code, and integration tests can go under `tests/`.
+
 ```
 domain/    pure types and rules: no I/O, no UI, no termion/ratatui imports
 storage/   file I/O behind repository traits (step 3)
@@ -21,6 +23,16 @@ ui/        rendering only; reads state, never mutates domain data or touches sto
 ```
 
 Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain`. `domain` depends on nothing in this crate.
+
+## Domain invariants
+
+- Domain fields are private. Mutate only through domain methods that validate and then call `refresh()`.
+- Derived fields (`total_amount`, project `status`, amounts of *pending* hourly milestones) are recomputed by the domain. Never set them from outside, and never trust them from storage.
+- Once a milestone is invoiced its amount is the billed record: it is frozen and never recomputed (e.g. after a rate change).
+- Deserialisation goes through a `Raw*` struct + `TryFrom` (`#[serde(try_from = ...)]`) that runs the same `validate()` as the constructors.
+- Status changes go through the explicit transition methods (`invoice_milestone`, `record_payment`). No status setters.
+- Money is `BigDecimal`, rounded with `with_scale_round(2, RoundingMode::HalfUp)`. Durations are whole minutes (`u32`).
+- Reuse accounting-core value types (`Gstin`) instead of re-validating strings.
 
 ## SOLID
 
@@ -40,9 +52,9 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 
 ## Memory
 
-- Render from borrowed state: `Span::raw(project.name.as_str())`, `&'static str` for fixed text. Don't clone domain data in `render`.
+- Render from borrowed state: `Span::raw(project.name())`, `&'static str` for fixed text. Don't clone domain data in `render`.
 - Formatting dynamic values (money, dates) while rendering is fine. Only redraw when something changed: the `App` dirty flag and `take_dirty()`.
-- Fieldless `Copy` enums for statuses. Use `Vec::with_capacity` when the size is known. No `Rc<RefCell<_>>` graphs.
+- Fieldless `Copy` enums for statuses, `Copy` newtype ids (`ProjectId(Uuid)`), `u32` minutes. Use `Vec::with_capacity` when the size is known. No `Rc<RefCell<_>>` graphs.
 - Channels are bounded (`sync_channel`). Producers that can drop work (ticks) use `try_send`.
 - Storage (step 3+): load a small project index for lists and load full records only on selection. Write files with `BufWriter` and atomic tmp-then-rename.
 
@@ -52,6 +64,24 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - No `unwrap`/`expect` outside tests. Use `unwrap_or_default`, `?` or a typed error.
 - Keep `main.rs` to wiring: hooks, terminal setup, view registration, event loop.
 
+## Tests
+
+Every module keeps its unit tests in a `tests/` folder next to its source files, one `<file>_tests.rs` per source file. Never write inline `#[cfg(test)] mod tests { … }` blocks.
+
+```
+src/domain/billing.rs     → src/domain/tests/billing_tests.rs
+src/ui/selection.rs       → src/ui/tests/selection_tests.rs
+src/ui/mod.rs (draw)      → src/ui/tests/draw_tests.rs
+src/app.rs (crate root)   → src/tests/app_tests.rs
+```
+
+- The parent file ends with `#[cfg(test)] mod tests;`: `domain/mod.rs`, `ui/mod.rs`, and `lib.rs` for crate-root files like `app.rs`. A new module (`storage/`, `services/`) gets its own `tests/` folder the same way.
+- `tests/mod.rs` only declares the files: `mod billing_tests;`. Keep the declarations sorted.
+- Import explicitly (`use crate::domain::{Billing, Project};`), never `use super::*`.
+- Test through the public API. Reach into a private module (e.g. `crate::domain::billing::amount_for`) only for pure helpers.
+- `unwrap`/`expect` are fine in tests. Name tests after the behaviour (`transitions_cannot_be_skipped_or_repeated`), not the function.
+- Cross-module integration tests (e.g. FileStorage on a temp dir, step 3) go in the top-level `tests/` directory and use the `compter_tui` library crate.
+
 ## Before you call a change done
 
 ```bash
@@ -60,6 +90,6 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-UI changes also need a manual `cargo run` check: tabs, focus, help popup, resizing, and a clean exit with `q`. Add or extend the `TestBackend` render test in `main.rs` for new chrome.
+UI changes also need a manual `cargo run` check: tabs, focus, help popup, resizing, and a clean exit with `q`. Add or extend the `TestBackend` render test in `src/ui/tests/draw_tests.rs` for new chrome.
 
 Shell commands are proxied through RTK (`rtk ...`) automatically. See `~/.claude/RTK.md`.

@@ -1,9 +1,3 @@
-mod app;
-mod domain;
-mod event;
-mod mock;
-mod ui;
-
 use std::io::{self, Write};
 use std::time::Duration;
 
@@ -13,11 +7,12 @@ use ratatui::backend::TermionBackend;
 use termion::raw::IntoRawMode;
 use termion::screen::IntoAlternateScreen;
 
-use app::App;
-use event::{Event, Events};
-use ui::theme::Theme;
-use ui::view::View;
-use ui::views::{PlaceholderView, ProjectsView};
+use compter_tui::app::App;
+use compter_tui::event::{Event, Events};
+use compter_tui::mock;
+use compter_tui::ui::{
+    self, theme::Theme, view::View, views::PlaceholderView, views::ProjectsView,
+};
 
 const TICK_RATE: Duration = Duration::from_millis(250);
 
@@ -29,7 +24,7 @@ fn main() -> Result<()> {
             "Dashboard",
             "Earnings overview arrives in step 6",
         )),
-        Box::new(ProjectsView::new(mock::projects())),
+        Box::new(ProjectsView::new(mock::projects()?)),
         Box::new(PlaceholderView::new(
             "Invoices",
             "GST invoices arrive in step 5",
@@ -93,43 +88,4 @@ fn install_hooks() -> Result<()> {
         panic_hook(info);
     }));
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use ratatui::backend::TestBackend;
-
-    use super::*;
-
-    #[test]
-    fn renders_shell_at_80x24() {
-        let views: Vec<Box<dyn View>> = vec![
-            Box::new(PlaceholderView::new("Dashboard", "")),
-            Box::new(ProjectsView::new(mock::projects())),
-        ];
-        let mut app = App::new(views, Theme::default());
-        app.handle_key(termion::event::Key::Char('2'));
-
-        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
-        terminal.draw(|frame| ui::draw(frame, &app)).unwrap();
-        let screen: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect();
-
-        for expected in [
-            "compter",
-            "Dashboard",
-            "Projects",
-            "Milestones",
-            "Website Revamp",
-            "help",
-            "quit",
-        ] {
-            assert!(screen.contains(expected), "missing {expected:?}");
-        }
-    }
 }
