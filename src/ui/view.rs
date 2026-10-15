@@ -1,18 +1,48 @@
+use std::borrow::Cow;
+
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use termion::event::Key;
 
-use super::theme::Theme;
+use super::theme::{Theme, Tone};
+
+/// A transient footer message
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Notice {
+    pub text: Cow<'static, str>,
+    pub tone: Tone,
+}
+
+impl Notice {
+    pub fn info(text: impl Into<Cow<'static, str>>) -> Self {
+        Self::new(text, Tone::Warning)
+    }
+
+    pub fn success(text: impl Into<Cow<'static, str>>) -> Self {
+        Self::new(text, Tone::Success)
+    }
+
+    pub fn error(text: impl Into<Cow<'static, str>>) -> Self {
+        Self::new(text, Tone::Error)
+    }
+
+    fn new(text: impl Into<Cow<'static, str>>, tone: Tone) -> Self {
+        Self {
+            text: text.into(),
+            tone,
+        }
+    }
+}
 
 /// What a view did with a key press
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     /// Not handled; the app may apply its global bindings
     Ignored,
     /// Handled; state changed and needs a redraw
     Handled,
     /// Handled; show a transient message in the footer
-    Notify(&'static str),
+    Notify(Notice),
 }
 
 /// A key binding shown in the footer and the help popup

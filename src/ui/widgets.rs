@@ -2,10 +2,11 @@
 
 use accounting_core::utils::formatting::format_inr;
 use bigdecimal::BigDecimal;
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Block;
+use ratatui::widgets::{Block, Clear};
 
 use super::theme::{Theme, Tone};
 use crate::domain::{MilestoneStatus, ProjectStatus};
@@ -41,6 +42,16 @@ pub fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
         .flex(Flex::Center)
         .areas(row);
     rect
+}
+
+/// Clear a centred box, draw a focused panel on it and return the area inside the border
+pub fn modal(frame: &mut Frame, title: &str, width: u16, height: u16, theme: &Theme) -> Rect {
+    let area = centered_rect(frame.area(), width, height);
+    let block = panel(title, true, theme);
+    let inner = block.inner(area);
+    frame.render_widget(Clear, area);
+    frame.render_widget(block, area);
+    inner
 }
 
 /// A status that renders as a coloured badge

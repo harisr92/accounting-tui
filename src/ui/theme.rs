@@ -7,6 +7,7 @@ pub enum Tone {
     Info,
     Warning,
     Success,
+    Error,
 }
 
 /// The single source of colours and styles for the whole UI
@@ -26,6 +27,7 @@ impl Theme {
             Tone::Info => Color::Cyan,
             Tone::Warning => Color::Yellow,
             Tone::Success => Color::Green,
+            Tone::Error => Color::Red,
         };
         Style::new().fg(fg).add_modifier(Modifier::BOLD)
     }

@@ -1,6 +1,7 @@
 //! Rendering only: reads `App` state, never mutates domain data
 
 mod footer;
+pub mod form;
 mod header;
 mod popup;
 pub mod selection;

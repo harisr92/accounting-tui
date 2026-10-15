@@ -1,14 +1,14 @@
 use bigdecimal::BigDecimal;
 use redb::ReadableDatabase;
 
+use crate::demo;
 use crate::domain::{Billing, Project, ProjectId, ProjectStatus};
-use crate::mock;
 use crate::storage::tables::{PROJECT_SUMMARIES, PROJECTS};
 use crate::storage::{ProjectRepository, StorageError, Store};
 
 fn store_with_samples() -> (Store, Vec<Project>) {
     let store = Store::in_memory().unwrap();
-    let projects = mock::projects().unwrap();
+    let projects = demo::projects().unwrap();
     let mut repo = store.projects();
     for project in &projects {
         repo.save(project).unwrap();

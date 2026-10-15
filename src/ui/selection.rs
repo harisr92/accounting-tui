@@ -31,6 +31,15 @@ impl Selection {
         self.0 = 0;
     }
 
+    pub fn select(&mut self, index: usize) {
+        self.0 = index;
+    }
+
+    /// Keep the cursor inside a list that may have shrunk
+    pub fn clamp(&mut self, len: usize) {
+        self.0 = self.0.min(len.saturating_sub(1));
+    }
+
     pub fn move_by(&mut self, nav: Nav, len: usize) {
         if len == 0 {
             self.0 = 0;

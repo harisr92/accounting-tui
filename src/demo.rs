@@ -1,9 +1,11 @@
-//! Sample data for the layout shell. Replaced by `FileStorage` in step 4.
+//! Sample projects for `compter --demo` and for tests
 
 use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 
 use crate::domain::{Billing, DomainError, Project, TimeEntry};
+use crate::services::ServiceError;
+use crate::storage::{ProjectRepository, Store};
 
 fn date(year: i32, month: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(year, month, day).unwrap_or_default()
@@ -66,4 +68,14 @@ pub fn projects() -> Result<Vec<Project>, DomainError> {
     pipeline.invoice_milestone(1)?;
 
     Ok(vec![website, app, audit, pipeline])
+}
+
+/// An in-memory database holding the sample projects; nothing is written to disk
+pub fn store() -> Result<Store, ServiceError> {
+    let store = Store::in_memory()?;
+    let mut repo = store.projects();
+    for project in projects()? {
+        repo.save(&project)?;
+    }
+    Ok(store)
 }

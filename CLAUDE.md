@@ -16,10 +16,10 @@ The crate is a library (`src/lib.rs`, `compter_tui`) plus a thin binary (`src/ma
 ```
 domain/    pure types and rules: no I/O, no UI, no termion/ratatui imports
 storage/   redb database behind ProjectRepository and the ledger store
-services/  use-cases: invoicing, payments, tax; depend on repository traits (step 5+)
+services/  use-cases (ProjectService; invoicing, payments, tax later); generic over repository traits
 app.rs     application state and global key handling
 event.rs   input and tick threads
-ui/        rendering only; reads state, never mutates domain data or touches storage
+ui/        rendering and key handling; changes data only by calling services
 ```
 
 Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain`. `domain` depends on nothing in this crate.
@@ -31,6 +31,7 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - Once a milestone is invoiced its amount is the billed record: it is frozen and never recomputed (e.g. after a rate change).
 - Deserialisation goes through a `Raw*` struct + `TryFrom` (`#[serde(try_from = ...)]`) that runs the same `validate()` as the constructors.
 - Status changes go through the explicit transition methods (`invoice_milestone`, `record_payment`). No status setters.
+- Billing records are never destroyed: invoiced or paid milestones can't be edited or removed, and a project containing any can't be deleted (`Project::ensure_deletable`, checked in the service). New delete paths must respect this.
 - Money is `BigDecimal`, rounded with `with_scale_round(2, RoundingMode::HalfUp)`. Durations are whole minutes (`u32`).
 - Reuse accounting-core value types (`Gstin`) instead of re-validating strings.
 
@@ -54,6 +55,7 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 ## SOLID
 
 - **Single responsibility**: one concern per module and per type. Rendering, state changes and persistence never share a function.
+- **Views call services, never storage.** A view holds a service (`ProjectService<R>`), not a repository, and never calls domain mutators on its loaded copy. Every change is load → domain method → save inside the service (`ProjectService::update`), so a rejected change is never saved and the view re-reads what was stored.
 - **Open/closed**: every tab is a `ui::view::View`. Add a screen by implementing `View` and registering it in `main.rs`. Don't add per-tab `match` arms to `App` or `ui::draw`.
 - **Liskov**: any `View` must work through `&dyn View`. A view returns `Action::Ignored` for keys it doesn't own so global bindings still work.
 - **Interface segregation**: narrow traits (`ProjectRepository`, `InvoiceRepository`, `SettingsRepository`), not one god storage trait.
@@ -62,9 +64,13 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 ## DRY
 
 - Colours and styles come only from `ui::theme::Theme`. No `Color::` literals in views.
-- Use the shared helpers in `ui::widgets`: `panel` (bordered block with focus styling), `money`, `status_span`/`Toned`, `centered_rect`.
+- Use the shared helpers in `ui::widgets`: `panel` (bordered block with focus styling), `modal` (cleared, centred, focused box), `money`, `duration`, `status_span`/`Toned`, `centered_rect`.
 - List and table navigation goes through `ui::selection::{Selection, Nav}`. Don't hand-roll wrap-around or j/k mapping.
-- Key hints are defined once as `&'static [KeyHint]`. The footer and the help popup both render from that one slice.
+- Key hints are defined once as `&'static [KeyHint]`. The footer and the help popup both render from that one slice. The footer always shows `FOOTER_HINTS` (`? help · q quit`) on the right; view hints fill the left and may be cut off on narrow screens.
+- All input goes through `ui::form`: build a `Form` from `Field::text` / `Field::choice`, and use `Confirm` before anything irreversible. Don't write another text-input widget.
+- Parse what the user typed only in `ui/form/parse.rs` (money, dates, durations, optional text). Give a field a live `with_preview` when its input could be misread (durations).
+- Modals belong to the view that opened them. While one is open the view takes **every** key, so typing never triggers shortcuts. Only `Ctrl-c` is handled by `App` first.
+- A failed submit keeps the form open: put the reason in `Form::set_error` and keep the input. Errors outside forms go to the footer as `Notice::error`.
 - Status labels live once on the enum (`label()` / `Display`).
 
 ## Memory
@@ -74,6 +80,7 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - Fieldless `Copy` enums for statuses, `Copy` newtype ids (`ProjectId(Uuid)`), `u32` minutes. Use `Vec::with_capacity` when the size is known. No `Rc<RefCell<_>>` graphs.
 - Channels are bounded (`sync_channel`). Producers that can drop work (ticks) use `try_send`.
 - Storage: lists read summary tables (`project_summaries`), never full records. Load a full record only when it is opened. Repositories and the ledger store cache nothing in memory.
+- Views hold summary rows plus the **one** selected full record (`ProjectsView::selected`), dropped before the next is loaded. After a change, take the record the service returns instead of loading it again.
 
 ## Style
 

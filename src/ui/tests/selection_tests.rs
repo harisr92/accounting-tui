@@ -16,3 +16,13 @@ fn empty_list_has_no_selection() {
     assert_eq!(sel.index(), 0);
     assert_eq!(sel.table_state(0).selected(), None);
 }
+
+#[test]
+fn clamps_after_the_list_shrinks() {
+    let mut sel = Selection::default();
+    sel.select(4);
+    sel.clamp(3);
+    assert_eq!(sel.index(), 2);
+    sel.clamp(0);
+    assert_eq!(sel.index(), 0);
+}

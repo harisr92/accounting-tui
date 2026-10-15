@@ -3,13 +3,18 @@ use termion::event::Key;
 
 use crate::domain::FiscalYear;
 use crate::ui::theme::Theme;
-use crate::ui::view::{Action, KeyHint, View};
+use crate::ui::view::{Action, KeyHint, Notice, View};
 
+/// Bindings that work on every tab, as listed in the help popup
 pub const GLOBAL_HINTS: &[KeyHint] = &[
-    KeyHint::new("1-9/←→", "tabs"),
     KeyHint::new("?", "help"),
     KeyHint::new("q", "quit"),
+    KeyHint::new("1-9/←→", "tabs"),
+    KeyHint::new("Ctrl-c", "quit, even in a form"),
 ];
+
+/// The global bindings the footer always keeps visible
+pub const FOOTER_HINTS: &[KeyHint] = GLOBAL_HINTS.split_at(2).0;
 
 /// How many ticks a footer notice stays visible
 const NOTICE_TICKS: u8 = 12;
@@ -19,7 +24,7 @@ pub struct App {
     views: Vec<Box<dyn View>>,
     active: usize,
     show_help: bool,
-    notice: Option<(&'static str, u8)>,
+    notice: Option<(Notice, u8)>,
     fiscal_year: FiscalYear,
     theme: Theme,
     running: bool,
@@ -60,8 +65,8 @@ impl App {
         self.show_help
     }
 
-    pub fn notice(&self) -> Option<&'static str> {
-        self.notice.map(|(text, _)| text)
+    pub fn notice(&self) -> Option<&Notice> {
+        self.notice.as_ref().map(|(notice, _)| notice)
     }
 
     pub fn fiscal_year(&self) -> FiscalYear {
@@ -94,6 +99,12 @@ impl App {
     pub fn handle_key(&mut self, key: Key) {
         self.dirty = true;
 
+        // Always quits, even while a view has a form open
+        if key == Key::Ctrl('c') {
+            self.running = false;
+            return;
+        }
+
         if self.show_help {
             if matches!(key, Key::Esc | Key::Char('?' | 'q')) {
                 self.show_help = false;
@@ -103,8 +114,8 @@ impl App {
 
         match self.views[self.active].handle_key(key) {
             Action::Handled => return,
-            Action::Notify(text) => {
-                self.notice = Some((text, NOTICE_TICKS));
+            Action::Notify(notice) => {
+                self.notice = Some((notice, NOTICE_TICKS));
                 return;
             }
             Action::Ignored => {}
@@ -112,7 +123,7 @@ impl App {
 
         let count = self.views.len();
         match key {
-            Key::Char('q') | Key::Ctrl('c') => self.running = false,
+            Key::Char('q') => self.running = false,
             Key::Char('?') => self.show_help = true,
             Key::Right | Key::Char('l') => self.active = (self.active + 1) % count,
             Key::Left | Key::Char('h') => self.active = (self.active + count - 1) % count,

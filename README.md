@@ -24,29 +24,59 @@ Tab focus · j/k move · n new · i invoice · 1-9/←→ tabs · ? help · q qu
 
 ## Status
 
-**Steps 1–3 of 7 are done**: the layout shell, the domain model (billing, time tracking, status transitions, validation, serde) and redb storage. The TUI still runs on built-in sample data; step 4 connects it to the database.
+**Steps 1–4 of 7 are done.** compter saves to its database: create, edit and delete projects and milestones, and log hours on hourly work. Every change is saved as you make it. Invoicing and payments arrive in step 5.
 
 ## Build and run
 
 ```bash
-cargo run              # launch the TUI
-cargo test             # unit and render tests
+cargo run              # launch compter on your data
+cargo run -- --demo    # try it on sample projects kept in memory; nothing is saved
+cargo test             # unit, view and storage tests
 cargo clippy --all-targets -- -D warnings
 ```
+
+Only one compter can have the database open at a time; a second one exits with a clear message.
 
 Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Unicode support.
 
 ## Key bindings
 
+**Everywhere**
+
 | Key | Action |
 |-----|--------|
 | `1`–`9`, `←`/`→` (`h`/`l`) | switch tab |
-| `Tab` | switch focus between the project list and milestones |
-| `j`/`k`, `↓`/`↑` | move the selection (wraps around) |
-| `n` | new project *(step 4)* |
-| `i` | invoice the selected milestone *(step 5)* |
-| `?` | help popup (`Esc` closes it) |
-| `q`, `Ctrl-c` | quit |
+| `?` | help popup with every binding (`Esc` closes it) |
+| `q` | quit |
+| `Ctrl-c` | quit, even while a form is open |
+
+**Projects tab**
+
+| Focus | Key | Action |
+|-------|-----|--------|
+| any | `j`/`k`, `↓`/`↑` | move the selection (wraps around) |
+| any | `Tab` | switch between the project list and milestones (`Enter` on a project also works) |
+| any | `n` | new project |
+| project list | `e` | edit name, client, GSTIN, billing or hourly rate |
+| project list | `x` | delete the project (asks first; only while nothing in it is invoiced) |
+| milestones | `a` | add a milestone |
+| milestones | `e` / `x` | edit / delete a pending milestone (delete asks first) |
+| milestones | `t` | log time on an hourly milestone |
+| milestones | `u` | undo the last time entry (asks first) |
+| milestones | `i` | invoice *(step 5)* |
+
+**Forms**: type to edit, `Backspace` deletes, `Ctrl-u` clears the field. `Tab`/`↓` and `Shift-Tab`/`↑` move between fields, and `Space`/`←→` change a choice. `Enter` saves and `Esc` cancels. If something is wrong, the form stays open with the reason shown in red and your input kept.
+
+**What you can type**
+
+| Field | Accepts |
+|-------|---------|
+| amounts | `50000`, `1,50,000.50`, `₹1,50,000` |
+| dates | `2026-10-31`; blank means today |
+| time | `1h30m`, `2h`, `45m`, `1:30`, or a plain number of **hours** (`1.5` = 1h 30m). The field shows what it will log as you type (`= 1h 30m`). One entry can be at most 24 hours, so `90` is refused rather than logged as 90 hours. |
+| GSTIN | 15 characters, any case; blank for an unregistered client |
+
+An invoiced milestone is locked: it can't be edited, deleted or have time added. A project with any invoiced or paid milestone can't be deleted either, because those milestones are the billing records your tax and GST filings come from. Changing an hourly rate re-prices only pending milestones. Fixed and hourly billing can only be switched while a project has no milestones.
 
 ## Data model
 
@@ -123,7 +153,10 @@ src/
 ├── lib.rs               library root; everything below is the `compter_tui` crate
 ├── app.rs               App state and global key bindings
 ├── event.rs             termion input and tick threads
-├── mock.rs              sample data (TUI until step 4; also test fixtures)
+├── demo.rs              sample projects for --demo and tests
+├── services/            use-cases: load → domain change → save
+│   ├── project_service.rs  ProjectService, ProjectDraft, MilestoneDraft
+│   └── error.rs         ServiceError
 ├── storage/             redb persistence
 │   ├── store.rs         Store: open/in-memory, schema check, hands out repositories
 │   ├── repository.rs    ProjectRepository trait
@@ -144,10 +177,13 @@ src/
     ├── mod.rs           draw(): header / body / footer, help overlay
     ├── view.rs          View trait, Action, KeyHint
     ├── theme.rs         every colour and style
-    ├── widgets.rs       panel, money, status_span, centered_rect
+    ├── widgets.rs       panel, modal, money, duration, status_span
     ├── selection.rs     wrap-around Selection and j/k Nav
+    ├── form/            reusable modal Form (text and choice fields), Confirm, input parsers
     ├── header.rs  footer.rs  popup.rs
-    └── views/           projects (live), placeholder (Dashboard, Invoices, Reports)
+    └── views/
+        ├── projects/    ProjectsView: state and keys, rendering, forms
+        └── placeholder.rs  Dashboard, Invoices, Reports until their steps
 ```
 
 Unit tests sit in a `tests/` folder beside the code they cover (`src/domain/tests/`, `src/storage/tests/`, `src/ui/tests/`, and `src/tests/` for `app.rs`), one `<file>_tests.rs` per source file. Integration tests that reopen a real database file are in the top-level `tests/` directory.
@@ -180,14 +216,14 @@ Everything lives in one [redb](https://www.redb.org) database file, `compter.red
 - `store.projects()`: a `ProjectRepository` (list, load, save, delete)
 - `store.ledger()`: an accounting-core `AccountStore` + `TransactionStore`, so `Ledger::new(store.ledger())` works directly
 
-The TUI still runs on sample data until step 4 switches it to the store.
+The app opens the file on start, before the terminal is taken over, so an error like "already open" prints normally.
 
 ## Roadmap
 
 1. ✅ **TUI layout shell**: tabs, project list and milestone table, footer hints, help popup
 2. ✅ **Domain model**: serde, hourly billing and time entries, status transitions, validation
 3. ✅ **Storage**: redb database, project repository, ledger storage for `accounting-core`
-4. **Wire storage into the TUI**: load and save, forms to create and edit projects and milestones, log hours
+4. ✅ **Wire storage into the TUI**: load and save, forms to create and edit projects and milestones, log hours
 5. **Invoicing** (+ invoice and settings tables): milestone → `GstInvoice` (SAC code, CGST+SGST or IGST), validation, preview, PDF export, ledger posting, record payment
 6. **Tax and reports**: dashboard, income statement per FY, receivables, GSTR-1 JSON export, per-client income summary for ITR (incl. 44ADA view)
-7. **Polish**: search and filter, settings screen, error toasts, theming, integration tests
+7. **Polish**: archive finished projects (hidden from the list, kept for tax records), search and filter, settings screen, error toasts, theming, integration tests

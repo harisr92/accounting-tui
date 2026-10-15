@@ -1,9 +1,9 @@
 use ratatui::Frame;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Clear, Paragraph};
+use ratatui::widgets::Paragraph;
 
 use super::view::KeyHint;
-use super::widgets::{centered_rect, panel};
+use super::widgets::modal;
 use crate::app::{App, GLOBAL_HINTS};
 
 const KEY_COLUMN: usize = 10;
@@ -27,10 +27,6 @@ pub fn render_help(frame: &mut Frame, app: &App) {
     let height = u16::try_from(lines.len())
         .unwrap_or(u16::MAX)
         .saturating_add(2);
-    let area = centered_rect(frame.area(), 44, height);
-    frame.render_widget(Clear, area);
-    frame.render_widget(
-        Paragraph::new(lines).block(panel("Help", true, theme)),
-        area,
-    );
+    let area = modal(frame, "Help", 44, height, theme);
+    frame.render_widget(Paragraph::new(lines), area);
 }

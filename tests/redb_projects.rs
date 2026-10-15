@@ -1,13 +1,13 @@
 //! Projects survive closing and reopening the database file
 
-use compter_tui::mock;
+use compter_tui::demo;
 use compter_tui::storage::{DataDir, ProjectRepository, StorageError, Store};
 
 #[test]
 fn projects_persist_across_reopen() {
     let dir = tempfile::tempdir().unwrap();
     let data_dir = DataDir::new(dir.path());
-    let projects = mock::projects().unwrap();
+    let projects = demo::projects().unwrap();
 
     let saved_list = {
         let store = Store::open(&data_dir).unwrap();
@@ -30,7 +30,7 @@ fn projects_persist_across_reopen() {
 fn deletes_persist_across_reopen() {
     let dir = tempfile::tempdir().unwrap();
     let data_dir = DataDir::new(dir.path());
-    let projects = mock::projects().unwrap();
+    let projects = demo::projects().unwrap();
     let removed = projects[0].id();
     {
         let store = Store::open(&data_dir).unwrap();
