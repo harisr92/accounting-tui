@@ -1,0 +1,131 @@
+use bigdecimal::BigDecimal;
+use chrono::NaiveDate;
+
+use super::ServiceError;
+use crate::domain::{Billing, Project, ProjectId, ProjectSummary, TimeEntry};
+use crate::storage::ProjectRepository;
+
+/// Input for creating or editing a project
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectDraft {
+    pub name: String,
+    pub client_name: String,
+    /// `None` for an unregistered client
+    pub client_gstin: Option<String>,
+    pub billing: Billing,
+}
+
+/// Input for adding or editing a milestone; `amount` is `None` on hourly projects
+#[derive(Debug, Clone, PartialEq)]
+pub struct MilestoneDraft {
+    pub name: String,
+    pub due_date: NaiveDate,
+    pub amount: Option<BigDecimal>,
+}
+
+/// Project use-cases over any [`ProjectRepository`]. Each change is saved before it returns.
+pub struct ProjectService<R> {
+    repo: R,
+}
+
+impl<R: ProjectRepository> ProjectService<R> {
+    pub fn new(repo: R) -> Self {
+        Self { repo }
+    }
+
+    pub fn list(&self) -> Result<Vec<ProjectSummary>, ServiceError> {
+        Ok(self.repo.list()?)
+    }
+
+    pub fn load(&self, id: ProjectId) -> Result<Project, ServiceError> {
+        Ok(self.repo.load(id)?)
+    }
+
+    pub fn create(&mut self, draft: ProjectDraft) -> Result<Project, ServiceError> {
+        let project = Project::new(
+            draft.name,
+            draft.client_name,
+            draft.client_gstin.as_deref(),
+            draft.billing,
+        )?;
+        self.repo.save(&project)?;
+        Ok(project)
+    }
+
+    /// Apply the details and the billing of `draft`; nothing is saved if either is rejected
+    pub fn update_details(
+        &mut self,
+        id: ProjectId,
+        draft: ProjectDraft,
+    ) -> Result<Project, ServiceError> {
+        self.update(id, |p| {
+            p.update_details(draft.name, draft.client_name, draft.client_gstin.as_deref())?;
+            p.set_billing(draft.billing)
+        })
+    }
+
+    /// Delete a project that has nothing invoiced (see [`Project::ensure_deletable`])
+    pub fn delete(&mut self, id: ProjectId) -> Result<(), ServiceError> {
+        self.repo.load(id)?.ensure_deletable()?;
+        Ok(self.repo.delete(id)?)
+    }
+
+    pub fn add_milestone(
+        &mut self,
+        id: ProjectId,
+        draft: MilestoneDraft,
+    ) -> Result<Project, ServiceError> {
+        self.update(id, |p| {
+            p.add_milestone(draft.name, draft.due_date, draft.amount)
+                .map(drop)
+        })
+    }
+
+    pub fn edit_milestone(
+        &mut self,
+        id: ProjectId,
+        index: usize,
+        draft: MilestoneDraft,
+    ) -> Result<Project, ServiceError> {
+        self.update(id, |p| {
+            p.edit_milestone(index, draft.name, draft.due_date, draft.amount)
+        })
+    }
+
+    pub fn remove_milestone(
+        &mut self,
+        id: ProjectId,
+        index: usize,
+    ) -> Result<Project, ServiceError> {
+        self.update(id, |p| p.remove_milestone(index).map(drop))
+    }
+
+    pub fn log_time(
+        &mut self,
+        id: ProjectId,
+        index: usize,
+        entry: TimeEntry,
+    ) -> Result<Project, ServiceError> {
+        self.update(id, |p| p.log_time(index, entry))
+    }
+
+    pub fn remove_last_time_entry(
+        &mut self,
+        id: ProjectId,
+        index: usize,
+    ) -> Result<Project, ServiceError> {
+        self.update(id, |p| p.remove_last_time_entry(index).map(drop))
+    }
+
+    /// Load, change, save. A failed change is never saved, since the edit is on a fresh copy.
+    fn update(
+        &mut self,
+        id: ProjectId,
+        change: impl FnOnce(&mut Project) -> Result<(), crate::domain::DomainError>,
+    ) -> Result<Project, ServiceError> {
+        let mut project = self.repo.load(id)?;
+        change(&mut project)?;
+        self.repo.save(&project)?;
+        Ok(project)
+    }
+}
