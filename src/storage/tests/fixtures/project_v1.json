@@ -1,0 +1,45 @@
+{
+  "id": "334e10d2-bfa8-4883-963f-d91123cbb223",
+  "name": "Mobile App",
+  "client_name": "Globex Labs",
+  "client_gstin": null,
+  "billing": {
+    "type": "hourly",
+    "rate": "1500"
+  },
+  "milestones": [
+    {
+      "name": "Prototype",
+      "amount": "15750.00",
+      "due_date": "2026-10-30",
+      "status": "INVOICED",
+      "time_entries": [
+        {
+          "date": "2026-10-06",
+          "minutes": 360,
+          "note": "Wireframes"
+        },
+        {
+          "date": "2026-10-08",
+          "minutes": 270,
+          "note": "Navigation shell"
+        }
+      ]
+    },
+    {
+      "name": "Beta",
+      "amount": "3000.00",
+      "due_date": "2026-12-15",
+      "status": "PENDING",
+      "time_entries": [
+        {
+          "date": "2026-10-13",
+          "minutes": 120,
+          "note": "Auth spike"
+        }
+      ]
+    }
+  ],
+  "total_amount": "18750.00",
+  "status": "ACTIVE"
+}

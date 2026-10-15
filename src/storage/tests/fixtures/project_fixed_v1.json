@@ -1,0 +1,19 @@
+{
+  "id": "6f1c2a7e-0d5b-4c1e-9a3f-2b8d4e6f7a90",
+  "name": "API Audit",
+  "client_name": "Initech Solutions",
+  "client_gstin": "27AAPFU0939F1ZV",
+  "billing": {
+    "type": "fixed"
+  },
+  "milestones": [
+    {
+      "name": "Audit report",
+      "amount": "90000",
+      "due_date": "2026-06-30",
+      "status": "PAID"
+    }
+  ],
+  "total_amount": "90000",
+  "status": "PAID"
+}
