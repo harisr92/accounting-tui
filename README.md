@@ -81,7 +81,7 @@ Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Un
 
 **Reports tab**: `[`/`]` change the year, `g` exports the GSTR-1 for a quarter. See [Reports](#reports).
 
-**Settings tab**: `e` edits your business details: name, address, GSTIN, SAC code, invoice prefix, LUT ARN, and terms such as bank details. They must be filled in before the first invoice.
+**Settings tab**: `e` edits your business details: name, address, GSTIN, SAC code, invoice prefix, LUT ARN, and terms such as bank details. They must be filled in before the first invoice. `l` sets a logo (path to a PNG or JPEG under 1 MB; blank removes it), printed at the top left of new invoices.
 
 **Forms**: type to edit, `Backspace` deletes, `Ctrl-u` clears the field. `Tab`/`↓` and `Shift-Tab`/`↑` move between fields, and `Space`/`←→` change a choice. `Enter` saves and `Esc` cancels. If something is wrong, the form stays open with the reason shown in red and your input kept.
 
@@ -163,7 +163,7 @@ The financial year is the Indian April–March year (`FY 2026-27`).
 - Tax invoices are built and checked by accounting-core (`GstInvoice`, `validate_invoice`). Compliance errors block issuing, and warnings appear in the confirmation.
 - Unregistered clients need a name and address from ₹50,000, and clients abroad always need one.
 - The PDF is rendered before anything is saved, so an invoice that can't be printed is never issued. It is written to `<data dir>/invoices/2026-27/PREFIX-26-27-001.pdf`.
-- An invoice keeps its own copy of the printed document and terms, so its PDF comes out identical later, even after you change Settings.
+- An invoice keeps its own copy of the printed document and terms, so its PDF comes out identical later, even after you change Settings. It also records which logo it was issued with: changing or removing the logo affects only new invoices.
 - Issuing writes the invoice, the milestone's new status, the invoice counter and the ledger posting in **one transaction**.
 
 **Ledger** (accounting-core, created on first use):
@@ -276,7 +276,7 @@ src/
     └── views/
         ├── projects/    ProjectsView: state and keys, rendering, forms, issue/pay
         ├── invoices/    InvoicesView: list, open PDF, record payment
-        ├── settings/    SettingsView: business profile
+        ├── settings/    SettingsView: business profile and logo
         ├── payment.rs   the payment form shared by Projects and Invoices
         ├── dashboard/   DashboardView: this year and unpaid invoices
         ├── expenses/    ExpensesView: add, delete, by year
@@ -309,6 +309,7 @@ Everything lives in one [redb](https://www.redb.org) database file, `compter.red
 | `invoice_counters` | financial year (`2026-27`) | last sequence used |
 | `settings` | `"business_profile"` | your business details |
 | `expenses` | expense UUID | an expense (its posting is transaction `exp-<id>`) |
+| `logos` | logo UUID | raw PNG or JPEG bytes; never removed, since invoices refer to them |
 
 - **Atomic**: a project and its summary are written in one transaction, and issuing or paying an invoice writes every affected table in one transaction. The lists can never disagree with the records, and a crash leaves the last committed state.
 - **Low memory**: nothing is cached. Lists read only the small summary rows; a full project is read when you open it. The ledger store answers each query from the database.

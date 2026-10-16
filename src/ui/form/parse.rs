@@ -1,5 +1,6 @@
 //! Turning what the user typed into domain values. The only place input text is parsed.
 
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use bigdecimal::{BigDecimal, RoundingMode, ToPrimitive};
@@ -67,4 +68,26 @@ pub fn duration_minutes(input: &str) -> ParseResult<u32> {
 pub fn optional(input: &str) -> Option<String> {
     let input = input.trim();
     (!input.is_empty()).then(|| input.to_owned())
+}
+
+/// A file path, or `None` when blank. Strips the quotes a terminal adds when a file is dragged
+/// in, and expands a leading `~` to the home directory.
+pub fn path(input: &str) -> Option<PathBuf> {
+    let input = input.trim();
+    let input = ['"', '\'']
+        .iter()
+        .find_map(|&q| input.strip_prefix(q).and_then(|s| s.strip_suffix(q)))
+        .unwrap_or(input)
+        .trim();
+    if input.is_empty() {
+        return None;
+    }
+    let home = || std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
+    let expanded = match input.strip_prefix('~') {
+        Some(rest) if rest.is_empty() || rest.starts_with(['/', '\\']) => {
+            home().map(|home| PathBuf::from(home).join(rest.trim_start_matches(['/', '\\'])))
+        }
+        _ => None,
+    };
+    Some(expanded.unwrap_or_else(|| PathBuf::from(input)))
 }

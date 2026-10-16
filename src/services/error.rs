@@ -33,6 +33,14 @@ pub enum ServiceError {
     NotRegistered,
     #[error(transparent)]
     Gstr1(#[from] accounting_core::Gstr1Error),
+    #[error("could not read the logo {path}")]
+    ReadLogo {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("logo {0} is missing from the database")]
+    MissingLogo(crate::domain::LogoId),
     #[error("could not open {path} in a PDF viewer")]
     OpenPdf {
         path: std::path::PathBuf,

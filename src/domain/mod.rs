@@ -6,6 +6,7 @@ mod error;
 mod expense;
 mod fiscal_year;
 mod invoice;
+mod logo;
 mod milestone;
 mod profile;
 mod project;
@@ -20,6 +21,7 @@ pub use invoice::{
     Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber, InvoiceParts, InvoiceStatus,
     InvoiceSummary, Payment,
 };
+pub use logo::{Logo, LogoFormat, LogoId, MAX_LOGO_BYTES};
 pub use milestone::{Milestone, MilestoneId, MilestoneStatus};
 pub use profile::{BusinessProfile, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, ProfileDraft};
 pub use project::{ClientDetails, ClientRegion, Project, ProjectId, ProjectStatus, ProjectSummary};

@@ -4,4 +4,5 @@ mod format_tests;
 mod invoices_tests;
 mod migrations_tests;
 mod projects_tests;
+mod settings_tests;
 mod store_tests;

@@ -6,7 +6,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 use super::error::require;
-use super::{Currency, DomainError, ExchangeRate, FiscalYear, MilestoneId, ProjectId};
+use super::{Currency, DomainError, ExchangeRate, FiscalYear, LogoId, MilestoneId, ProjectId};
 
 /// `INV/26-27/004`: prefix, financial year and a sequence that restarts every year
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -171,6 +171,9 @@ pub struct Invoice {
     gst: Option<GstInvoice>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     payments: Vec<Payment>,
+    /// The logo printed on it, as it was when issued; `None` for an invoice without one
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    logo: Option<LogoId>,
 }
 
 #[derive(Deserialize)]
@@ -194,6 +197,8 @@ struct RawInvoice {
     gst: Option<GstInvoice>,
     #[serde(default)]
     payments: Vec<Payment>,
+    #[serde(default)]
+    logo: Option<LogoId>,
     /// The v1 format's single payment status; v2 records list `payments` instead
     #[serde(default)]
     status: Option<serde::de::IgnoredAny>,
@@ -234,6 +239,7 @@ impl TryFrom<RawInvoice> for Invoice {
             terms: raw.terms,
             gst: raw.gst,
             payments: raw.payments,
+            logo: raw.logo,
         })
     }
 }
@@ -255,6 +261,7 @@ pub struct InvoiceParts {
     pub print: InvoicePrint,
     pub terms: Vec<String>,
     pub gst: Option<GstInvoice>,
+    pub logo: Option<LogoId>,
 }
 
 impl Invoice {
@@ -276,6 +283,7 @@ impl Invoice {
             terms: parts.terms,
             gst: parts.gst,
             payments: Vec::new(),
+            logo: parts.logo,
         })
     }
 
@@ -346,6 +354,11 @@ impl Invoice {
 
     pub fn terms(&self) -> &[String] {
         &self.terms
+    }
+
+    /// The logo it was issued with, to print it again exactly
+    pub fn logo(&self) -> Option<LogoId> {
+        self.logo
     }
 
     pub fn gst(&self) -> Option<&GstInvoice> {

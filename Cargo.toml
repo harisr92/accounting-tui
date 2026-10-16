@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-accounting-core = { git = "https://github.com/harisr92/accounting-blue.git", rev = "3467ec6114e57ec6fba7b7d9c066382da0d4fa4a", features = ["pdf"] }
+accounting-core = { git = "https://github.com/harisr92/accounting-blue.git", rev = "0700ab4976b3193a69d63b6fe4c8e6d14ec35c23", features = ["pdf"] }
 async-trait = "0.1.92"
 bigdecimal = { version = "0.4", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }

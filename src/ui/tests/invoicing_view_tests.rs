@@ -10,6 +10,14 @@ use crate::storage::{InvoiceRepository, ProjectRepository, SettingsRepository, S
 use crate::ui::tests::support::{invoicing_app, screen, type_keys};
 
 const W: u16 = 120;
+/// A 2x1 pixel RGB PNG that accounting-core can draw
+const LOGO_PNG: [u8; 70] = [
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x7B, 0x40, 0xE8,
+    0xDD, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x38, 0x21, 0x07, 0x04,
+    0x27, 0x00, 0x07, 0x23, 0x02, 0x09, 0xE4, 0x58, 0x88, 0x39, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
+    0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+];
 const H: u16 = 32;
 
 fn registered_profile() -> BusinessProfile {
@@ -269,4 +277,53 @@ fn dollar_invoices_ask_for_the_rate_and_payments_for_rupees_banked() {
     let summary = &store.repository().list_invoices().unwrap()[0];
     assert_eq!(summary.status(), InvoiceStatus::Paid);
     assert_eq!(milestone_status(&store, &project), MilestoneStatus::Paid);
+}
+
+#[test]
+fn settings_sets_and_removes_the_logo() {
+    let (store, _) = store_with_milestone(true);
+    let mut app = invoicing_app(&store);
+    app.handle_key(Key::Char('3'));
+    assert!(screen(&app, W, H).contains("none: press l"));
+
+    let file = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(file.path(), LOGO_PNG).unwrap();
+    app.handle_key(Key::Char('l'));
+    type_keys(&mut app, &file.path().display().to_string());
+    app.handle_key(Key::Enter);
+    let shown = screen(&app, W, H);
+    assert!(shown.contains("PNG, 1 KB"), "{shown}");
+    let logo = store.repository().load_profile().unwrap().unwrap().logo();
+    assert!(logo.is_some());
+
+    // Editing the details keeps the logo
+    app.handle_key(Key::Char('e'));
+    app.handle_key(Key::Enter);
+    assert_eq!(
+        store.repository().load_profile().unwrap().unwrap().logo(),
+        logo
+    );
+
+    app.handle_key(Key::Char('l'));
+    app.handle_key(Key::Enter);
+    assert!(screen(&app, W, H).contains("Logo removed"));
+    assert!(
+        store
+            .repository()
+            .load_profile()
+            .unwrap()
+            .unwrap()
+            .logo()
+            .is_none()
+    );
+}
+
+#[test]
+fn a_logo_waits_for_the_business_details() {
+    let store = Store::in_memory().unwrap();
+    let mut app = invoicing_app(&store);
+    app.handle_key(Key::Char('3'));
+    app.handle_key(Key::Char('l'));
+    let shown = screen(&app, W, H);
+    assert!(shown.contains("before a logo"), "{shown}");
 }

@@ -9,7 +9,7 @@ use ratatui::widgets::{Paragraph, Wrap};
 
 use crate::domain::{
     BusinessProfile, Currency, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, FiscalYear, InvoiceNumber,
-    ProfileDraft,
+    LogoFormat, ProfileDraft,
 };
 use crate::services::InvoiceService;
 use crate::storage::Repository;
@@ -18,7 +18,10 @@ use crate::ui::theme::Theme;
 use crate::ui::view::{Action, KeyHint, Notice, View};
 use crate::ui::widgets::panel;
 
-const HINTS: &[KeyHint] = &[KeyHint::new("e", "edit business details")];
+const HINTS: &[KeyHint] = &[
+    KeyHint::new("e", "edit business details"),
+    KeyHint::new("l", "set logo"),
+];
 
 const NAME: usize = 0;
 const ADDRESS: [usize; 3] = [1, 2, 3];
@@ -29,21 +32,44 @@ const LUT: usize = 7;
 const TERMS: [usize; 2] = [8, 9];
 const CURRENCY: usize = 10;
 
-/// Shows the business profile; `e` edits it
+const LOGO_FILE: usize = 0;
+
+enum Modal {
+    Profile(Form),
+    Logo(Form),
+}
+
+/// What the Settings tab shows about the current logo; the bytes stay in storage
+#[derive(Debug, Clone, Copy)]
+struct LogoInfo {
+    format: LogoFormat,
+    bytes: usize,
+}
+
+/// Shows the business profile; `e` edits it, `l` sets the logo
 pub struct SettingsView<R> {
     service: InvoiceService<R>,
     profile: Option<BusinessProfile>,
-    form: Option<Form>,
+    logo: Option<LogoInfo>,
+    modal: Option<Modal>,
 }
 
 impl<R: Repository> SettingsView<R> {
     pub fn new(service: InvoiceService<R>) -> Result<Self, crate::services::ServiceError> {
         let profile = service.profile()?;
+        let logo = logo_info(&service)?;
         Ok(Self {
             service,
             profile,
-            form: None,
+            logo,
+            modal: None,
         })
+    }
+
+    fn reload(&mut self) -> Result<(), crate::services::ServiceError> {
+        self.profile = self.service.profile()?;
+        self.logo = logo_info(&self.service)?;
+        Ok(())
     }
 
     fn submit(&mut self, form: &Form) -> Result<Notice, String> {
@@ -57,6 +83,8 @@ impl<R: Repository> SettingsView<R> {
             lut_arn: parse::optional(form.value(LUT)),
             terms: lines(&TERMS),
             currency: Currency::from_index(form.choice(CURRENCY)),
+            // The logo is set on its own (`l`); editing the details keeps it
+            logo: self.profile.as_ref().and_then(BusinessProfile::logo),
         };
         let profile = self
             .service
@@ -65,6 +93,40 @@ impl<R: Repository> SettingsView<R> {
         self.profile = Some(profile);
         Ok(Notice::success("Business details saved"))
     }
+
+    fn submit_logo(&mut self, form: &Form) -> Result<Notice, String> {
+        let path = parse::path(form.value(LOGO_FILE));
+        let profile = self
+            .service
+            .set_logo(path.as_deref())
+            .map_err(|e| e.to_string())?;
+        self.profile = Some(profile);
+        self.logo = logo_info(&self.service).map_err(|e| e.to_string())?;
+        Ok(Notice::success(if path.is_some() {
+            "Logo saved: it is printed on new invoices"
+        } else {
+            "Logo removed from new invoices"
+        }))
+    }
+}
+
+fn logo_info<R: Repository>(
+    service: &InvoiceService<R>,
+) -> Result<Option<LogoInfo>, crate::services::ServiceError> {
+    Ok(service.current_logo()?.map(|logo| LogoInfo {
+        format: logo.format(),
+        bytes: logo.bytes().len(),
+    }))
+}
+
+fn logo_form() -> Form {
+    Form::new(
+        "Logo",
+        vec![Field::text(
+            "Logo file",
+            "path to a PNG or JPEG; blank removes it",
+        )],
+    )
 }
 
 fn profile_form(profile: Option<&BusinessProfile>) -> Form {
@@ -124,26 +186,41 @@ impl<R: Repository> View for SettingsView<R> {
                     theme.dim(),
                 ),
             ],
-            Some(p) => profile_lines(p, theme),
+            Some(p) => profile_lines(p, self.logo, theme),
         };
         let body = Paragraph::new(lines)
             .wrap(Wrap { trim: false })
             .block(block);
         frame.render_widget(body, area);
-        if let Some(form) = &self.form {
+        if let Some(Modal::Profile(form) | Modal::Logo(form)) = &self.modal {
             form.render(frame, theme);
         }
     }
 
     fn handle_key(&mut self, key: Key) -> Action {
-        if let Some(form) = self.form.take() {
-            let (form, action) = form.step(key, |form| self.submit(form));
-            self.form = form;
-            return action;
+        match self.modal.take() {
+            Some(Modal::Profile(form)) => {
+                let (form, action) = form.step(key, |form| self.submit(form));
+                self.modal = form.map(Modal::Profile);
+                return action;
+            }
+            Some(Modal::Logo(form)) => {
+                let (form, action) = form.step(key, |form| self.submit_logo(form));
+                self.modal = form.map(Modal::Logo);
+                return action;
+            }
+            None => {}
         }
         match key {
             Key::Char('e') => {
-                self.form = Some(profile_form(self.profile.as_ref()));
+                self.modal = Some(Modal::Profile(profile_form(self.profile.as_ref())));
+                Action::Handled
+            }
+            Key::Char('l') if self.profile.is_none() => {
+                Action::Notify(Notice::error("Add your business details (e) before a logo"))
+            }
+            Key::Char('l') => {
+                self.modal = Some(Modal::Logo(logo_form()));
                 Action::Handled
             }
             _ => Action::Ignored,
@@ -151,7 +228,7 @@ impl<R: Repository> View for SettingsView<R> {
     }
 
     fn key_hints(&self) -> &'static [KeyHint] {
-        if self.form.is_some() {
+        if self.modal.is_some() {
             Form::HINTS
         } else {
             HINTS
@@ -159,17 +236,17 @@ impl<R: Repository> View for SettingsView<R> {
     }
 
     fn on_activate(&mut self) -> Option<Notice> {
-        match self.service.profile() {
-            Ok(profile) => {
-                self.profile = profile;
-                None
-            }
-            Err(error) => Some(Notice::error(error.to_string())),
-        }
+        self.reload()
+            .err()
+            .map(|error| Notice::error(error.to_string()))
     }
 }
 
-fn profile_lines<'a>(p: &'a BusinessProfile, theme: &Theme) -> Vec<Line<'a>> {
+fn profile_lines<'a>(
+    p: &'a BusinessProfile,
+    logo: Option<LogoInfo>,
+    theme: &Theme,
+) -> Vec<Line<'a>> {
     let row = |label: &'static str, value: String| {
         Line::from(vec![
             Span::styled(format!("{label:<16}"), theme.dim()),
@@ -208,6 +285,19 @@ fn profile_lines<'a>(p: &'a BusinessProfile, theme: &Theme) -> Vec<Line<'a>> {
                 "{} {}: default for new projects; clients in India are billed in INR",
                 p.currency().code(),
                 p.currency().symbol()
+            ),
+        ),
+        row(
+            "Logo",
+            logo.map_or_else(
+                || "none: press l to print one on new invoices".to_owned(),
+                |logo| {
+                    format!(
+                        "{}, {} KB: printed on new invoices",
+                        logo.format.label(),
+                        logo.bytes.div_ceil(1024)
+                    )
+                },
             ),
         ),
     ]

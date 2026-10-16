@@ -48,6 +48,12 @@ pub enum StorageError {
         #[source]
         source: serde_json::Error,
     },
+    #[error("invalid logo {key} in the database")]
+    InvalidLogo {
+        key: String,
+        #[source]
+        source: crate::domain::DomainError,
+    },
     #[error(transparent)]
     Db(#[from] redb::Error),
 }

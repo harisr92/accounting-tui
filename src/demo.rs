@@ -91,6 +91,7 @@ fn profile(gstin: Option<&str>) -> ProfileDraft {
             "Payment due within 15 days".to_owned(),
         ],
         currency: Currency::Inr,
+        logo: None,
     }
 }
 

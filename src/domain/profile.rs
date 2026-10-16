@@ -3,7 +3,7 @@ use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 
 use super::error::require;
-use super::{Currency, DomainError};
+use super::{Currency, DomainError, LogoId};
 
 /// SAC for IT design and development services, the usual freelance software code
 pub const DEFAULT_SAC: &str = "998314";
@@ -30,6 +30,9 @@ pub struct ProfileDraft {
     /// What new projects are billed in; clients in India are always billed in INR
     #[serde(default)]
     pub currency: Currency,
+    /// Printed on new invoices; set from Settings, stored in its own table
+    #[serde(default)]
+    pub logo: Option<LogoId>,
 }
 
 /// Who is issuing invoices: the freelancer's business
@@ -44,6 +47,7 @@ pub struct BusinessProfile {
     lut_arn: Option<String>,
     terms: Vec<String>,
     currency: Currency,
+    logo: Option<LogoId>,
 }
 
 impl TryFrom<ProfileDraft> for BusinessProfile {
@@ -87,6 +91,7 @@ impl TryFrom<ProfileDraft> for BusinessProfile {
             lut_arn,
             terms: non_blank(draft.terms),
             currency: draft.currency,
+            logo: draft.logo,
         })
     }
 }
@@ -135,6 +140,11 @@ impl BusinessProfile {
         self.currency
     }
 
+    /// The logo new invoices are issued with
+    pub fn logo(&self) -> Option<LogoId> {
+        self.logo
+    }
+
     /// The profile as entered, for prefilling the Settings form
     pub fn to_draft(&self) -> ProfileDraft {
         ProfileDraft {
@@ -146,6 +156,7 @@ impl BusinessProfile {
             lut_arn: self.lut_arn.clone(),
             terms: self.terms.clone(),
             currency: self.currency,
+            logo: self.logo,
         }
     }
 }

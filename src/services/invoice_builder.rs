@@ -243,6 +243,7 @@ fn tax_invoice(
         print,
         terms: profile.terms().to_vec(),
         gst: Some(gst),
+        logo: profile.logo(),
     })?;
     Ok(BuiltInvoice {
         invoice,
@@ -366,6 +367,7 @@ fn untaxed_invoice(
         print,
         terms,
         gst: None,
+        logo: profile.logo(),
     })?;
     Ok(BuiltInvoice {
         invoice,

@@ -4,7 +4,7 @@ use chrono::NaiveDate;
 
 use crate::domain::{
     Currency, DomainError, ExchangeRate, FiscalYear, Invoice, InvoiceAmounts, InvoiceKind,
-    InvoiceNumber, InvoiceParts, InvoiceStatus, InvoiceSummary, MilestoneId, ProjectId,
+    InvoiceNumber, InvoiceParts, InvoiceStatus, InvoiceSummary, LogoId, MilestoneId, ProjectId,
 };
 
 fn date(day: u32) -> NaiveDate {
@@ -52,6 +52,7 @@ fn parts() -> InvoiceParts {
         print: print(),
         terms: Vec::new(),
         gst: None,
+        logo: None,
     }
 }
 
@@ -251,4 +252,27 @@ fn records_without_a_currency_are_rupees() {
     let read = serde_json::from_value::<Invoice>(json).unwrap();
     assert_eq!(read.currency(), Currency::Inr);
     assert!(read.exchange_rate().is_none());
+}
+
+#[test]
+fn the_logo_is_kept_with_the_invoice_and_older_records_have_none() {
+    let logo = LogoId::generate();
+    let inv = Invoice::issue(InvoiceParts {
+        logo: Some(logo),
+        ..parts()
+    })
+    .unwrap();
+    assert_eq!(inv.logo(), Some(logo));
+
+    let json = serde_json::to_value(&inv).unwrap();
+    assert_eq!(
+        serde_json::from_value::<Invoice>(json).unwrap().logo(),
+        Some(logo)
+    );
+    let without = serde_json::to_value(Invoice::issue(parts()).unwrap()).unwrap();
+    assert!(without.get("logo").is_none());
+    assert_eq!(
+        serde_json::from_value::<Invoice>(without).unwrap().logo(),
+        None
+    );
 }

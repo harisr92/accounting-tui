@@ -7,7 +7,7 @@ use redb::{
 
 use super::codec::{decode, encode};
 use super::tables::{
-    ACCOUNTS, EXPENSES, INVOICE_COUNTERS, INVOICE_SUMMARIES, INVOICES, PROFILE_KEY,
+    ACCOUNTS, EXPENSES, INVOICE_COUNTERS, INVOICE_SUMMARIES, INVOICES, LOGOS, PROFILE_KEY,
     PROJECT_SUMMARIES, PROJECTS, SETTINGS, TRANSACTIONS,
 };
 use super::{
@@ -15,8 +15,8 @@ use super::{
     ProjectRepository, SettingsRepository, StorageError,
 };
 use crate::domain::{
-    BusinessProfile, Expense, ExpenseId, FiscalYear, Invoice, InvoiceNumber, InvoiceSummary,
-    Project, ProjectId, ProjectSummary,
+    BusinessProfile, Expense, ExpenseId, FiscalYear, Invoice, InvoiceNumber, InvoiceSummary, Logo,
+    LogoId, Project, ProjectId, ProjectSummary,
 };
 
 /// All of compter's records on redb. One type behind every repository trait, so a change that
@@ -265,11 +265,52 @@ impl SettingsRepository for RedbRepository {
     }
 
     fn save_profile(&mut self, profile: &BusinessProfile) -> Result<(), StorageError> {
-        let bytes = encode(SETTINGS.name(), PROFILE_KEY, profile)?;
         let txn = self.db.begin_write()?;
-        txn.open_table(SETTINGS)?
-            .insert(PROFILE_KEY, bytes.as_slice())?;
+        put_profile(&txn, profile)?;
         txn.commit()?;
         Ok(())
     }
+
+    fn load_logo(&self, id: LogoId) -> Result<Option<Logo>, StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(LOGOS)?;
+        let row = table.get(id.as_uuid())?;
+        row.map(|value| {
+            Logo::from_stored(id, value.value().to_vec()).map_err(|source| {
+                StorageError::InvalidLogo {
+                    key: id.to_string(),
+                    source,
+                }
+            })
+        })
+        .transpose()
+    }
+
+    fn set_logo(
+        &mut self,
+        profile: &BusinessProfile,
+        logo: Option<&Logo>,
+    ) -> Result<(), StorageError> {
+        let txn = self.db.begin_write()?;
+        if let Some(logo) = logo {
+            put_logo(&txn, logo)?;
+        }
+        put_profile(&txn, profile)?;
+        txn.commit()?;
+        Ok(())
+    }
+}
+
+fn put_profile(txn: &WriteTransaction, profile: &BusinessProfile) -> Result<(), StorageError> {
+    let bytes = encode(SETTINGS.name(), PROFILE_KEY, profile)?;
+    txn.open_table(SETTINGS)?
+        .insert(PROFILE_KEY, bytes.as_slice())?;
+    Ok(())
+}
+
+/// Logos are stored as their raw image bytes, never overwritten
+fn put_logo(txn: &WriteTransaction, logo: &Logo) -> Result<(), StorageError> {
+    txn.open_table(LOGOS)?
+        .insert(logo.id().as_uuid(), logo.bytes())?;
+    Ok(())
 }

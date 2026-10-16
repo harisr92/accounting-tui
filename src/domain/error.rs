@@ -70,6 +70,10 @@ pub enum DomainError {
     MissingCreditedAmount,
     #[error("rupees credited are only recorded for invoices in a foreign currency")]
     UnexpectedCreditedAmount,
+    #[error("the logo must be a PNG or JPEG image")]
+    InvalidLogo,
+    #[error("the logo is {bytes} bytes; use an image under 1 MB")]
+    LogoTooLarge { bytes: usize },
 }
 
 /// Reject blank text fields

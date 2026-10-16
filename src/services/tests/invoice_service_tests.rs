@@ -3,7 +3,7 @@ use bigdecimal::BigDecimal;
 use pollster::block_on;
 
 use super::fixtures::{
-    OTHER_STATE_GSTIN, SELLER_GSTIN, client, date, fixed_project, foreign_client, india,
+    LOGO_PNG, OTHER_STATE_GSTIN, SELLER_GSTIN, client, date, fixed_project, foreign_client, india,
     profile_draft,
 };
 use crate::domain::{
@@ -238,4 +238,85 @@ fn foreign_invoices_need_a_rate_and_take_no_tds() {
         service.load(&number).unwrap().status(),
         InvoiceStatus::Issued
     );
+}
+
+/// `bytes` written to a temp file, for `set_logo`
+fn logo_file(bytes: &[u8]) -> tempfile::NamedTempFile {
+    let file = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(file.path(), bytes).unwrap();
+    file
+}
+
+#[test]
+fn invoices_print_the_logo_they_were_issued_with() {
+    let (store, mut service, mut project) = setup();
+    let first = project.milestones()[0].id();
+    let plain = service
+        .issue(project.id(), first, date(), None)
+        .unwrap()
+        .invoice;
+    assert_eq!(plain.logo(), None);
+
+    let file = logo_file(&LOGO_PNG);
+    let profile = service.set_logo(Some(file.path())).unwrap();
+    let logo = profile.logo().unwrap();
+    assert_eq!(service.current_logo().unwrap().unwrap().id(), logo);
+
+    project
+        .add_milestone("Build", date(), Some(rupees(10_000)))
+        .unwrap();
+    store.repository().save(&project).unwrap();
+    let second = project.milestones()[1].id();
+    let branded = service
+        .issue(project.id(), second, date(), None)
+        .unwrap()
+        .invoice;
+    assert_eq!(branded.logo(), Some(logo));
+    let with_logo = service.pdf_bytes(&branded).unwrap();
+    assert!(with_logo.starts_with(b"%PDF") && has_image(&with_logo));
+
+    // Removing the logo affects only new invoices; issued ones reprint unchanged
+    service.set_logo(None).unwrap();
+    assert!(service.current_logo().unwrap().is_none());
+    let reloaded = service.load(branded.number()).unwrap();
+    assert_eq!(reloaded.logo(), Some(logo));
+    assert!(has_image(&service.pdf_bytes(&reloaded).unwrap()));
+    assert!(!has_image(&service.pdf_bytes(&plain).unwrap()));
+}
+
+/// Whether the PDF embeds an image XObject
+fn has_image(pdf: &[u8]) -> bool {
+    pdf.windows(b"/Image".len()).any(|w| w == b"/Image")
+}
+
+#[test]
+fn a_file_that_is_not_an_image_is_refused_and_nothing_changes() {
+    let (_store, mut service, _project) = setup();
+    let file = logo_file(b"not an image");
+    assert!(matches!(
+        service.set_logo(Some(file.path())),
+        Err(ServiceError::Domain(DomainError::InvalidLogo))
+    ));
+    assert!(matches!(
+        service.set_logo(Some(std::path::Path::new("/no/such/logo.png"))),
+        Err(ServiceError::ReadLogo { .. })
+    ));
+    // Starts like a PNG but can't be drawn
+    let broken = logo_file(&LOGO_PNG[..40]);
+    assert!(matches!(
+        service.set_logo(Some(broken.path())),
+        Err(ServiceError::Pdf(_))
+    ));
+    assert!(service.profile().unwrap().unwrap().logo().is_none());
+}
+
+#[test]
+fn a_logo_needs_a_profile_first() {
+    let store = Store::in_memory().unwrap();
+    let mut service = InvoiceService::new(store.repository(), None);
+    let file = logo_file(&LOGO_PNG);
+    assert!(matches!(
+        service.set_logo(Some(file.path())),
+        Err(ServiceError::Invoicing(InvoicingError::NoProfile))
+    ));
 }

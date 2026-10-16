@@ -1,4 +1,4 @@
-use crate::domain::{BusinessProfile, Currency, DomainError, ProfileDraft};
+use crate::domain::{BusinessProfile, Currency, DomainError, LogoId, ProfileDraft};
 
 fn draft() -> ProfileDraft {
     ProfileDraft {
@@ -93,4 +93,21 @@ fn the_default_currency_is_kept_and_older_profiles_are_in_rupees() {
     json.as_object_mut().unwrap().remove("currency");
     let read = serde_json::from_value::<BusinessProfile>(json).unwrap();
     assert_eq!(read.currency(), Currency::Inr);
+}
+
+#[test]
+fn logo_survives_editing_and_older_records_have_none() {
+    let logo = LogoId::generate();
+    let profile = BusinessProfile::try_from(ProfileDraft {
+        logo: Some(logo),
+        ..draft()
+    })
+    .unwrap();
+    assert_eq!(profile.logo(), Some(logo));
+    assert_eq!(profile.to_draft().logo, Some(logo));
+
+    let mut stored = serde_json::to_value(&profile).unwrap();
+    stored.as_object_mut().unwrap().remove("logo");
+    let older: BusinessProfile = serde_json::from_value(stored).unwrap();
+    assert_eq!(older.logo(), None);
 }

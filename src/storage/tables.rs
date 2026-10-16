@@ -38,3 +38,8 @@ pub(super) const EXPENSES: TableDefinition<Uuid, &[u8]> = TableDefinition::new("
 /// Single-row settings, keyed by name (`business_profile`)
 pub(super) const SETTINGS: TableDefinition<&str, &[u8]> = TableDefinition::new("settings");
 pub(super) const PROFILE_KEY: &str = "business_profile";
+
+/// Logo images, keyed by `LogoId`. The one table not written through `codec`: values are the raw
+/// PNG or JPEG bytes (JSON would triple them), checked by `Logo::from_stored` when read. Rows are
+/// never removed, because issued invoices refer to them.
+pub(super) const LOGOS: TableDefinition<Uuid, &[u8]> = TableDefinition::new("logos");

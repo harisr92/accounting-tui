@@ -2,8 +2,8 @@ use accounting_core::{Account, Transaction};
 
 use super::StorageError;
 use crate::domain::{
-    BusinessProfile, Expense, ExpenseId, FiscalYear, Invoice, InvoiceNumber, InvoiceSummary,
-    Project, ProjectId, ProjectSummary,
+    BusinessProfile, Expense, ExpenseId, FiscalYear, Invoice, InvoiceNumber, InvoiceSummary, Logo,
+    LogoId, Project, ProjectId, ProjectSummary,
 };
 
 /// Where projects live. The app depends on this trait, not on redb.
@@ -84,6 +84,16 @@ pub trait SettingsRepository {
     fn load_profile(&self) -> Result<Option<BusinessProfile>, StorageError>;
 
     fn save_profile(&mut self, profile: &BusinessProfile) -> Result<(), StorageError>;
+
+    /// A stored logo; `None` if no logo has that id
+    fn load_logo(&self, id: LogoId) -> Result<Option<Logo>, StorageError>;
+
+    /// Save `profile` and, when given, the new logo it points at, in one write
+    fn set_logo(
+        &mut self,
+        profile: &BusinessProfile,
+        logo: Option<&Logo>,
+    ) -> Result<(), StorageError>;
 }
 
 /// All of the repositories at once, as the app's views use them
