@@ -1,4 +1,4 @@
-use termion::event::Key;
+use crate::ui::key::Key;
 
 use crate::ui::form::{Confirm, Field, Form, FormEvent};
 
@@ -34,7 +34,7 @@ fn edits_text_in_the_focused_field() {
 #[test]
 fn tab_moves_between_fields_and_choices_cycle() {
     let mut form = form();
-    assert_eq!(form.handle_key(Key::Char('\t')), FormEvent::Edited);
+    assert_eq!(form.handle_key(Key::Tab), FormEvent::Edited);
     press(&mut form, " ");
     assert_eq!((form.choice(1), form.value(1)), (1, "Hourly"));
     form.handle_key(Key::Right);
@@ -50,7 +50,7 @@ fn tab_moves_between_fields_and_choices_cycle() {
 #[test]
 fn enter_submits_escape_cancels() {
     let mut form = form();
-    assert_eq!(form.handle_key(Key::Char('\n')), FormEvent::Submit);
+    assert_eq!(form.handle_key(Key::Enter), FormEvent::Submit);
     assert_eq!(form.handle_key(Key::Esc), FormEvent::Cancel);
 }
 

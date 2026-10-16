@@ -1,8 +1,8 @@
 //! Helpers for driving the UI in tests: build an app, press keys, read the screen
 
+use crate::ui::key::Key;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
-use termion::event::Key;
 
 use crate::app::App;
 use crate::services::{ExpenseService, InvoiceService, ReportService};
@@ -62,7 +62,12 @@ pub fn go_to_year(app: &mut App, start_year: i32) {
 /// Press each character as a key (`\t` is Tab, `\n` is Enter)
 pub fn type_keys(app: &mut App, text: &str) {
     for c in text.chars() {
-        app.handle_key(Key::Char(c));
+        let key = match c {
+            '\t' => Key::Tab,
+            '\n' => Key::Enter,
+            c => Key::Char(c),
+        };
+        app.handle_key(key);
     }
 }
 

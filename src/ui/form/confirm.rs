@@ -1,7 +1,7 @@
+use crate::ui::key::Key;
 use ratatui::Frame;
 use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Wrap};
-use termion::event::Key;
 
 use crate::ui::theme::Theme;
 use crate::ui::view::KeyHint;

@@ -1,5 +1,5 @@
+use crate::ui::key::Key;
 use bigdecimal::BigDecimal;
-use termion::event::Key;
 
 use crate::demo;
 use crate::storage::{ProjectRepository, Store};
@@ -17,7 +17,7 @@ fn names(store: &Store) -> Vec<String> {
 fn create_project(app: &mut crate::app::App, fields: &str) {
     app.handle_key(Key::Char('n'));
     type_keys(app, fields);
-    app.handle_key(Key::Char('\n'));
+    app.handle_key(Key::Enter);
 }
 
 /// Fields of the project form up to Billing: name, client, GSTIN, client in, state, country,
@@ -72,7 +72,7 @@ fn hourly_project_logs_time_into_amounts() {
     let store = Store::in_memory().unwrap();
     let mut app = projects_app(&store);
     create_project(&mut app, &hourly_project_keys("App", "Globex", "1500"));
-    app.handle_key(Key::Char('\t'));
+    app.handle_key(Key::Tab);
     app.handle_key(Key::Char('a'));
     type_keys(&mut app, "Prototype\n");
 
@@ -80,7 +80,7 @@ fn hourly_project_logs_time_into_amounts() {
     type_keys(&mut app, "\t1h30m\tspike");
     let preview = screen(&app, W, H);
     assert!(preview.contains("= 1h 30m"), "{preview}");
-    app.handle_key(Key::Char('\n'));
+    app.handle_key(Key::Enter);
 
     let summary = &store.repository().list().unwrap()[0];
     assert_eq!(summary.total_amount(), &BigDecimal::from(2250));
@@ -94,14 +94,14 @@ fn a_plain_90_is_hours_and_is_refused_as_one_entry() {
     let store = Store::in_memory().unwrap();
     let mut app = projects_app(&store);
     create_project(&mut app, &hourly_project_keys("App", "Globex", "1500"));
-    app.handle_key(Key::Char('\t'));
+    app.handle_key(Key::Tab);
     app.handle_key(Key::Char('a'));
     type_keys(&mut app, "Prototype\n");
 
     app.handle_key(Key::Char('t'));
     type_keys(&mut app, "\t90");
     assert!(screen(&app, W, H).contains("over 24h"));
-    app.handle_key(Key::Char('\n'));
+    app.handle_key(Key::Enter);
 
     let screen = screen(&app, W, H);
     assert!(screen.contains("at most 24 hours"), "{screen}");
@@ -209,7 +209,7 @@ fn time_log_follows_undo() {
     let store = Store::in_memory().unwrap();
     let mut app = projects_app(&store);
     create_project(&mut app, &hourly_project_keys("App", "Globex", "1500"));
-    app.handle_key(Key::Char('\t'));
+    app.handle_key(Key::Tab);
     app.handle_key(Key::Char('a'));
     type_keys(&mut app, "Prototype\n");
     app.handle_key(Key::Char('o'));

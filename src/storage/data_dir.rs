@@ -17,13 +17,17 @@ impl DataDir {
         Self { root: root.into() }
     }
 
-    /// `$COMPTER_HOME`, else `$XDG_DATA_HOME/compter`, else `$HOME/.local/share/compter`
+    /// `$COMPTER_HOME`, else `$XDG_DATA_HOME/compter`, else `%APPDATA%\compter` on Windows or
+    /// `$HOME/.local/share/compter` elsewhere
     pub fn from_env() -> Result<Self, StorageError> {
-        Self::resolve(|key| env::var_os(key))
+        Self::resolve(cfg!(windows), |key| env::var_os(key))
     }
 
-    /// [`Self::from_env`] with an injectable variable lookup
-    pub fn resolve(lookup: impl Fn(&str) -> Option<OsString>) -> Result<Self, StorageError> {
+    /// [`Self::from_env`] with an injectable platform and variable lookup
+    pub fn resolve(
+        windows: bool,
+        lookup: impl Fn(&str) -> Option<OsString>,
+    ) -> Result<Self, StorageError> {
         let var = |key| {
             lookup(key)
                 .filter(|value| !value.is_empty())
@@ -34,6 +38,12 @@ impl DataDir {
         }
         if let Some(data) = var("XDG_DATA_HOME") {
             return Ok(Self::new(data.join("compter")));
+        }
+        // Windows shells like Git Bash set HOME too; APPDATA keeps one folder whatever the shell
+        if windows {
+            return var("APPDATA")
+                .map(|data| Self::new(data.join("compter")))
+                .ok_or(StorageError::NoDataDir);
         }
         var("HOME")
             .map(|home| Self::new(home.join(".local/share/compter")))

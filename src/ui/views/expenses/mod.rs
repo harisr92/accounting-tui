@@ -1,12 +1,12 @@
 //! Expenses tab: business spending for the year, posted to the ledger
 
+use crate::ui::key::Key;
 use bigdecimal::{BigDecimal, Zero};
 use chrono::Local;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Rect};
 use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Row, Table};
-use termion::event::Key;
 
 use super::year::{self, YearPicker};
 use crate::domain::{Expense, ExpenseCategory, ExpenseId};

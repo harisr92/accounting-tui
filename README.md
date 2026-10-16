@@ -2,7 +2,7 @@
 
 A terminal app for freelancers who work for several clients, billed by the hour or per feature. Track work as **projects** split into **milestones**, raise GST invoices from milestones, record payments, and get the numbers you need to file income tax and GST returns, all without leaving the terminal.
 
-Built with [ratatui](https://ratatui.rs) (termion backend) on top of [`accounting-core`](https://github.com/harisr92/accounting-blue), which provides double-entry bookkeeping, GST invoices with PDF export, GSTR-1 and financial reports.
+Built with [ratatui](https://ratatui.rs) (crossterm backend) on top of [`accounting-core`](https://github.com/harisr92/accounting-blue), which provides double-entry bookkeeping, GST invoices with PDF export, GSTR-1 and financial reports.
 
 ```
 ┌ compter ─────────────────────────────────────────────────────────────────── FY 2026-27 ┐
@@ -37,7 +37,7 @@ cargo clippy --all-targets -- -D warnings
 
 Only one compter can have the database open at a time; a second one exits with a clear message.
 
-Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Unicode support.
+Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Unicode support. Runs on macOS, Linux and Windows. `o` opens PDFs with `open`, `xdg-open` or `start`; set `COMPTER_OPEN` to use another program.
 
 ## Key bindings
 
@@ -226,7 +226,7 @@ src/
 ├── main.rs              binary: args, panic hook, store, six tabs, event loop
 ├── lib.rs               library root; everything below is the `compter_tui` crate
 ├── app.rs               App state, global keys, tab switching (on_activate)
-├── event.rs             termion input and tick threads
+├── event.rs             crossterm input, resize and tick threads
 ├── demo.rs              in-memory sample business for --demo; fixture projects for tests
 ├── services/            use-cases: load → domain change → save
 │   ├── project_service.rs  ProjectService, ProjectDraft, MilestoneDraft
@@ -289,7 +289,7 @@ Everything lives in one [redb](https://www.redb.org) database file, `compter.red
 
 1. `$COMPTER_HOME`
 2. `$XDG_DATA_HOME/compter`
-3. `$HOME/.local/share/compter`
+3. `%APPDATA%\compter` on Windows (whichever shell started compter), `$HOME/.local/share/compter` elsewhere
 
 | Table | Key | Value |
 |-------|-----|-------|

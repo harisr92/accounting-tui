@@ -1,7 +1,7 @@
 //! `[` and `]` step through financial years; shared by every tab that shows a year
 
+use crate::ui::key::Key;
 use chrono::Local;
-use termion::event::Key;
 
 use crate::domain::FiscalYear;
 use crate::ui::view::KeyHint;

@@ -1,4 +1,4 @@
-use termion::event::Key;
+use crate::ui::key::Key;
 
 use crate::demo;
 use crate::domain::FiscalYear;
@@ -75,7 +75,7 @@ fn expenses_are_added_and_deleted() {
 
     app.handle_key(Key::Char('a'));
     type_keys(&mut app, "2026-07-05\t \tTrain to Mumbai\t2,500");
-    app.handle_key(Key::Char('\n'));
+    app.handle_key(Key::Enter);
     go_to_year(&mut app, 2026);
     let listed = store.repository().list_expenses(fy_2026()).unwrap();
     assert_eq!(listed.len(), 1);

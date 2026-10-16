@@ -4,7 +4,8 @@ Engineering rules for `compter-tui`. Follow them for every change. See `README.m
 
 ## Stack
 
-- Rust 2024, `ratatui` 0.30 with the **termion** backend (no crossterm)
+- Rust 2024, `ratatui` 0.30 with the **crossterm** backend (`ratatui::crossterm`, no separate dependency), so it runs on macOS, Linux and Windows. No termion: it has no Windows support
+- Views see only `ui::key::Key`. Crossterm events are converted once, in `Key::from_event` (which drops key releases, reported on Windows)
 - `accounting-core` (git, pinned rev, `pdf` feature) for GST invoices, ledger, reports and returns. Use it; don't reimplement accounting, GST or INR formatting (`accounting_core::utils::formatting::format_inr`)
 - `bigdecimal` for money (never `f64`), `chrono::NaiveDate` for dates
 - `color_eyre::Result` in `main` and at the edges; typed `thiserror` enums inside `domain` and `storage`
@@ -14,11 +15,11 @@ Engineering rules for `compter-tui`. Follow them for every change. See `README.m
 The crate is a library (`src/lib.rs`, `compter_tui`) plus a thin binary (`src/main.rs`). Public domain APIs live in the library, so items the UI doesn't use yet aren't dead code, and integration tests can go under `tests/`.
 
 ```
-domain/    pure types and rules: no I/O, no UI, no termion/ratatui imports
+domain/    pure types and rules: no I/O, no UI, no crossterm/ratatui imports
 storage/   redb database behind the repository traits and the ledger store
 services/  use-cases (ProjectService; invoicing, payments, tax later); generic over repository traits
 app.rs     application state and global key handling
-event.rs   input and tick threads
+event.rs   input, resize and tick threads
 ui/        rendering and key handling; changes data only by calling services
 ```
 

@@ -1,6 +1,6 @@
 //! Money columns are right-aligned, so their headers must end where their values end
 
-use termion::event::Key;
+use crate::ui::key::Key;
 
 use crate::demo;
 use crate::ui::tests::support::{go_to_year, invoicing_app, reporting_app, screen};

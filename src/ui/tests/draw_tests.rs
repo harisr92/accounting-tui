@@ -14,7 +14,7 @@ fn renders_shell_at_80x24() {
         Box::new(projects),
     ];
     let mut app = App::new(views, Theme::default());
-    app.handle_key(termion::event::Key::Char('2'));
+    app.handle_key(crate::ui::key::Key::Char('2'));
     let screen = screen(&app, 80, 24);
 
     for expected in [

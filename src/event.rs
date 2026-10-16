@@ -1,17 +1,18 @@
-//! Termion has no poll API, so input and ticks come from background threads over a bounded channel
+//! Input and ticks come from background threads over a bounded channel
 
-use std::io;
 use std::sync::mpsc::{self, Receiver, RecvError, SyncSender};
 use std::thread;
 use std::time::Duration;
 
-use termion::event::Key;
-use termion::input::TermRead;
+use ratatui::crossterm::event::{self as term, Event as TermEvent};
+
+use crate::ui::key::Key;
 
 const CHANNEL_CAPACITY: usize = 64;
 
 pub enum Event {
     Key(Key),
+    Resize,
     Tick,
 }
 
@@ -34,8 +35,16 @@ impl Events {
 
 fn spawn_input(tx: SyncSender<Event>) {
     thread::spawn(move || {
-        for key in io::stdin().keys().map_while(Result::ok) {
-            if tx.send(Event::Key(key)).is_err() {
+        while let Ok(event) = term::read() {
+            let event = match event {
+                TermEvent::Key(key) => match Key::from_event(key) {
+                    Some(key) => Event::Key(key),
+                    None => continue,
+                },
+                TermEvent::Resize(..) => Event::Resize,
+                _ => continue,
+            };
+            if tx.send(event).is_err() {
                 return;
             }
         }

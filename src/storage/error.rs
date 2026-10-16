@@ -9,7 +9,7 @@ use crate::domain::ProjectId;
 /// Why reading or writing the database failed
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
-    #[error("no data directory: set COMPTER_HOME or HOME")]
+    #[error("no data directory: set COMPTER_HOME, or HOME (APPDATA on Windows)")]
     NoDataDir,
     #[error("could not create data directory {path}")]
     Io {

@@ -1,6 +1,6 @@
+use crate::ui::key::Key;
 use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
-use termion::event::Key;
 
 use crate::domain::{
     Billing, BusinessProfile, ClientDetails, ClientRegion, Currency, InvoiceStatus,
@@ -69,7 +69,7 @@ fn settings_form_saves_the_profile() {
         "Nila Studio\t12 FC Road\t\tPune 411004\t27aapfu0939f1zv",
     );
     assert!(screen(&app, W, H).contains("IT design and development services (18%)"));
-    app.handle_key(Key::Char('\n'));
+    app.handle_key(Key::Enter);
 
     let profile = store.repository().load_profile().unwrap().unwrap();
     assert_eq!(profile.name(), "Nila Studio");
@@ -149,7 +149,7 @@ fn part_payments_show_their_history_and_balance() {
 
     // ₹59,000 due: receive 20,000 now
     app.handle_key(Key::Char('p'));
-    app.handle_key(Key::Char('\t'));
+    app.handle_key(Key::Tab);
     app.handle_key(Key::Ctrl('u'));
     type_keys(&mut app, "20000\n");
     let screen_after = screen(&app, W, H);
@@ -168,7 +168,7 @@ fn part_payments_show_their_history_and_balance() {
     // The form now offers the balance; accepting it settles the invoice
     app.handle_key(Key::Char('p'));
     assert!(screen(&app, W, H).contains("39000"));
-    app.handle_key(Key::Char('\n'));
+    app.handle_key(Key::Enter);
     assert!(screen(&app, W, H).contains("paid in full"));
     assert_eq!(milestone_status(&store, &project), MilestoneStatus::Paid);
 }
@@ -186,7 +186,7 @@ fn settings_currency_is_the_default_for_new_projects() {
     // Past name, address, GSTIN, SAC, prefix, LUT and terms to Currency: INR -> USD
     type_keys(&mut app, "\t\t\t\t\t\t\t\t\t\t ");
     assert!(screen(&app, W, H).contains("USD $"));
-    app.handle_key(Key::Char('\n'));
+    app.handle_key(Key::Enter);
     let profile = store.repository().load_profile().unwrap().unwrap();
     assert_eq!(profile.currency(), Currency::Usd);
     assert!(screen(&app, W, H).contains("default for new projects"));

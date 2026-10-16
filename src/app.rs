@@ -1,5 +1,5 @@
+use crate::ui::key::Key;
 use chrono::Local;
-use termion::event::Key;
 
 use crate::domain::FiscalYear;
 use crate::ui::theme::Theme;

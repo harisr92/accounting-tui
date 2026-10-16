@@ -7,10 +7,10 @@ pub mod parse;
 pub use confirm::Confirm;
 pub use field::{Field, Preview};
 
+use crate::ui::key::Key;
 use ratatui::Frame;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use termion::event::Key;
 
 use super::theme::{Theme, Tone};
 use super::view::{Action, KeyHint, Notice};
@@ -104,8 +104,8 @@ impl Form {
         let count = self.fields.len().max(1);
         match key {
             Key::Esc => FormEvent::Cancel,
-            Key::Char('\n') => FormEvent::Submit,
-            Key::Char('\t') | Key::Down => {
+            Key::Enter => FormEvent::Submit,
+            Key::Tab | Key::Down => {
                 self.focus = (self.focus + 1) % count;
                 FormEvent::Edited
             }

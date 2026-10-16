@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 
+use crate::ui::key::Key;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use termion::event::Key;
 
 use super::theme::{Theme, Tone};
 

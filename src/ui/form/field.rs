@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
+use crate::ui::key::Key;
 use ratatui::text::Span;
-use termion::event::Key;
 
 use crate::ui::theme::Theme;
 

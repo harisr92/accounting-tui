@@ -1,5 +1,5 @@
+use crate::ui::key::Key;
 use ratatui::widgets::TableState;
-use termion::event::Key;
 
 /// Direction of a list movement key
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

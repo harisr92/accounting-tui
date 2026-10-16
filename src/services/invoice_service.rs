@@ -311,20 +311,30 @@ fn receivable_cleared(invoice: &Invoice) -> BigDecimal {
 }
 
 fn open_in_viewer(path: &Path) -> std::io::Result<()> {
-    let opener = std::env::var("COMPTER_OPEN").unwrap_or_else(|_| {
-        if cfg!(target_os = "macos") {
-            "open".to_owned()
-        } else {
-            "xdg-open".to_owned()
-        }
-    });
-    Command::new(opener)
+    viewer_command()
         .arg(path)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .map(drop)
+}
+
+/// `$COMPTER_OPEN`, else the platform's "open with the default app" command, waiting for a path
+fn viewer_command() -> Command {
+    if let Ok(opener) = std::env::var("COMPTER_OPEN") {
+        return Command::new(opener);
+    }
+    if cfg!(windows) {
+        // `start` is a cmd built-in, and its first quoted argument is the window title
+        let mut command = Command::new("cmd");
+        command.args(["/C", "start", ""]);
+        command
+    } else if cfg!(target_os = "macos") {
+        Command::new("open")
+    } else {
+        Command::new("xdg-open")
+    }
 }
 
 fn pdf_path(dir: &DataDir, invoice: &Invoice) -> PathBuf {

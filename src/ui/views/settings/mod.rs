@@ -1,11 +1,11 @@
 //! Settings tab: the business profile invoices are issued under
 
+use crate::ui::key::Key;
 use accounting_core::HsnMaster;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
-use termion::event::Key;
 
 use crate::domain::{
     BusinessProfile, Currency, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, FiscalYear, InvoiceNumber,

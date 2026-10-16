@@ -3,9 +3,9 @@
 mod forms;
 mod render;
 
+use crate::ui::key::Key;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
-use termion::event::Key;
 
 use std::collections::BTreeSet;
 
@@ -322,14 +322,14 @@ impl<R: Repository> ProjectsView<R> {
             return self.navigate(nav);
         }
         match (self.focus, key) {
-            (_, Key::Char('\t') | Key::BackTab) => {
+            (_, Key::Tab | Key::BackTab) => {
                 self.focus = match self.focus {
                     Focus::Projects => Focus::Milestones,
                     Focus::Milestones => Focus::Projects,
                 };
                 Action::Handled
             }
-            (Focus::Projects, Key::Char('\n')) if self.selected.is_some() => {
+            (Focus::Projects, Key::Enter) if self.selected.is_some() => {
                 self.focus = Focus::Milestones;
                 Action::Handled
             }

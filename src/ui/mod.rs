@@ -3,6 +3,7 @@
 mod footer;
 pub mod form;
 mod header;
+pub mod key;
 mod popup;
 pub mod selection;
 pub mod theme;

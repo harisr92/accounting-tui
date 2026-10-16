@@ -1,11 +1,11 @@
 //! Invoices tab: every issued invoice, newest first; open the PDF or record a payment
 
+use crate::ui::key::Key;
 use bigdecimal::BigDecimal;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Row, Table};
-use termion::event::Key;
 
 use crate::domain::{Invoice, InvoiceStatus, InvoiceSummary};
 use crate::services::{InvoiceService, ServiceError};

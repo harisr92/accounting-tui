@@ -1,4 +1,4 @@
-use termion::event::Key;
+use crate::ui::key::Key;
 
 use crate::app::App;
 use crate::ui::theme::Theme;

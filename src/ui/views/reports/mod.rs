@@ -1,12 +1,12 @@
 //! Reports tab: a financial year for income tax and GST, and the quarterly GSTR-1 export
 
+use crate::ui::key::Key;
 use bigdecimal::Zero;
 use chrono::Local;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Row, Table, Wrap};
-use termion::event::Key;
 
 use super::year::{self, YearPicker};
 use crate::domain::Quarter;

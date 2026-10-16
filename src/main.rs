@@ -6,9 +6,11 @@ use std::time::Duration;
 use color_eyre::Result;
 use color_eyre::eyre::WrapErr;
 use ratatui::Terminal;
-use ratatui::backend::TermionBackend;
-use termion::raw::IntoRawMode;
-use termion::screen::IntoAlternateScreen;
+use ratatui::backend::CrosstermBackend;
+use ratatui::crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
+use ratatui::crossterm::{cursor, execute};
 
 use compter_tui::app::App;
 use compter_tui::cli;
@@ -33,7 +35,8 @@ const USAGE: &str = "usage: compter [--demo] [-V | --version] [-h | --help]
   import-merges    add a milestone to an hourly project for each merge into the main branch
                    of a git repository, timed from the previous merge (8h at most across days)
 
-Data is stored in $COMPTER_HOME, $XDG_DATA_HOME/compter or ~/.local/share/compter.";
+Data is stored in $COMPTER_HOME, $XDG_DATA_HOME/compter, or else %APPDATA%\\compter on Windows
+and ~/.local/share/compter elsewhere.";
 
 fn main() -> Result<ExitCode> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -85,11 +88,17 @@ fn main() -> Result<ExitCode> {
     ];
     let mut app = App::new(views, Theme::default());
 
-    let stdout = io::stdout().into_raw_mode()?.into_alternate_screen()?;
-    let mut terminal = Terminal::new(TermionBackend::new(stdout))?;
-    let result = run(&mut terminal, &mut app);
-    terminal.show_cursor()?;
+    enable_raw_mode()?;
+    // Restore even when setup or the loop fails, so the shell isn't left in raw mode
+    let result = run_fullscreen(&mut app);
+    restore_terminal()?;
     result.map(|()| ExitCode::SUCCESS)
+}
+
+fn run_fullscreen(app: &mut App) -> Result<()> {
+    execute!(io::stdout(), EnterAlternateScreen)?;
+    let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
+    run(&mut terminal, app)
 }
 
 /// `compter import-merges <repo> <project> [--dry-run]`
@@ -122,7 +131,6 @@ where
     B::Error: Send + Sync + 'static,
 {
     let events = Events::spawn(TICK_RATE);
-    let mut size = terminal.size()?;
 
     while app.is_running() {
         if app.take_dirty() {
@@ -130,34 +138,29 @@ where
         }
         match events.next()? {
             Event::Key(key) => app.handle_key(key),
-            Event::Tick => {
-                app.on_tick();
-                let current = terminal.size()?;
-                if current != size {
-                    size = current;
-                    app.mark_dirty();
-                }
-            }
+            Event::Resize => app.mark_dirty(),
+            Event::Tick => app.on_tick(),
         }
     }
     Ok(())
 }
 
-/// Leave the alternate screen before printing a panic, so the report stays visible
+/// Restore the terminal before printing a panic, so the report stays visible
 fn install_hooks() -> Result<()> {
     let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default().into_hooks();
     eyre_hook.install()?;
     let panic_hook = panic_hook.into_panic_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let mut stdout = io::stdout();
-        let _ = write!(
-            stdout,
-            "{}{}\r",
-            termion::screen::ToMainScreen,
-            termion::cursor::Show
-        );
-        let _ = stdout.flush();
+        let _ = restore_terminal();
         panic_hook(info);
     }));
     Ok(())
+}
+
+/// Leave raw mode and the alternate screen; safe to call when neither was entered
+fn restore_terminal() -> io::Result<()> {
+    disable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, LeaveAlternateScreen, cursor::Show)?;
+    stdout.flush()
 }
