@@ -37,6 +37,8 @@ cargo clippy --all-targets -- -D warnings
 
 Only one compter can have the database open at a time; a second one exits with a clear message.
 
+Prebuilt binaries are attached to each [GitHub release](../../releases): macOS (arm64, x86_64, universal), Linux (static, x86_64 and arm64) and Windows (x86_64 and arm64), each with a `SHA256SUMS-<platform>.txt`.
+
 Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Unicode support. Runs on macOS, Linux and Windows. `o` opens PDFs with `open`, `xdg-open` or `start`; set `COMPTER_OPEN` to use another program.
 
 ## Key bindings

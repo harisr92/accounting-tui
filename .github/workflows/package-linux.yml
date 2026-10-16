@@ -1,0 +1,107 @@
+name: Package Linux
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish release draft (if running manually)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build & Package for Linux (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install musl tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Run tests
+        run: cargo test --verbose
+
+      # musl links statically, so the binary runs on any distribution whatever its glibc
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Create Archive
+        run: |
+          mkdir -p dist
+          BIN="target/${{ matrix.target }}/release/compter-tui"
+
+          # Verify the binary is static
+          file "$BIN"
+
+          tar -czf "dist/compter-tui-linux-${{ matrix.arch }}.tar.gz" -C "target/${{ matrix.target }}/release" compter-tui
+
+      - name: Upload Artifacts to Run
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-binaries-${{ matrix.arch }}
+          path: dist/*.tar.gz
+
+  # One publish step for both architectures, so they never race on the release
+  release:
+    name: Checksum & Publish
+    needs: build-linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: linux-binaries-*
+          path: dist
+          merge-multiple: true
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd dist
+          sha256sum *.tar.gz > SHA256SUMS-linux.txt
+          cat SHA256SUMS-linux.txt
+
+      - name: Upload Checksums to Run
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-checksums
+          path: dist/SHA256SUMS-linux.txt
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.publish_release == true
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/SHA256SUMS-linux.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: false

@@ -66,8 +66,8 @@ jobs:
 
           # Generate SHA256 checksums
           cd dist
-          shasum -a 256 *.tar.gz > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          shasum -a 256 *.tar.gz > SHA256SUMS-macos.txt
+          cat SHA256SUMS-macos.txt
 
       - name: Upload Artifacts to Run
         uses: actions/upload-artifact@v4
@@ -75,7 +75,7 @@ jobs:
           name: macos-binaries
           path: |
             dist/*.tar.gz
-            dist/SHA256SUMS.txt
+            dist/SHA256SUMS-macos.txt
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v') || inputs.publish_release == true
@@ -83,7 +83,7 @@ jobs:
         with:
           files: |
             dist/*.tar.gz
-            dist/SHA256SUMS.txt
+            dist/SHA256SUMS-macos.txt
           generate_release_notes: true
           draft: false
           prerelease: false
