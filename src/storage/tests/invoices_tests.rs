@@ -24,6 +24,7 @@ fn profile() -> BusinessProfile {
         invoice_prefix: "INV".to_owned(),
         lut_arn: None,
         terms: Vec::new(),
+        ..Default::default()
     })
     .unwrap()
 }
@@ -51,6 +52,7 @@ fn issue(
         &project.milestones()[0],
         number,
         date(),
+        None,
     )
     .unwrap();
     let mut invoiced = project.clone();

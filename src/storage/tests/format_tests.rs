@@ -4,8 +4,8 @@
 use bigdecimal::BigDecimal;
 
 use crate::domain::{
-    Billing, BusinessProfile, ClientRegion, Expense, ExpenseCategory, Invoice, InvoiceKind,
-    InvoiceStatus, MilestoneStatus, Project, ProjectStatus,
+    Billing, BusinessProfile, ClientRegion, Currency, Expense, ExpenseCategory, Invoice,
+    InvoiceKind, InvoiceStatus, MilestoneStatus, Project, ProjectStatus,
 };
 use crate::storage::codec::decode;
 use crate::storage::migrations::invoice_v1_to_v2;
@@ -19,6 +19,8 @@ const PROFILE_V1: &str = include_str!("fixtures/business_profile_v1.json");
 const TAX_INVOICE_V1: &str = include_str!("fixtures/invoice_tax_v1.json");
 const EXPORT_INVOICE_V1: &str = include_str!("fixtures/invoice_export_v1.json");
 const PLAIN_INVOICE_V1: &str = include_str!("fixtures/invoice_plain_v1.json");
+const EUR_INVOICE_V2: &str = include_str!("fixtures/invoice_export_eur_v2.json");
+const EUR_PROJECT_V2: &str = include_str!("fixtures/project_eur_v2.json");
 
 #[test]
 fn hourly_project_v1_still_loads() {
@@ -115,4 +117,36 @@ fn partly_paid_invoice_v2_still_loads() {
     assert_eq!(invoice.status(), InvoiceStatus::PartlyPaid);
     assert_eq!(invoice.payments()[0].received, 35_400);
     assert_eq!(invoice.balance(), BigDecimal::from(35_400));
+}
+
+#[test]
+fn records_from_before_currencies_are_in_rupees() {
+    let project: Project = decode("projects", "fixture", CLIENT_V1.as_bytes()).unwrap();
+    assert_eq!(project.currency(), Currency::Inr);
+    let invoice: Invoice = decode("invoices", "fixture", PARTLY_PAID_V2.as_bytes()).unwrap();
+    assert_eq!(invoice.currency(), Currency::Inr);
+    assert!(invoice.exchange_rate().is_none());
+    let profile: BusinessProfile = decode("settings", "fixture", PROFILE_V1.as_bytes()).unwrap();
+    assert_eq!(profile.currency(), Currency::Inr);
+}
+
+#[test]
+fn euro_export_v2_still_loads() {
+    let invoice: Invoice = decode("invoices", "fixture", EUR_INVOICE_V2.as_bytes()).unwrap();
+    assert_eq!(invoice.currency(), Currency::Eur);
+    assert_eq!(
+        invoice.exchange_rate().map(|r| r.value().clone()),
+        Some(BigDecimal::from(90))
+    );
+    assert_eq!(invoice.amounts().total, BigDecimal::from(1_000));
+    assert_eq!(invoice.inr_amounts().total, BigDecimal::from(90_000));
+    assert!(invoice.is_paid());
+    assert_eq!(
+        invoice.payments()[0].received_inr(),
+        &BigDecimal::from(90_450)
+    );
+
+    let project: Project = decode("projects", "fixture", EUR_PROJECT_V2.as_bytes()).unwrap();
+    assert_eq!(project.currency(), Currency::Eur);
+    assert_eq!(project.status(), ProjectStatus::Paid);
 }
