@@ -1,6 +1,5 @@
 //! Small rendering helpers shared by every view
 
-use accounting_core::utils::formatting::format_inr;
 use bigdecimal::BigDecimal;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
@@ -9,7 +8,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Row};
 
 use super::theme::{Theme, Tone};
-use crate::domain::{MilestoneStatus, ProjectStatus};
+use crate::domain::{Currency, MilestoneStatus, ProjectStatus};
 
 /// Bordered block whose border lights up when the pane has focus
 pub fn panel<'a>(title: &'a str, focused: bool, theme: &Theme) -> Block<'a> {
@@ -25,10 +24,16 @@ pub fn panel<'a>(title: &'a str, focused: bool, theme: &Theme) -> Block<'a> {
 
 /// Rupee amount with Indian digit grouping
 pub fn money(amount: &BigDecimal) -> String {
-    let formatted = format_inr(amount);
+    money_in(amount, Currency::Inr)
+}
+
+/// Amount with its currency's symbol and grouping: `₹1,50,000.00`, `$150,000.00`
+pub fn money_in(amount: &BigDecimal, currency: Currency) -> String {
+    let formatted = currency.format(amount);
+    let symbol = currency.symbol();
     match formatted.strip_prefix('-') {
-        Some(magnitude) => format!("-₹{magnitude}"),
-        None => format!("₹{formatted}"),
+        Some(magnitude) => format!("-{symbol}{magnitude}"),
+        None => format!("{symbol}{formatted}"),
     }
 }
 

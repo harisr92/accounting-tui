@@ -15,7 +15,7 @@ use crate::ui::selection::{Nav, Selection};
 use crate::ui::theme::{Theme, Tone};
 use crate::ui::view::{Action, KeyHint, Notice, View};
 use crate::ui::views::payment::{payment_form, submit_payment};
-use crate::ui::widgets::{header, money, panel};
+use crate::ui::widgets::{header, money, money_in, panel};
 
 const HINTS: &[KeyHint] = &[
     KeyHint::new("j/k", "move"),
@@ -65,8 +65,9 @@ impl<R: Repository> InvoicesView<R> {
         self.summaries.get(self.selection.index())
     }
 
+    /// In rupees, foreign invoices at their rate
     fn outstanding(&self) -> BigDecimal {
-        self.summaries.iter().map(InvoiceSummary::balance).sum()
+        self.summaries.iter().map(InvoiceSummary::balance_inr).sum()
     }
 
     fn open_payment(&mut self) -> Action {
@@ -142,7 +143,7 @@ impl<R: Repository> View for InvoicesView<R> {
                 let due = if s.is_paid() {
                     "-".to_owned()
                 } else {
-                    money(s.balance())
+                    money_in(s.balance(), s.currency())
                 };
                 Row::new(vec![
                     Line::raw(s.number().as_str()),
@@ -150,7 +151,7 @@ impl<R: Repository> View for InvoicesView<R> {
                     Line::raw(s.client_name()),
                     Line::raw(s.milestone_name()),
                     Line::raw(s.kind().label()),
-                    Line::raw(money(s.total())).right_aligned(),
+                    Line::raw(money_in(s.total(), s.currency())).right_aligned(),
                     Line::raw(due).right_aligned(),
                     Line::styled(s.status().label(), theme.tone(tone)),
                 ])
@@ -236,19 +237,32 @@ impl<R: Repository> View for InvoicesView<R> {
 
 /// Every payment received against the selected invoice
 fn render_payments(frame: &mut Frame, area: Rect, invoice: &Invoice, theme: &Theme) {
+    let currency = invoice.currency();
     let title = format!(
         "Payments for {} · {} due",
         invoice.number(),
-        money(&invoice.balance())
+        money_in(&invoice.balance(), currency)
     );
+    // Foreign clients withhold no TDS; show the rupees banked instead
+    let foreign = !currency.is_inr();
     let rows = invoice.payments().iter().map(|p| {
+        let third = if foreign {
+            money(p.received_inr())
+        } else {
+            money(&p.tds)
+        };
         Row::new(vec![
             Line::raw(p.date.format("%d-%m-%Y").to_string()),
-            Line::raw(money(&p.received)).right_aligned(),
-            Line::raw(money(&p.tds)).right_aligned(),
-            Line::raw(money(&p.settled())).right_aligned(),
+            Line::raw(money_in(&p.received, currency)).right_aligned(),
+            Line::raw(third).right_aligned(),
+            Line::raw(money_in(&p.settled(), currency)).right_aligned(),
         ])
     });
+    let titles: &[&str] = if foreign {
+        &["Date", "Received", "Banked", "Settled"]
+    } else {
+        &["Date", "Received", "TDS", "Settled"]
+    };
     let widths = [
         Constraint::Length(10),
         Constraint::Length(14),
@@ -256,11 +270,7 @@ fn render_payments(frame: &mut Frame, area: Rect, invoice: &Invoice, theme: &The
         Constraint::Length(14),
     ];
     let table = Table::new(rows, widths)
-        .header(header(
-            &["Date", "Received", "TDS", "Settled"],
-            &[1, 2, 3],
-            theme,
-        ))
+        .header(header(titles, &[1, 2, 3], theme))
         .column_spacing(2)
         .block(panel(&title, false, theme));
     frame.render_widget(table, area);

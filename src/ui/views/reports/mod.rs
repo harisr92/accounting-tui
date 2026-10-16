@@ -1,5 +1,6 @@
 //! Reports tab: a financial year for income tax and GST, and the quarterly GSTR-1 export
 
+use bigdecimal::Zero;
 use chrono::Local;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -103,7 +104,7 @@ impl<R: Repository> View for ReportsView<R> {
         let block = panel(&title, true, theme);
         let inner = block.inner(income_area);
         frame.render_widget(block, income_area);
-        let income = [
+        let mut income = vec![
             ("Invoices", report.invoice_count.to_string()),
             ("Receipts", money(&report.gross_receipts)),
             ("Exports", money(&report.export_receipts)),
@@ -111,6 +112,9 @@ impl<R: Repository> View for ReportsView<R> {
             ("TDS", money(&report.tds)),
             ("Outstanding", money(&report.outstanding)),
         ];
+        if !report.exchange_difference.is_zero() {
+            income.push(("Exchange gain", money(&report.exchange_difference)));
+        }
         stat_tiles(frame, inner, &income, theme);
 
         render_income_tax(frame, tax_area, report, theme);

@@ -66,6 +66,14 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - Payments may be partial: each is `{date, received, tds}`, and their sum never exceeds the total (`Invoice::record_payment`, checked again on load). Invoice status (Issued / PartlyPaid / Paid) is derived from the payments, never stored. The milestone is marked paid only by the payment that settles the invoice.
 - Each payment posts its own ledger transaction, `pay-<number>-<n>`: Dr Bank (received), Dr `1250 TDS Receivable` (tds), Cr Receivable (both). Payments from schema v1 kept their original id `pay-<number>`.
 
+### Currency
+
+- `domain::Currency` (INR, USD, GBP, EUR). The profile's currency is only the default for new projects; a project's currency lives on its `ClientDetails` and is fixed once a milestone is invoiced.
+- Only clients abroad are billed in a foreign currency (`ForeignCurrencyInIndia`), so tax invoices are always INR. Format amounts with `Currency::format` / `widgets::money_in`, never by hand.
+- A foreign invoice stores its `currency` and `ExchangeRate` (rupees per unit, entered when issuing). `amounts()` are in the invoice currency. GST, the ledger, GSTR-1 and reports use `inr_amounts()` / `to_inr`.
+- Foreign payments settle the balance in the invoice currency and record `credited_inr`, the rupees banked. They carry no TDS. Banked rupees minus the receivable at the invoice rate post to `4900 Exchange Gain/Loss`, and reports show it as `exchange_difference`.
+- PDFs label amounts with `Currency::pdf_label` (`Rs.` for INR, because the built-in font has no `₹`).
+
 ## Reports and returns
 
 - Reports are computed on demand and never stored. `services::reports` is pure (a `YearReportBuilder` fed one invoice at a time). `ReportService` streams invoices with `InvoiceRepository::scan_invoices`, so it never holds them all in memory.

@@ -13,8 +13,8 @@ use bigdecimal::Zero;
 use chrono::Local;
 
 use crate::domain::{
-    InvoiceAmounts, InvoiceKind, InvoiceNumber, Milestone, MilestoneId, MilestoneStatus, Project,
-    ProjectId, ProjectSummary,
+    Currency, ExchangeRate, InvoiceAmounts, InvoiceKind, InvoiceNumber, Milestone, MilestoneId,
+    MilestoneStatus, Project, ProjectId, ProjectSummary,
 };
 use crate::services::{InvoicePreview, InvoiceService, Issued, ProjectService, ServiceError};
 use crate::storage::{DataDir, Repository};
@@ -23,9 +23,8 @@ use crate::ui::selection::{Nav, Selection};
 use crate::ui::theme::Theme;
 use crate::ui::view::{Action, KeyHint, Notice, View};
 use crate::ui::views::payment::payment_form;
-use accounting_core::utils::formatting::format_inr;
 
-use crate::ui::widgets::{duration, money};
+use crate::ui::widgets::{duration, money, money_in};
 
 const PROJECT_HINTS: &[KeyHint] = &[
     KeyHint::new("j/k", "move"),
@@ -67,15 +66,18 @@ enum FormKind {
     LogTime(usize),
     /// Payment for the invoice that billed a milestone
     Payment(InvoiceNumber),
+    /// The exchange rate to invoice a milestone of a foreign-currency project at
+    IssueRate(ProjectId, MilestoneId),
 }
 
 /// A change waiting for a yes
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum ConfirmAction {
     DeleteProject(ProjectId),
     DeleteMilestone(ProjectId, usize),
     UndoTime(ProjectId, usize),
-    Issue(ProjectId, MilestoneId),
+    /// With the exchange rate for a foreign-currency project
+    Issue(ProjectId, MilestoneId, Option<ExchangeRate>),
 }
 
 enum Modal {
@@ -174,7 +176,10 @@ impl<R: Repository> ProjectsView<R> {
         match modal {
             Modal::Form(kind, form) => {
                 let (form, action) = form.step(key, |form| self.submit(&kind, form));
-                self.modal = form.map(|form| Modal::Form(kind, form));
+                // A submit may open the next modal (the rate form opens its confirm)
+                if let Some(form) = form {
+                    self.modal = Some(Modal::Form(kind, form));
+                }
                 action
             }
             Modal::Confirm(action, confirm) => match Confirm::answer(key) {
@@ -205,7 +210,7 @@ impl<R: Repository> ProjectsView<R> {
                 .remove_last_time_entry(id, index)
                 .and_then(|p| self.refresh(Some(p)))
                 .map(|()| "Time entry removed"),
-            ConfirmAction::Issue(id, milestone) => return self.issue(id, milestone),
+            ConfirmAction::Issue(id, milestone, rate) => return self.issue(id, milestone, rate),
         };
         Action::Notify(match result {
             Ok(done) => Notice::success(done),
@@ -213,9 +218,14 @@ impl<R: Repository> ProjectsView<R> {
         })
     }
 
-    fn issue(&mut self, id: ProjectId, milestone: MilestoneId) -> Action {
+    fn issue(
+        &mut self,
+        id: ProjectId,
+        milestone: MilestoneId,
+        rate: Option<ExchangeRate>,
+    ) -> Action {
         let today = Local::now().date_naive();
-        let issued = match self.invoices.issue(id, milestone, today) {
+        let issued = match self.invoices.issue(id, milestone, today, rate) {
             Ok(issued) => issued,
             Err(error) => return Action::Notify(Notice::error(error.to_string())),
         };
@@ -226,16 +236,41 @@ impl<R: Repository> ProjectsView<R> {
         })
     }
 
-    /// `i`: show what the invoice will be and ask before issuing it
+    /// `i`: show what the invoice will be and ask before issuing it. A project billed in a
+    /// foreign currency first asks for the day's exchange rate.
     fn confirm_issue(&mut self, id: ProjectId, milestone: MilestoneId) -> Action {
-        let today = Local::now().date_naive();
-        match self.invoices.preview(id, milestone, today) {
-            Ok(preview) => {
-                let message = issue_question(&preview);
-                self.ask(ConfirmAction::Issue(id, milestone), message)
-            }
-            Err(error) => Action::Notify(Notice::error(error.to_string())),
+        let currency = self
+            .selected
+            .as_ref()
+            .map_or(Currency::Inr, Project::currency);
+        if !currency.is_inr() {
+            self.modal = Some(Modal::Form(
+                FormKind::IssueRate(id, milestone),
+                forms::rate_form(currency),
+            ));
+            return Action::Handled;
         }
+        match self.preview_issue(id, milestone, None) {
+            Ok(()) => Action::Handled,
+            Err(error) => Action::Notify(Notice::error(error)),
+        }
+    }
+
+    /// Open the confirm showing the invoice `milestone` would get today
+    fn preview_issue(
+        &mut self,
+        id: ProjectId,
+        milestone: MilestoneId,
+        rate: Option<ExchangeRate>,
+    ) -> Result<(), String> {
+        let today = Local::now().date_naive();
+        let preview = self
+            .invoices
+            .preview(id, milestone, today, rate.clone())
+            .map_err(|e| e.to_string())?;
+        let message = issue_question(&preview);
+        self.ask(ConfirmAction::Issue(id, milestone, rate), message);
+        Ok(())
     }
 
     /// `o`: show or hide the milestone's time entries under it
@@ -444,15 +479,20 @@ impl<R: Repository> View for ProjectsView<R> {
     }
 }
 
-/// "Issue INV/26-27/004 to Acme for Rs. 59,000.00 (50,000.00 + IGST 9,000.00)?"
+/// "Issue INV/26-27/004 to Acme for ₹59,000.00 (50,000.00 + IGST 9,000.00)?"
 fn issue_question(preview: &InvoicePreview) -> String {
     let a = &preview.amounts;
+    let in_rupees = preview
+        .total_inr
+        .as_ref()
+        .map(|inr| format!(", {} in INR", money(inr)))
+        .unwrap_or_default();
     let mut question = format!(
-        "Issue {} to {} for {} ({})?",
+        "Issue {} to {} for {} ({}{in_rupees})?",
         preview.number,
         preview.client_name,
-        money(&a.total),
-        tax_breakdown(preview.kind, a)
+        money_in(&a.total, preview.currency),
+        tax_breakdown(preview.kind, preview.currency, a)
     );
     for warning in &preview.warnings {
         question.push_str(&format!(" Note: {warning}."));
@@ -460,16 +500,17 @@ fn issue_question(preview: &InvoicePreview) -> String {
     question
 }
 
-fn tax_breakdown(kind: InvoiceKind, a: &InvoiceAmounts) -> String {
-    let base = format_inr(&a.taxable_value);
+fn tax_breakdown(kind: InvoiceKind, currency: Currency, a: &InvoiceAmounts) -> String {
+    let format = |amount| currency.format(amount);
+    let base = format(&a.taxable_value);
     match kind {
         InvoiceKind::Export => format!("{base}, zero-rated export under LUT"),
         InvoiceKind::Plain => format!("{base}, no GST"),
-        InvoiceKind::Tax if !a.igst.is_zero() => format!("{base} + IGST {}", format_inr(&a.igst)),
+        InvoiceKind::Tax if !a.igst.is_zero() => format!("{base} + IGST {}", format(&a.igst)),
         InvoiceKind::Tax => format!(
             "{base} + CGST {} + SGST {}",
-            format_inr(&a.cgst),
-            format_inr(&a.sgst)
+            format(&a.cgst),
+            format(&a.sgst)
         ),
     }
 }

@@ -7,11 +7,11 @@ use chrono::NaiveDate;
 
 pub type ParseResult<T> = Result<T, &'static str>;
 
-/// `150000`, `1,50,000.50` or `₹1,50,000`
+/// `150000`, `1,50,000.50`, `₹1,50,000` or `$1,500.50`
 pub fn money(input: &str) -> ParseResult<BigDecimal> {
     let cleaned: String = input
         .chars()
-        .filter(|c| !matches!(c, ',' | '₹' | ' '))
+        .filter(|c| !matches!(c, ',' | '₹' | '$' | '£' | '€' | ' '))
         .collect();
     if cleaned.is_empty() {
         return Err("enter an amount, like 1,50,000.50");

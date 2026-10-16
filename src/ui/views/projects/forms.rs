@@ -6,8 +6,8 @@ use super::{FormKind, ProjectsView};
 use accounting_core::StateCode;
 
 use crate::domain::{
-    Billing, ClientDetails, ClientRegion, MAX_ENTRY_MINUTES, Milestone, Project, TimeEntry,
-    state_name,
+    Billing, ClientDetails, ClientRegion, Currency, ExchangeRate, MAX_ENTRY_MINUTES, Milestone,
+    Project, TimeEntry, state_name,
 };
 use crate::services::{MilestoneDraft, ProjectDraft};
 use crate::storage::Repository;
@@ -31,8 +31,9 @@ mod project_field {
     pub const COUNTRY: usize = 5;
     pub const ADDRESS_1: usize = 6;
     pub const ADDRESS_2: usize = 7;
-    pub const BILLING: usize = 8;
-    pub const RATE: usize = 9;
+    pub const CURRENCY: usize = 8;
+    pub const BILLING: usize = 9;
+    pub const RATE: usize = 10;
 }
 
 mod milestone_field {
@@ -54,8 +55,20 @@ impl<R: Repository> ProjectsView<R> {
         let project = self.selected.as_ref();
         let hourly = project.is_some_and(|p| p.billing().rate().is_some());
         Some(match *kind {
-            FormKind::NewProject => project_form("New project", None),
-            FormKind::EditProject => project_form("Edit project", Some(project?)),
+            FormKind::NewProject => {
+                // A broken or missing profile only loses the default; INR is always valid
+                let currency = self
+                    .invoices
+                    .profile()
+                    .ok()
+                    .flatten()
+                    .map_or(Currency::Inr, |p| p.currency());
+                project_form("New project", None, currency)
+            }
+            FormKind::EditProject => {
+                let project = project?;
+                project_form("Edit project", Some(project), project.currency())
+            }
             FormKind::AddMilestone => {
                 project?;
                 milestone_form("Add milestone", hourly, None)
@@ -68,8 +81,8 @@ impl<R: Repository> ProjectsView<R> {
                 project?.milestones().get(index)?;
                 time_form()
             }
-            // Built from the stored invoice by `open_payment`
-            FormKind::Payment(_) => return None,
+            // Built from the stored invoice by `open_payment`, and by `confirm_issue`
+            FormKind::Payment(_) | FormKind::IssueRate(..) => return None,
         })
     }
 
@@ -122,6 +135,12 @@ impl<R: Repository> ProjectsView<R> {
                 let notice = Notice::success(format!("{logged} on {name}"));
                 (project, notice)
             }
+            // Opens the confirm; nothing changes until it is answered
+            FormKind::IssueRate(id, milestone) => {
+                let rate = ExchangeRate::new(parse::money(form.value(0))?).map_err(fail)?;
+                self.preview_issue(id, milestone, Some(rate))?;
+                return Ok(Notice::info("Check the invoice before issuing it"));
+            }
             FormKind::Payment(number) => {
                 let notice = submit_payment(&mut self.invoices, &number, form)?;
                 let id = id.ok_or_else(no_project)?;
@@ -137,7 +156,7 @@ fn fail(error: impl ToString) -> String {
     error.to_string()
 }
 
-fn project_form(title: &'static str, existing: Option<&Project>) -> Form {
+fn project_form(title: &'static str, existing: Option<&Project>, currency: Currency) -> Form {
     let client = existing.map(Project::client_details).unwrap_or_default();
     let (region, state, country) = match &client.region {
         ClientRegion::India { state } => (0, state.as_ref().map(|s| s.as_str().to_owned()), None),
@@ -165,8 +184,9 @@ fn project_form(title: &'static str, existing: Option<&Project>) -> Form {
                 .with_value(country.unwrap_or_default()),
             Field::text("Address", "street, building").with_value(address(0)),
             Field::text("", "city, PIN / postcode").with_value(address(1)),
+            Field::choice("Currency", Currency::LABELS).with_choice(currency.index()),
             Field::choice("Billing", BILLING_OPTIONS).with_choice(billing),
-            Field::text("Rate / hour", "hourly billing only, e.g. 1500").with_value(rate),
+            Field::text("Rate / hour", "hourly only, in the currency above").with_value(rate),
         ],
     )
 }
@@ -178,7 +198,7 @@ fn describe_state(input: &str) -> String {
 
 fn project_draft(form: &Form) -> Result<ProjectDraft, String> {
     use project_field::{
-        ADDRESS_1, ADDRESS_2, BILLING, CLIENT, COUNTRY, GSTIN, NAME, RATE, REGION, STATE,
+        ADDRESS_1, ADDRESS_2, BILLING, CLIENT, COUNTRY, CURRENCY, GSTIN, NAME, RATE, REGION, STATE,
     };
 
     let billing = if form.choice(BILLING) == HOURLY {
@@ -209,9 +229,16 @@ fn project_draft(form: &Form) -> Result<ProjectDraft, String> {
                 form.value(ADDRESS_2).to_owned(),
             ],
             region,
+            currency: Currency::from_index(form.choice(CURRENCY)),
         },
         billing,
     })
+}
+
+/// The one field of the exchange-rate form, asked before invoicing in a foreign currency
+pub(super) fn rate_form(currency: Currency) -> Form {
+    let hint = format!("rupees per {currency} today, e.g. RBI reference rate");
+    Form::new("Exchange rate", vec![Field::text("₹ per unit", hint)])
 }
 
 fn milestone_form(title: &'static str, hourly: bool, existing: Option<&Milestone>) -> Form {

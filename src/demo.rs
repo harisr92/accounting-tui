@@ -6,8 +6,8 @@ use chrono::NaiveDate;
 use accounting_core::StateCode;
 
 use crate::domain::{
-    Billing, ClientDetails, ClientRegion, DEFAULT_SAC, DomainError, ExpenseCategory, MilestoneId,
-    ProfileDraft, Project, TimeEntry,
+    Billing, ClientDetails, ClientRegion, Currency, DEFAULT_SAC, DomainError, ExchangeRate,
+    ExpenseCategory, MilestoneId, ProfileDraft, Project, TimeEntry,
 };
 use crate::services::{ExpenseService, InvoiceService, ServiceError};
 use crate::storage::{ProjectRepository, Store};
@@ -90,6 +90,7 @@ fn profile(gstin: Option<&str>) -> ProfileDraft {
             "Bank: HDFC Bank, A/c 50100012345678, IFSC HDFC0000123".to_owned(),
             "Payment due within 15 days".to_owned(),
         ],
+        currency: Currency::Inr,
     }
 }
 
@@ -103,6 +104,11 @@ fn client(
         name: name.to_owned(),
         gstin: gstin.map(str::to_owned),
         address: address.iter().map(|line| (*line).to_owned()).collect(),
+        currency: if region.is_abroad() {
+            Currency::Eur
+        } else {
+            Currency::Inr
+        },
         region,
     }
 }
@@ -177,7 +183,7 @@ pub fn store() -> Result<Store, ServiceError> {
                 country: "Germany".to_owned(),
             },
         ),
-        &[("Audit report", 90_000, date(2026, 6, 30))],
+        &[("Audit report", 1_000, date(2026, 6, 30))],
     )?;
     let mut app = Project::for_client(
         "Mobile App",
@@ -202,25 +208,27 @@ pub fn store() -> Result<Store, ServiceError> {
 
     // Unregistered: a plain invoice, paid with 10% TDS
     invoices.save_profile(profile(None))?;
-    let plain = invoices.issue(pipeline.id(), pipeline_ms[0], date(2026, 3, 10))?;
+    let plain = invoices.issue(pipeline.id(), pipeline_ms[0], date(2026, 3, 10), None)?;
     let plain = plain.invoice.number().clone();
     invoices.record_payment(&plain, date(2026, 3, 25), rupee(40_500), rupee(4_500))?;
 
     // Registered from April 2026
     invoices.save_profile(profile(Some(SELLER_GSTIN)))?;
-    let export = invoices.issue(audit.id(), audit_ms[0], date(2026, 6, 30))?;
+    // Billed in euros at ₹90.00, banked at a better rate
+    let rate = ExchangeRate::new(rupee(90))?;
+    let export = invoices.issue(audit.id(), audit_ms[0], date(2026, 6, 30), Some(rate))?;
     let export = export.invoice.number().clone();
-    invoices.record_payment(&export, date(2026, 7, 15), rupee(90_000), rupee(0))?;
+    invoices.record_foreign_payment(&export, date(2026, 7, 15), rupee(1_000), rupee(90_450))?;
 
-    let design = invoices.issue(website.id(), website_ms[0], date(2026, 9, 1))?;
+    let design = invoices.issue(website.id(), website_ms[0], date(2026, 9, 1), None)?;
     let design = design.invoice.number().clone();
     invoices.record_payment(&design, date(2026, 9, 20), rupee(54_000), rupee(5_000))?;
-    invoices.issue(pipeline.id(), pipeline_ms[1], date(2026, 9, 25))?;
-    let frontend = invoices.issue(website.id(), website_ms[1], date(2026, 10, 5))?;
+    invoices.issue(pipeline.id(), pipeline_ms[1], date(2026, 9, 25), None)?;
+    let frontend = invoices.issue(website.id(), website_ms[1], date(2026, 10, 5), None)?;
     // Half paid so far
     let frontend = frontend.invoice.number().clone();
     invoices.record_payment(&frontend, date(2026, 10, 12), rupee(35_400), rupee(0))?;
-    invoices.issue(app.id(), app_ms[0], date(2026, 10, 10))?;
+    invoices.issue(app.id(), app_ms[0], date(2026, 10, 10), None)?;
 
     // Business expenses, GST claimed back as input credit
     let mut expenses = ExpenseService::new(store.repository());

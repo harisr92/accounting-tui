@@ -4,9 +4,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Row, Table, TableState};
 
 use super::{Focus, ProjectsView};
-use crate::domain::{Billing, Milestone, Project};
+use crate::domain::{Billing, Currency, Milestone, Project};
 use crate::ui::theme::Theme;
-use crate::ui::widgets::{duration, header, money, panel, stat_tiles, status_span};
+use crate::ui::widgets::{duration, header, money_in, panel, stat_tiles, status_span};
 
 /// Wide enough for the longest status label
 const STATUS_WIDTH: u16 = 9;
@@ -54,11 +54,11 @@ impl Column {
         }
     }
 
-    fn cell<'a>(self, m: &'a Milestone, theme: &Theme) -> Line<'a> {
+    fn cell<'a>(self, m: &'a Milestone, currency: Currency, theme: &Theme) -> Line<'a> {
         match self {
             Self::Name => Line::raw(m.name()),
             Self::Hours => Line::raw(duration(m.logged_minutes())).right_aligned(),
-            Self::Amount => Line::raw(money(m.amount())).right_aligned(),
+            Self::Amount => Line::raw(money_in(m.amount(), currency)).right_aligned(),
             Self::Due => Line::raw(m.due_date().format("%Y-%m-%d").to_string()),
             Self::Status => Line::from(status_span(m.status(), theme)),
         }
@@ -143,7 +143,10 @@ impl<R> ProjectsView<R> {
             if index == self.milestone_sel.index() {
                 selected_row = Some(rows.len());
             }
-            rows.push(Row::new(columns.iter().map(|column| column.cell(m, theme))));
+            let currency = project.currency();
+            rows.push(Row::new(
+                columns.iter().map(|column| column.cell(m, currency, theme)),
+            ));
             if self.open_logs.contains(&m.id()) {
                 rows.extend(time_log_rows(m, &columns, theme));
             }
@@ -222,17 +225,24 @@ fn render_summary(frame: &mut Frame, area: Rect, project: &Project, theme: &Them
         ),
     ]);
     frame.render_widget(client, client_area);
+    let currency = project.currency();
     let billing = match project.billing() {
         Billing::Fixed => Span::raw("Fixed price"),
-        Billing::Hourly { rate } => Span::raw(format!("Hourly {}/h", money(rate))),
+        Billing::Hourly { rate } => Span::raw(format!("Hourly {}/h", money_in(rate, currency))),
     };
     let billing = Line::from(vec![Span::styled("Billing ", theme.dim()), billing]);
     frame.render_widget(billing, billing_area);
 
     let stats = [
-        ("Total excl. GST", money(project.total_amount())),
-        ("Paid", money(&project.paid_amount())),
-        ("Outstanding", money(&project.outstanding_amount())),
+        (
+            "Total excl. GST",
+            money_in(project.total_amount(), currency),
+        ),
+        ("Paid", money_in(&project.paid_amount(), currency)),
+        (
+            "Outstanding",
+            money_in(&project.outstanding_amount(), currency),
+        ),
     ];
     stat_tiles(frame, stats_area, &stats, theme);
 }

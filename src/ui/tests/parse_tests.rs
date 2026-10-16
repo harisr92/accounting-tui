@@ -9,6 +9,9 @@ fn money_accepts_indian_grouping_and_rupee_sign() {
     assert_eq!(money("1,50,000.50").unwrap(), expected);
     assert_eq!(money(" ₹1,50,000.50 ").unwrap(), expected);
     assert_eq!(money("1500").unwrap(), BigDecimal::from(1500));
+    assert_eq!(money("$150,000.50").unwrap(), expected);
+    assert_eq!(money("€1,500").unwrap(), BigDecimal::from(1500));
+    assert_eq!(money("£ 1500").unwrap(), BigDecimal::from(1500));
     assert!(money("").is_err());
     assert!(money("12abc").is_err());
 }

@@ -23,7 +23,8 @@ fn create_project(app: &mut crate::app::App, fields: &str) {
 /// Fields of the project form up to Billing: name, client, GSTIN, client in, state, country,
 /// two address lines
 fn hourly_project_keys(name: &str, client: &str, rate: &str) -> String {
-    format!("{name}\t{client}\t\t\t29\t\t\t\t \t{rate}")
+    // State 29, then past country, address and currency to Billing (space: hourly) and the rate
+    format!("{name}\t{client}\t\t\t29\t\t\t\t\t \t{rate}")
 }
 
 #[test]

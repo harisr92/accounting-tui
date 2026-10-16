@@ -13,7 +13,7 @@ use crate::storage::Repository;
 use crate::ui::theme::{Theme, Tone};
 use crate::ui::view::{Notice, View};
 use crate::ui::views::year::YearPicker;
-use crate::ui::widgets::{header, money, panel, stat_tiles};
+use crate::ui::widgets::{header, money, money_in, panel, stat_tiles};
 
 /// After this many days an unpaid invoice is shown as overdue
 const OVERDUE_DAYS: i64 = 30;
@@ -99,7 +99,7 @@ impl<R: Repository> View for DashboardView<R> {
                 Line::raw(s.number().as_str()),
                 Line::raw(s.client_name()),
                 Line::raw(s.milestone_name()),
-                Line::raw(money(s.balance())).right_aligned(),
+                Line::raw(money_in(s.balance(), s.currency())).right_aligned(),
                 Line::styled(format!("{days} days"), theme.tone(tone)).right_aligned(),
             ])
         });

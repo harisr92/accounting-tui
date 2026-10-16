@@ -8,7 +8,8 @@ use ratatui::widgets::{Paragraph, Wrap};
 use termion::event::Key;
 
 use crate::domain::{
-    BusinessProfile, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, FiscalYear, InvoiceNumber, ProfileDraft,
+    BusinessProfile, Currency, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, FiscalYear, InvoiceNumber,
+    ProfileDraft,
 };
 use crate::services::InvoiceService;
 use crate::storage::Repository;
@@ -26,6 +27,7 @@ const SAC: usize = 5;
 const PREFIX: usize = 6;
 const LUT: usize = 7;
 const TERMS: [usize; 2] = [8, 9];
+const CURRENCY: usize = 10;
 
 /// Shows the business profile; `e` edits it
 pub struct SettingsView<R> {
@@ -54,6 +56,7 @@ impl<R: Repository> SettingsView<R> {
             invoice_prefix: form.value(PREFIX).to_owned(),
             lut_arn: parse::optional(form.value(LUT)),
             terms: lines(&TERMS),
+            currency: Currency::from_index(form.choice(CURRENCY)),
         };
         let profile = self
             .service
@@ -92,6 +95,7 @@ fn profile_form(profile: Option<&BusinessProfile>) -> Form {
             Field::text("Terms", "e.g. Bank: HDFC 0001234, IFSC HDFC0000001")
                 .with_value(line(&draft.terms, 0)),
             Field::text("", "e.g. Payment due in 15 days").with_value(line(&draft.terms, 1)),
+            Field::choice("Currency", Currency::LABELS).with_choice(draft.currency.index()),
         ],
     )
 }
@@ -198,5 +202,13 @@ fn profile_lines<'a>(p: &'a BusinessProfile, theme: &Theme) -> Vec<Line<'a>> {
                 .to_owned(),
         ),
         row("Terms", p.terms().join(" · ")),
+        row(
+            "Currency",
+            format!(
+                "{} {}: default for new projects; clients in India are billed in INR",
+                p.currency().code(),
+                p.currency().symbol()
+            ),
+        ),
     ]
 }

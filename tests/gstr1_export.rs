@@ -21,6 +21,7 @@ fn quarterly_gstr1_json_is_written() {
             invoice_prefix: "INV".to_owned(),
             lut_arn: None,
             terms: Vec::new(),
+            ..Default::default()
         })
         .unwrap();
     let date = NaiveDate::from_ymd_opt(2026, 8, 10).unwrap();
@@ -31,7 +32,7 @@ fn quarterly_gstr1_json_is_written() {
         .unwrap();
     store.repository().save(&project).unwrap();
     invoices
-        .issue(project.id(), project.milestones()[0].id(), date)
+        .issue(project.id(), project.milestones()[0].id(), date, None)
         .unwrap();
 
     let reports = ReportService::new(store.repository(), Some(data_dir));
