@@ -1,3 +1,7 @@
+[![Rust](https://github.com/harisr92/accounting-tui/actions/workflows/rust.yml/badge.svg)](https://github.com/harisr92/accounting-tui/actions/workflows/rust.yml) 
+[![Package macOS](https://github.com/harisr92/accounting-tui/actions/workflows/package-macos.yml/badge.svg)](https://github.com/harisr92/accounting-tui/actions/workflows/package-macos.yml)
+[![Package Linux](https://github.com/harisr92/accounting-tui/actions/workflows/package-linux.yml/badge.svg)](https://github.com/harisr92/accounting-tui/actions/workflows/package-linux.yml)
+[![Package Windows](https://github.com/harisr92/accounting-tui/actions/workflows/package-windows.yml/badge.svg)](https://github.com/harisr92/accounting-tui/actions/workflows/package-windows.yml)
 # compter
 
 A terminal app for freelancers who work for several clients, billed by the hour or per feature. Track work as **projects** split into **milestones**, raise GST invoices from milestones, record payments, and get the numbers you need to file income tax and GST returns, all without leaving the terminal.
