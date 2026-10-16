@@ -11,8 +11,8 @@ use chrono::NaiveDate;
 use super::invoice_builder::{self, BuiltInvoice, InvoicingError};
 use super::{ServiceError, chart};
 use crate::domain::{
-    BusinessProfile, FiscalYear, Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber,
-    InvoiceSummary, MilestoneId, ProfileDraft, Project, ProjectId,
+    BusinessProfile, Currency, ExchangeRate, FiscalYear, Invoice, InvoiceAmounts, InvoiceKind,
+    InvoiceNumber, InvoiceSummary, MilestoneId, Payment, ProfileDraft, Project, ProjectId,
 };
 use crate::storage::{
     DataDir, InvoiceRepository, IssueRecord, PaymentRecord, ProjectRepository, SettingsRepository,
@@ -25,7 +25,11 @@ pub struct InvoicePreview {
     pub number: InvoiceNumber,
     pub kind: InvoiceKind,
     pub client_name: String,
+    pub currency: Currency,
+    /// In `currency`
     pub amounts: InvoiceAmounts,
+    /// The total in rupees, for an invoice in a foreign currency
+    pub total_inr: Option<BigDecimal>,
     pub warnings: Vec<String>,
 }
 
@@ -67,20 +71,24 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         Ok(self.repo.load_invoice(number)?)
     }
 
-    /// Build the invoice the milestone would get on `date`, without saving anything
+    /// Build the invoice the milestone would get on `date`, without saving anything. `rate` is
+    /// needed for a project billed in a foreign currency (rupees per unit on `date`).
     pub fn preview(
         &self,
         project_id: ProjectId,
         milestone_id: MilestoneId,
         date: NaiveDate,
+        rate: Option<ExchangeRate>,
     ) -> Result<InvoicePreview, ServiceError> {
-        let (_, built, _) = self.build(project_id, milestone_id, date)?;
+        let (_, built, _) = self.build(project_id, milestone_id, date, rate)?;
         let invoice = &built.invoice;
         Ok(InvoicePreview {
             number: invoice.number().clone(),
             kind: invoice.kind(),
             client_name: invoice.client_name().to_owned(),
+            currency: invoice.currency(),
             amounts: invoice.amounts().clone(),
+            total_inr: invoice.exchange_rate().map(|_| invoice.inr_amounts().total),
             warnings: built.warnings,
         })
     }
@@ -91,8 +99,9 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         project_id: ProjectId,
         milestone_id: MilestoneId,
         date: NaiveDate,
+        rate: Option<ExchangeRate>,
     ) -> Result<Issued, ServiceError> {
-        let (mut project, built, sequence) = self.build(project_id, milestone_id, date)?;
+        let (mut project, built, sequence) = self.build(project_id, milestone_id, date, rate)?;
         let BuiltInvoice {
             invoice,
             entries,
@@ -134,8 +143,8 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         })
     }
 
-    /// Record all or part of what the client owes: `received` reached the bank, `tds` was withheld.
-    /// The milestone becomes paid once nothing is left to pay.
+    /// Record all or part of what the client owes on an invoice in rupees: `received` reached
+    /// the bank, `tds` was withheld. The milestone becomes paid once nothing is left to pay.
     pub fn record_payment(
         &mut self,
         number: &InvoiceNumber,
@@ -145,7 +154,32 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
     ) -> Result<Invoice, ServiceError> {
         let mut invoice = self.repo.load_invoice(number)?;
         let payment = invoice.record_payment(date, received, tds)?;
+        self.save_payment(invoice, &payment)
+    }
 
+    /// Record a payment on an invoice in a foreign currency: `received` (in that currency) settles
+    /// the balance and `credited_inr` reached the bank. The difference from the invoice's rate is
+    /// posted as an exchange gain or loss.
+    pub fn record_foreign_payment(
+        &mut self,
+        number: &InvoiceNumber,
+        date: NaiveDate,
+        received: BigDecimal,
+        credited_inr: BigDecimal,
+    ) -> Result<Invoice, ServiceError> {
+        let mut invoice = self.repo.load_invoice(number)?;
+        let payment = invoice.record_foreign_payment(date, received, credited_inr)?;
+        self.save_payment(invoice, &payment)
+    }
+
+    /// Post `payment`, just added to `invoice`, and save both (with the milestone once paid)
+    fn save_payment(
+        &mut self,
+        invoice: Invoice,
+        payment: &Payment,
+    ) -> Result<Invoice, ServiceError> {
+        let number = invoice.number().clone();
+        let date = payment.date;
         let project = if invoice.is_paid() {
             let mut project = self.repo.load(invoice.project_id())?;
             let index = project
@@ -164,8 +198,9 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
             format!("Payment for {number} from {}", invoice.client_name()),
         )
         .reference(number.as_str());
-        if payment.received > BigDecimal::zero() {
-            builder = builder.debit(chart::BANK, payment.received.clone(), None);
+        let banked = payment.received_inr();
+        if *banked > BigDecimal::zero() {
+            builder = builder.debit(chart::BANK, banked.clone(), None);
         }
         if payment.tds > BigDecimal::zero() {
             builder = builder.debit(
@@ -174,9 +209,23 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
                 Some("TDS withheld".to_owned()),
             );
         }
-        let transaction = builder
-            .credit(chart::RECEIVABLE, payment.settled(), None)
-            .build()?;
+        let cleared = receivable_cleared(&invoice);
+        // Rupees banked beyond (or short of) the receivable at the invoice's rate
+        let difference = banked + invoice.to_inr(&payment.tds) - &cleared;
+        if difference > BigDecimal::zero() {
+            builder = builder.credit(
+                chart::EXCHANGE_DIFFERENCE,
+                difference,
+                Some("Exchange gain".to_owned()),
+            );
+        } else if difference < BigDecimal::zero() {
+            builder = builder.debit(
+                chart::EXCHANGE_DIFFERENCE,
+                -difference,
+                Some("Exchange loss".to_owned()),
+            );
+        }
+        let transaction = builder.credit(chart::RECEIVABLE, cleared, None).build()?;
         DefaultTransactionValidator.validate_transaction(&transaction)?;
 
         self.repo.record_payment(&PaymentRecord {
@@ -220,6 +269,7 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         project_id: ProjectId,
         milestone_id: MilestoneId,
         date: NaiveDate,
+        rate: Option<ExchangeRate>,
     ) -> Result<(Project, BuiltInvoice, u32), ServiceError> {
         let profile = self.repo.load_profile()?.ok_or(InvoicingError::NoProfile)?;
         let project = self.repo.load(project_id)?;
@@ -230,7 +280,7 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         let year = FiscalYear::containing(date);
         let sequence = self.repo.next_sequence(year)?;
         let number = InvoiceNumber::new(profile.invoice_prefix(), year, sequence);
-        let built = invoice_builder::build(&profile, &project, milestone, number, date)?;
+        let built = invoice_builder::build(&profile, &project, milestone, number, date, rate)?;
         Ok((project, built, sequence))
     }
 
@@ -242,6 +292,21 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         write_file(&path, bytes)
             .map(|()| Some(path))
             .map_err(|e| e.to_string())
+    }
+}
+
+/// Rupees the latest payment takes off the receivable: its settled amount at the invoice's rate,
+/// or whatever is left of the receivable when it settles the invoice, so no paisa of rounding
+/// stays behind
+fn receivable_cleared(invoice: &Invoice) -> BigDecimal {
+    let Some((latest, earlier)) = invoice.payments().split_last() else {
+        return BigDecimal::zero();
+    };
+    if invoice.is_paid() {
+        let cleared_before: BigDecimal = earlier.iter().map(|p| invoice.to_inr(&p.settled())).sum();
+        invoice.inr_amounts().total - cleared_before
+    } else {
+        invoice.to_inr(&latest.settled())
     }
 }
 
@@ -271,6 +336,7 @@ fn pdf_path(dir: &DataDir, invoice: &Invoice) -> PathBuf {
 
 fn render(invoice: &Invoice) -> Result<Vec<u8>, ServiceError> {
     let options = PdfOptions {
+        currency_label: invoice.currency().pdf_label().to_owned(),
         terms: invoice.terms().to_vec(),
         // accounting-core's default note claims e-invoicing, which compter doesn't do
         footer_note: String::new(),

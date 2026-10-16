@@ -174,7 +174,7 @@ fn renumber(rows: &mut [HsnRow]) {
 fn add_export_hsn(merged: &mut Gstr1Return, exports: &[&Invoice], master: &HsnMaster) {
     let rows = exports.iter().filter_map(|invoice| {
         let row = invoice.print().rows.first()?;
-        let taxable = invoice.amounts().taxable_value.clone();
+        let taxable = invoice.inr_amounts().taxable_value;
         Some(HsnRow {
             number: 0,
             hsn_sac: row.hsn_sac.clone(),
@@ -243,12 +243,13 @@ fn export_section(exports: &[&Invoice]) -> Value {
     let invoices: Vec<Value> = exports
         .iter()
         .map(|invoice| {
-            let taxable = &invoice.amounts().taxable_value;
+            // Returns are in rupees, at the rate on the invoice date
+            let amounts = invoice.inr_amounts();
             json!({
                 "inum": invoice.number().as_str(),
                 "idt": invoice.date().format("%d-%m-%Y").to_string(),
-                "val": number(&invoice.amounts().total),
-                "itms": [{ "txval": number(taxable), "rt": 0, "iamt": 0, "csamt": 0 }],
+                "val": number(&amounts.total),
+                "itms": [{ "txval": number(&amounts.taxable_value), "rt": 0, "iamt": 0, "csamt": 0 }],
             })
         })
         .collect();

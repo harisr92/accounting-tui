@@ -66,8 +66,11 @@ pub struct YearReport {
     pub export_receipts: BigDecimal,
     /// Invoice totals including GST, for invoices dated in the year
     pub invoiced_total: BigDecimal,
-    /// Payments (whole or part) dated in the year that reached the bank
+    /// Payments (whole or part) dated in the year that reached the bank, in rupees
     pub received: BigDecimal,
+    /// On foreign-currency payments dated in the year: rupees banked less their value at the
+    /// invoice's rate. Positive is a gain.
+    pub exchange_difference: BigDecimal,
     /// TDS on payments dated in the year
     pub tds: BigDecimal,
     /// What is still due on invoices dated in the year, GST included
@@ -87,9 +90,9 @@ impl YearReport {
             .with_scale_round(2, bigdecimal::RoundingMode::HalfUp)
     }
 
-    /// Profit from the books: gross receipts less expenses
+    /// Profit from the books: gross receipts and exchange gains less expenses
     pub fn books_profit(&self) -> BigDecimal {
-        &self.gross_receipts - &self.expenses
+        &self.gross_receipts + &self.exchange_difference - &self.expenses
     }
 
     pub fn within_presumptive_limit(&self) -> bool {
@@ -114,6 +117,7 @@ impl YearReportBuilder {
                 export_receipts: zero(),
                 invoiced_total: zero(),
                 received: zero(),
+                exchange_difference: zero(),
                 tds: zero(),
                 outstanding: zero(),
                 expenses: zero(),
@@ -136,10 +140,11 @@ impl YearReportBuilder {
             })
     }
 
-    /// Count an invoice: its billing if dated in the year, its payment if paid in the year
+    /// Count an invoice: its billing if dated in the year, its payment if paid in the year. All
+    /// figures are in rupees: foreign invoices at their rate, payments as banked.
     pub fn add_invoice(&mut self, invoice: &Invoice) {
         let year = self.report.year;
-        let amounts = invoice.amounts();
+        let amounts = &invoice.inr_amounts();
         if year.contains(invoice.date()) {
             let r = &mut self.report;
             r.invoice_count += 1;
@@ -148,7 +153,7 @@ impl YearReportBuilder {
             if invoice.kind() == InvoiceKind::Export {
                 r.export_receipts += &amounts.taxable_value;
             }
-            r.outstanding += invoice.balance();
+            r.outstanding += invoice.to_inr(&invoice.balance());
             if let Some(q) = r
                 .quarters
                 .iter_mut()
@@ -161,10 +166,14 @@ impl YearReportBuilder {
             self.client(invoice.client_name()).invoiced += &amounts.taxable_value;
         }
         for payment in invoice.payments().iter().filter(|p| year.contains(p.date)) {
-            self.report.received += &payment.received;
+            let received = payment.received_inr();
+            if payment.credited_inr.is_some() {
+                self.report.exchange_difference += received - invoice.to_inr(&payment.settled());
+            }
+            self.report.received += received;
             self.report.tds += &payment.tds;
             let client = self.client(invoice.client_name());
-            client.received += &payment.received;
+            client.received += received;
             client.tds += &payment.tds;
         }
     }

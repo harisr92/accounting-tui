@@ -3,9 +3,12 @@ use bigdecimal::BigDecimal;
 use pollster::block_on;
 
 use super::fixtures::{
-    OTHER_STATE_GSTIN, SELLER_GSTIN, client, date, fixed_project, india, profile_draft,
+    OTHER_STATE_GSTIN, SELLER_GSTIN, client, date, fixed_project, foreign_client, india,
+    profile_draft,
 };
-use crate::domain::{DomainError, InvoiceStatus, MilestoneStatus, ProjectStatus};
+use crate::domain::{
+    Currency, DomainError, ExchangeRate, InvoiceStatus, MilestoneStatus, ProjectStatus,
+};
 use crate::services::{InvoiceService, InvoicingError, ServiceError, chart};
 use crate::storage::{InvoiceRepository, ProjectRepository, RedbRepository, Store};
 
@@ -49,7 +52,7 @@ fn issuing_without_a_profile_says_what_to_do() {
     store.repository().save(&project).unwrap();
     let milestone = project.milestones()[0].id();
     assert!(matches!(
-        service.issue(project.id(), milestone, date()),
+        service.issue(project.id(), milestone, date(), None),
         Err(ServiceError::Invoicing(InvoicingError::NoProfile))
     ));
 }
@@ -58,12 +61,16 @@ fn issuing_without_a_profile_says_what_to_do() {
 fn preview_matches_what_is_issued_and_saves_nothing() {
     let (store, mut service, project) = setup();
     let milestone = project.milestones()[0].id();
-    let preview = service.preview(project.id(), milestone, date()).unwrap();
+    let preview = service
+        .preview(project.id(), milestone, date(), None)
+        .unwrap();
     assert_eq!(preview.number.as_str(), "INV/26-27/001");
     assert_eq!(preview.amounts.total, rupees(59_000));
     assert!(service.list().unwrap().is_empty());
 
-    let issued = service.issue(project.id(), milestone, date()).unwrap();
+    let issued = service
+        .issue(project.id(), milestone, date(), None)
+        .unwrap();
     assert_eq!(issued.invoice.number(), &preview.number);
     assert!(matches!(issued.pdf, Ok(None)));
 
@@ -86,12 +93,12 @@ fn numbers_run_in_sequence_and_milestones_are_billed_once() {
     store.repository().save(&project).unwrap();
     let ids: Vec<_> = project.milestones().iter().map(|m| m.id()).collect();
 
-    let first = service.issue(project.id(), ids[0], date()).unwrap();
-    let second = service.issue(project.id(), ids[1], date()).unwrap();
+    let first = service.issue(project.id(), ids[0], date(), None).unwrap();
+    let second = service.issue(project.id(), ids[1], date(), None).unwrap();
     assert_eq!(first.invoice.number().as_str(), "INV/26-27/001");
     assert_eq!(second.invoice.number().as_str(), "INV/26-27/002");
     assert!(matches!(
-        service.issue(project.id(), ids[0], date()),
+        service.issue(project.id(), ids[0], date(), None),
         Err(ServiceError::Invoicing(InvoicingError::NotPending))
     ));
     assert_eq!(
@@ -105,7 +112,7 @@ fn part_payments_with_tds_settle_the_ledger() {
     let (store, mut service, project) = setup();
     let milestone = project.milestones()[0].id();
     let number = service
-        .issue(project.id(), milestone, date())
+        .issue(project.id(), milestone, date(), None)
         .unwrap()
         .invoice
         .number()
@@ -146,9 +153,89 @@ fn every_kind_renders_a_pdf() {
     let (_store, mut service, project) = setup();
     let milestone = project.milestones()[0].id();
     let invoice = service
-        .issue(project.id(), milestone, date())
+        .issue(project.id(), milestone, date(), None)
         .unwrap()
         .invoice;
     let bytes = service.pdf_bytes(&invoice).unwrap();
     assert!(bytes.starts_with(b"%PDF"));
+}
+
+/// A $1,000 export issued at ₹90
+fn usd_export() -> (
+    Store,
+    InvoiceService<RedbRepository>,
+    crate::domain::InvoiceNumber,
+) {
+    let store = Store::in_memory().unwrap();
+    let mut service = InvoiceService::new(store.repository(), None);
+    service
+        .save_profile(profile_draft(Some(SELLER_GSTIN), Some("AD2710260012345")))
+        .unwrap();
+    let project = fixed_project(foreign_client(Currency::Usd), 1_000);
+    store.repository().save(&project).unwrap();
+    let milestone = project.milestones()[0].id();
+    let rate = || Some(ExchangeRate::new(rupees(90)).unwrap());
+
+    let preview = service
+        .preview(project.id(), milestone, date(), rate())
+        .unwrap();
+    assert_eq!(preview.currency, Currency::Usd);
+    assert_eq!(preview.total_inr, Some(rupees(90_000)));
+    let issued = service
+        .issue(project.id(), milestone, date(), rate())
+        .unwrap();
+    assert_eq!(balance(&store, chart::RECEIVABLE), rupees(90_000));
+    assert_eq!(balance(&store, chart::EXPORT_REVENUE), rupees(90_000));
+    // The PDF labels amounts with the currency code
+    service.pdf_bytes(&issued.invoice).unwrap();
+    (store, service, issued.invoice.number().clone())
+}
+
+#[test]
+fn foreign_payments_post_the_exchange_gain() {
+    let (store, mut service, number) = usd_export();
+    // $400 banked at ₹91, then $600 at ₹92: ₹400 + ₹1,200 more than booked
+    let first = service
+        .record_foreign_payment(&number, date(), rupees(400), rupees(36_400))
+        .unwrap();
+    assert_eq!(first.status(), InvoiceStatus::PartlyPaid);
+    assert_eq!(balance(&store, chart::RECEIVABLE), rupees(54_000));
+    assert_eq!(balance(&store, chart::EXCHANGE_DIFFERENCE), rupees(400));
+
+    let paid = service
+        .record_foreign_payment(&number, date(), rupees(600), rupees(55_200))
+        .unwrap();
+    assert!(paid.is_paid());
+    assert_eq!(balance(&store, chart::RECEIVABLE), rupees(0));
+    assert_eq!(balance(&store, chart::BANK), rupees(91_600));
+    assert_eq!(balance(&store, chart::EXCHANGE_DIFFERENCE), rupees(1_600));
+    let stored = store.repository().load(paid.project_id()).unwrap();
+    assert_eq!(stored.milestones()[0].status(), MilestoneStatus::Paid);
+}
+
+#[test]
+fn foreign_payments_post_the_exchange_loss() {
+    let (store, mut service, number) = usd_export();
+    service
+        .record_foreign_payment(&number, date(), rupees(1_000), rupees(89_500))
+        .unwrap();
+    assert_eq!(balance(&store, chart::RECEIVABLE), rupees(0));
+    assert_eq!(balance(&store, chart::BANK), rupees(89_500));
+    let ledger = Ledger::new(store.ledger());
+    let trial = block_on(ledger.get_trial_balance(date())).unwrap();
+    let loss = &trial.balances[chart::EXCHANGE_DIFFERENCE];
+    assert_eq!(loss.debit_balance, Some(rupees(500)));
+}
+
+#[test]
+fn foreign_invoices_need_a_rate_and_take_no_tds() {
+    let (_, mut service, number) = usd_export();
+    assert!(matches!(
+        service.record_payment(&number, date(), rupees(1_000), rupees(0)),
+        Err(ServiceError::Domain(DomainError::MissingCreditedAmount))
+    ));
+    assert_eq!(
+        service.load(&number).unwrap().status(),
+        InvoiceStatus::Issued
+    );
 }

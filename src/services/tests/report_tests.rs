@@ -20,17 +20,19 @@ fn demo_year_adds_up() {
         .year(fy(2026))
         .unwrap();
 
-    // Export 90,000 + Design 50,000 + Dashboards 35,000 + Frontend 60,000 + Prototype 15,750
+    // Export €1,000 at ₹90 + Design 50,000 + Dashboards 35,000 + Frontend 60,000 + Prototype 15,750
     assert_eq!(report.invoice_count, 5);
     assert_eq!(report.gross_receipts, rupees(250_750));
     assert_eq!(report.export_receipts, rupees(90_000));
-    // The plain invoice was paid in March 2026, the previous year; Frontend is half paid
-    assert_eq!(report.received, rupees(179_400));
+    // The plain invoice was paid in March 2026, the previous year; Frontend is half paid; the
+    // export banked ₹90,450, ₹450 more than it was invoiced at
+    assert_eq!(report.received, rupees(179_850));
+    assert_eq!(report.exchange_difference, rupees(450));
     assert_eq!(report.tds, rupees(5_000));
     assert_eq!(report.outstanding, rupees(95_285));
 
     assert_eq!(report.expenses, rupees(162_000));
-    assert_eq!(report.books_profit(), rupees(88_750));
+    assert_eq!(report.books_profit(), rupees(89_200));
     assert_eq!(report.presumptive_income(), rupees(125_375));
     assert!(report.within_presumptive_limit());
     assert!(

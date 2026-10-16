@@ -3,9 +3,11 @@ use bigdecimal::BigDecimal;
 
 use super::fixtures::{
     OTHER_STATE_GSTIN, SAME_STATE_GSTIN, SELLER_GSTIN, abroad, client, date, fixed_project,
-    hourly_project, india, profile,
+    foreign_client, hourly_project, india, profile,
 };
-use crate::domain::{ClientRegion, FiscalYear, InvoiceKind, InvoiceNumber, Project};
+use crate::domain::{
+    ClientRegion, Currency, ExchangeRate, FiscalYear, InvoiceKind, InvoiceNumber, Project,
+};
 use crate::services::{InvoicingError, build_invoice, chart};
 
 fn number() -> InvoiceNumber {
@@ -16,7 +18,14 @@ fn build(
     profile: &crate::domain::BusinessProfile,
     project: &Project,
 ) -> Result<crate::services::BuiltInvoice, InvoicingError> {
-    build_invoice(profile, project, &project.milestones()[0], number(), date())
+    build_invoice(
+        profile,
+        project,
+        &project.milestones()[0],
+        number(),
+        date(),
+        None,
+    )
 }
 
 fn rupees(amount: i64) -> BigDecimal {
@@ -169,4 +178,62 @@ fn only_pending_milestones_are_invoiced() {
         build(&seller, &project),
         Err(InvoicingError::NotPending)
     ));
+}
+
+#[test]
+fn foreign_currency_export_prints_in_that_currency_and_posts_rupees() {
+    let seller = profile(Some(SELLER_GSTIN), Some("AD2710260012345"));
+    let project = fixed_project(foreign_client(Currency::Usd), 1_200);
+    assert!(matches!(
+        build(&seller, &project),
+        Err(InvoicingError::MissingExchangeRate(Currency::Usd))
+    ));
+
+    let rate = ExchangeRate::new("83.25".parse().unwrap()).unwrap();
+    let built = build_invoice(
+        &seller,
+        &project,
+        &project.milestones()[0],
+        number(),
+        date(),
+        Some(rate.clone()),
+    )
+    .unwrap();
+    let invoice = &built.invoice;
+    assert_eq!(invoice.kind(), InvoiceKind::Export);
+    assert_eq!(invoice.currency(), Currency::Usd);
+    assert_eq!(invoice.exchange_rate(), Some(&rate));
+    assert_eq!(invoice.amounts().total, rupees(1_200));
+    let print = invoice.print();
+    assert_eq!(print.total, "1,200.00");
+    assert_eq!(
+        print.total_in_words,
+        "US Dollars One Thousand Two Hundred Only"
+    );
+    assert_eq!(
+        invoice.terms()[0],
+        "Amounts in USD. Exchange rate: 1 USD = Rs. 83.2500; value Rs. 99,900.00"
+    );
+    assert!(invoice.terms()[1].contains("export under LUT"));
+    for entry in &built.entries {
+        assert_eq!(entry.amount, rupees(99_900));
+    }
+}
+
+#[test]
+fn rupee_projects_ignore_a_rate() {
+    let seller = profile(Some(SELLER_GSTIN), None);
+    let project = fixed_project(client(Some(OTHER_STATE_GSTIN), india(), &[]), 1_000);
+    let rate = ExchangeRate::new(rupees(90)).unwrap();
+    let built = build_invoice(
+        &seller,
+        &project,
+        &project.milestones()[0],
+        number(),
+        date(),
+        Some(rate),
+    )
+    .unwrap();
+    assert_eq!(built.invoice.currency(), Currency::Inr);
+    assert!(built.invoice.exchange_rate().is_none());
 }

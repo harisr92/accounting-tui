@@ -16,6 +16,9 @@ pub const IGST_OUTPUT: &str = "2320";
 pub const SERVICE_REVENUE: &str = "4100";
 /// Services to clients abroad, kept apart for export reporting
 pub const EXPORT_REVENUE: &str = "4110";
+/// Gain (credit) or loss (debit) when a foreign-currency payment banks more or fewer rupees than
+/// the invoice was booked at
+pub const EXCHANGE_DIFFERENCE: &str = "4900";
 
 /// Ledger account for each expense category
 pub fn expense_account(category: ExpenseCategory) -> &'static str {
@@ -40,6 +43,11 @@ const CHART: &[(&str, &str, AccountType)] = &[
     (IGST_OUTPUT, "IGST Output", AccountType::Liability),
     (SERVICE_REVENUE, "Service Revenue", AccountType::Income),
     (EXPORT_REVENUE, "Export Revenue", AccountType::Income),
+    (
+        EXCHANGE_DIFFERENCE,
+        "Exchange Gain/Loss",
+        AccountType::Income,
+    ),
 ];
 
 /// Every account compter posts to; storage creates the ones that are missing

@@ -4,7 +4,8 @@ use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 
 use crate::domain::{
-    Billing, BusinessProfile, ClientDetails, ClientRegion, ProfileDraft, Project, TimeEntry,
+    Billing, BusinessProfile, ClientDetails, ClientRegion, Currency, ProfileDraft, Project,
+    TimeEntry,
 };
 
 /// Maharashtra, the seller's state in these tests
@@ -27,6 +28,7 @@ pub fn profile_draft(gstin: Option<&str>, lut: Option<&str>) -> ProfileDraft {
         invoice_prefix: "INV".to_owned(),
         lut_arn: lut.map(str::to_owned),
         terms: vec!["Bank: HDFC 0001234, IFSC HDFC0000001".to_owned()],
+        ..Default::default()
     }
 }
 
@@ -40,6 +42,15 @@ pub fn client(gstin: Option<&str>, region: ClientRegion, address: &[&str]) -> Cl
         gstin: gstin.map(str::to_owned),
         address: address.iter().map(|line| (*line).to_owned()).collect(),
         region,
+        ..ClientDetails::default()
+    }
+}
+
+/// A client in Germany billed in `currency`, with an address
+pub fn foreign_client(currency: Currency) -> ClientDetails {
+    ClientDetails {
+        currency,
+        ..client(None, abroad(), &["Hauptstr. 1", "10115 Berlin"])
     }
 }
 

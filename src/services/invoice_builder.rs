@@ -2,7 +2,6 @@
 
 use accounting_core::invoice::print::PRINT_DATE_FORMAT;
 use accounting_core::invoice::{PrintRow, Recipient, TAX_INVOICE_TITLE, TaxLine};
-use accounting_core::utils::formatting::{amount_in_words, format_inr};
 use accounting_core::{
     Entry, GstInvoice, GstLineItem, HsnMaster, InvoiceParties, InvoiceParty, InvoicePrint,
     validate_invoice,
@@ -12,8 +11,8 @@ use chrono::NaiveDate;
 
 use super::chart;
 use crate::domain::{
-    Billing, BusinessProfile, ClientRegion, Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber,
-    InvoiceParts, Milestone, Project,
+    Billing, BusinessProfile, ClientRegion, Currency, DomainError, ExchangeRate, Invoice,
+    InvoiceAmounts, InvoiceKind, InvoiceNumber, InvoiceParts, Milestone, Project,
 };
 
 /// Taxable value from which an unregistered client's name and address must be printed (Rule 46)
@@ -39,12 +38,16 @@ pub enum InvoicingError {
     UnknownSac,
     #[error("only pending milestones can be invoiced")]
     NotPending,
+    #[error("enter the exchange rate (rupees per {0}) to invoice in {0}")]
+    MissingExchangeRate(Currency),
     #[error("invoice is not compliant: {}", .0.join("; "))]
     NotCompliant(Vec<String>),
     #[error(transparent)]
     Invoice(#[from] accounting_core::InvoiceError),
     #[error(transparent)]
     Posting(#[from] accounting_core::PostingError),
+    #[error(transparent)]
+    Domain(#[from] DomainError),
 }
 
 /// A built, not yet saved, invoice
@@ -57,17 +60,26 @@ pub struct BuiltInvoice {
     pub warnings: Vec<String>,
 }
 
-/// Build invoice `number` for `milestone`, choosing the kind from who is billing whom
+/// Build invoice `number` for `milestone`, choosing the kind from who is billing whom. A project
+/// billed in a foreign currency needs `rate`, the rupees per unit on `date`; rupee projects
+/// ignore it.
 pub fn build(
     profile: &BusinessProfile,
     project: &Project,
     milestone: &Milestone,
     number: InvoiceNumber,
     date: NaiveDate,
+    rate: Option<ExchangeRate>,
 ) -> Result<BuiltInvoice, InvoicingError> {
     if milestone.status() != crate::domain::MilestoneStatus::Pending {
         return Err(InvoicingError::NotPending);
     }
+    let currency = project.currency();
+    let rate = if currency.is_inr() {
+        None
+    } else {
+        Some(rate.ok_or(InvoicingError::MissingExchangeRate(currency))?)
+    };
     let line = Line::describe(project, milestone);
     match (profile.gstin(), project.client_region()) {
         (Some(_), ClientRegion::India { .. }) => tax_invoice(profile, project, line, number, date),
@@ -82,10 +94,13 @@ pub fn build(
                 profile,
                 project,
                 line,
-                number,
-                date,
-                InvoiceKind::Export,
-                terms,
+                Issue {
+                    number,
+                    date,
+                    kind: InvoiceKind::Export,
+                    rate,
+                    terms,
+                },
             )
         }
         (None, _) => {
@@ -97,13 +112,25 @@ pub fn build(
                 profile,
                 project,
                 line,
-                number,
-                date,
-                InvoiceKind::Plain,
-                terms,
+                Issue {
+                    number,
+                    date,
+                    kind: InvoiceKind::Plain,
+                    rate,
+                    terms,
+                },
             )
         }
     }
+}
+
+/// What an untaxed invoice is issued as
+struct Issue {
+    number: InvoiceNumber,
+    date: NaiveDate,
+    kind: InvoiceKind,
+    rate: Option<ExchangeRate>,
+    terms: Vec<String>,
 }
 
 /// The single invoice line for a milestone
@@ -119,11 +146,13 @@ impl Line {
         let mut description = format!("{} - {}", project.name(), milestone.name());
         if let Billing::Hourly { rate } = project.billing() {
             let minutes = milestone.logged_minutes();
+            let currency = project.currency();
             description.push_str(&format!(
-                " ({}h {:02}m @ Rs. {}/hour)",
+                " ({}h {:02}m @ {} {}/hour)",
                 minutes / 60,
                 minutes % 60,
-                format_inr(rate)
+                currency.pdf_label(),
+                currency.format(rate)
             ));
         }
         Self {
@@ -208,11 +237,13 @@ fn tax_invoice(
         milestone_id: line.milestone_id,
         client_name: project.client_name().to_owned(),
         milestone_name: line.milestone_name,
+        currency: Currency::Inr,
+        exchange_rate: None,
         amounts,
         print,
         terms: profile.terms().to_vec(),
         gst: Some(gst),
-    });
+    })?;
     Ok(BuiltInvoice {
         invoice,
         entries,
@@ -226,11 +257,15 @@ fn untaxed_invoice(
     profile: &BusinessProfile,
     project: &Project,
     line: Line,
-    number: InvoiceNumber,
-    date: NaiveDate,
-    kind: InvoiceKind,
-    terms: Vec<String>,
+    issue: Issue,
 ) -> Result<BuiltInvoice, InvoicingError> {
+    let Issue {
+        number,
+        date,
+        kind,
+        rate,
+        mut terms,
+    } = issue;
     // Same rule accounting-core applies to tax invoices: unregistered clients from the Rule 46
     // threshold up; exports always, as the recipient abroad has no GSTIN to identify them
     let abroad = project.client_region().is_abroad();
@@ -241,8 +276,25 @@ fn untaxed_invoice(
     }
 
     let export = kind == InvoiceKind::Export;
-    let amount = format_inr(&line.amount);
-    let zero = format_inr(&BigDecimal::zero());
+    let currency = project.currency();
+    let amount = currency.format(&line.amount);
+    let zero = currency.format(&BigDecimal::zero());
+    // Rupees for the ledger, and the rate printed so the rupee value can be checked
+    let inr = match &rate {
+        Some(rate) => {
+            let inr = rate.to_inr(&line.amount);
+            let code = currency.code();
+            terms.insert(
+                0,
+                format!(
+                    "Amounts in {code}. Exchange rate: 1 {code} = Rs. {rate}; value Rs. {}",
+                    Currency::Inr.format(&inr)
+                ),
+            );
+            inr
+        }
+        None => line.amount.clone(),
+    };
     let (title, gst_rate, tax_lines, place_of_supply) = if export {
         let tax_lines = vec![TaxLine {
             label: "IGST @ 0% (export under LUT)".to_owned(),
@@ -289,7 +341,7 @@ fn untaxed_invoice(
         tax_lines,
         total_tax: zero,
         total: amount,
-        total_in_words: amount_in_words(&line.amount),
+        total_in_words: currency.in_words(&line.amount),
     };
     let revenue = if abroad {
         chart::EXPORT_REVENUE
@@ -297,8 +349,8 @@ fn untaxed_invoice(
         chart::SERVICE_REVENUE
     };
     let entries = vec![
-        Entry::debit(chart::RECEIVABLE, line.amount.clone(), None),
-        Entry::credit(revenue, line.amount.clone(), None),
+        Entry::debit(chart::RECEIVABLE, inr.clone(), None),
+        Entry::credit(revenue, inr, None),
     ];
     let invoice = Invoice::issue(InvoiceParts {
         number,
@@ -308,11 +360,13 @@ fn untaxed_invoice(
         milestone_id: line.milestone_id,
         client_name: project.client_name().to_owned(),
         milestone_name: line.milestone_name,
+        currency,
+        exchange_rate: rate,
         amounts: InvoiceAmounts::untaxed(line.amount),
         print,
         terms,
         gst: None,
-    });
+    })?;
     Ok(BuiltInvoice {
         invoice,
         entries,

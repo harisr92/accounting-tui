@@ -29,6 +29,7 @@ fn export_quarter_has_table_6a_and_table_13() {
     let export = &json["exp"][0];
     assert_eq!(export["exp_typ"], "WOPAY");
     assert_eq!(export["inv"][0]["inum"], "NDC/26-27/001");
+    // Billed €1,000 at ₹90: returns are in rupees
     assert_eq!(export["inv"][0]["val"], 90_000.0);
     assert_eq!(export["inv"][0]["itms"][0]["rt"], 0);
     assert!(json.get("b2b").is_none());
@@ -77,7 +78,7 @@ fn months_of_a_quarter_merge_per_buyer() {
         store.repository().save(&project).unwrap();
         let day = NaiveDate::from_ymd_opt(2026, month, 10).unwrap();
         invoices
-            .issue(project.id(), project.milestones()[0].id(), day)
+            .issue(project.id(), project.milestones()[0].id(), day, None)
             .unwrap();
     }
     let json = gstr1(&store, quarter(2026, 7));
