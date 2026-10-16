@@ -2,6 +2,7 @@ use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 
 use crate::domain::{Billing, ClientDetails, DomainError, ProjectStatus, TimeEntry};
+use crate::services::merge_import::WorkSession;
 use crate::services::{MilestoneDraft, ProjectDraft, ProjectService, ServiceError};
 use crate::storage::{ProjectRepository, RedbRepository, StorageError, Store};
 
@@ -121,4 +122,67 @@ fn projects_with_invoiced_milestones_are_kept() {
         Err(ServiceError::Domain(DomainError::HasBilledMilestones))
     ));
     assert_eq!(service.load(id).unwrap(), project);
+}
+
+fn session(hash: &str, minutes: u32) -> WorkSession {
+    WorkSession {
+        name: format!("feat/{hash}"),
+        date: date(),
+        minutes,
+        note: format!("{hash} Merge branch 'feat/{hash}' into 'main'"),
+    }
+}
+
+#[test]
+fn imported_merges_become_priced_milestones_once() {
+    let mut service = service();
+    let rate = Billing::hourly(BigDecimal::from(1_800)).unwrap();
+    let id = service.create(draft("Web app", rate)).unwrap().id();
+    let sessions = [session("aaaa", 90), session("bbbb", 480)];
+
+    let (project, added) = service.import_sessions(id, &sessions).unwrap();
+    assert_eq!(added, 2);
+    assert_eq!(project.milestones()[0].amount(), &BigDecimal::from(2_700));
+    assert_eq!(project.total_amount(), &BigDecimal::from(17_100));
+    assert_eq!(service.find_by_name("Web app").unwrap(), id);
+
+    let more = [
+        session("aaaa", 90),
+        session("bbbb", 480),
+        session("cccc", 60),
+    ];
+    let (project, added) = service.import_sessions(id, &more).unwrap();
+    assert_eq!(added, 1);
+    assert_eq!(service.load(id).unwrap().milestones().len(), 3);
+    assert_eq!(project.milestones()[2].name(), "feat/cccc");
+}
+
+#[test]
+fn importing_into_a_fixed_project_saves_nothing() {
+    let mut service = service();
+    let id = service.create(draft("Site", Billing::Fixed)).unwrap().id();
+
+    let result = service.import_sessions(id, &[session("aaaa", 60)]);
+    assert!(matches!(
+        result,
+        Err(ServiceError::Domain(DomainError::BillingMismatch))
+    ));
+    assert!(service.load(id).unwrap().milestones().is_empty());
+}
+
+#[test]
+fn projects_are_found_by_exact_name() {
+    let mut service = service();
+    service.create(draft("Site", Billing::Fixed)).unwrap();
+    service.create(draft("Twin", Billing::Fixed)).unwrap();
+    service.create(draft("Twin", Billing::Fixed)).unwrap();
+
+    assert!(matches!(
+        service.find_by_name("Nope"),
+        Err(ServiceError::NoSuchProject(_))
+    ));
+    assert!(matches!(
+        service.find_by_name("Twin"),
+        Err(ServiceError::AmbiguousProject(_))
+    ));
 }

@@ -2,6 +2,7 @@ use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 
 use super::ServiceError;
+use super::merge_import::WorkSession;
 use crate::domain::{Billing, ClientDetails, Project, ProjectId, ProjectSummary, TimeEntry};
 use crate::storage::ProjectRepository;
 
@@ -108,6 +109,47 @@ impl<R: ProjectRepository> ProjectService<R> {
         index: usize,
     ) -> Result<Project, ServiceError> {
         self.update(id, |p| p.remove_last_time_entry(index).map(drop))
+    }
+
+    /// The one project called `name`
+    pub fn find_by_name(&self, name: &str) -> Result<ProjectId, ServiceError> {
+        let mut matches = self.repo.list()?.into_iter().filter(|p| p.name() == name);
+        match (matches.next(), matches.next()) {
+            (Some(project), None) => Ok(project.id()),
+            (None, _) => Err(ServiceError::NoSuchProject(name.to_owned())),
+            (Some(_), Some(_)) => Err(ServiceError::AmbiguousProject(name.to_owned())),
+        }
+    }
+
+    /// Add a milestone with one time entry per session, in one save; sessions whose merge is
+    /// already noted on a time entry are skipped, so a re-run imports only new merges.
+    /// Returns the project and how many milestones were added.
+    pub fn import_sessions(
+        &mut self,
+        id: ProjectId,
+        sessions: &[WorkSession],
+    ) -> Result<(Project, usize), ServiceError> {
+        let mut added = 0;
+        let project = self.update(id, |p| {
+            let imported: Vec<String> = p
+                .milestones()
+                .iter()
+                .flat_map(|m| m.time_entries())
+                .filter_map(|entry| entry.note().split_whitespace().next())
+                .map(str::to_owned)
+                .collect();
+            for session in sessions {
+                if imported.iter().any(|hash| hash == session.hash()) {
+                    continue;
+                }
+                let index = p.add_milestone(session.name.as_str(), session.date, None)?;
+                let entry = TimeEntry::new(session.date, session.minutes, session.note.as_str())?;
+                p.log_time(index, entry)?;
+                added += 1;
+            }
+            Ok(())
+        })?;
+        Ok((project, added))
     }
 
     /// Load, change, save. A failed change is never saved, since the edit is on a fresh copy.

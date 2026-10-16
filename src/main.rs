@@ -1,4 +1,5 @@
 use std::io::{self, Write};
+use std::path::Path;
 use std::process::ExitCode;
 use std::time::Duration;
 
@@ -10,6 +11,7 @@ use termion::raw::IntoRawMode;
 use termion::screen::IntoAlternateScreen;
 
 use compter_tui::app::App;
+use compter_tui::cli;
 use compter_tui::demo;
 use compter_tui::event::{Event, Events};
 use compter_tui::services::{ExpenseService, InvoiceService, ReportService};
@@ -22,16 +24,24 @@ use compter_tui::ui::{self, theme::Theme, view::View};
 const TICK_RATE: Duration = Duration::from_millis(250);
 
 const USAGE: &str = "usage: compter [--demo] [-V | --version] [-h | --help]
+       compter import-merges <repo> <project> [--dry-run]
 
   --demo           try compter on sample projects kept in memory; nothing is saved
   -V, --version    display version information
   -h, --help       display this help text
 
+  import-merges    add a milestone to an hourly project for each merge into the main branch
+                   of a git repository, timed from the previous merge (8h at most across days)
+
 Data is stored in $COMPTER_HOME, $XDG_DATA_HOME/compter or ~/.local/share/compter.";
 
 fn main() -> Result<ExitCode> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("import-merges") {
+        return import_merges(&args[1..]);
+    }
     let mut demo_mode = false;
-    for arg in std::env::args().skip(1) {
+    for arg in &args {
         match arg.as_str() {
             "--demo" => demo_mode = true,
             "-V" | "--version" => {
@@ -80,6 +90,19 @@ fn main() -> Result<ExitCode> {
     let result = run(&mut terminal, &mut app);
     terminal.show_cursor()?;
     result.map(|()| ExitCode::SUCCESS)
+}
+
+/// `compter import-merges <repo> <project> [--dry-run]`
+fn import_merges(args: &[String]) -> Result<ExitCode> {
+    let dry_run = args.iter().any(|arg| arg == "--dry-run");
+    let positional: Vec<&String> = args.iter().filter(|arg| *arg != "--dry-run").collect();
+    let [repo, project] = positional.as_slice() else {
+        eprintln!("import-merges needs a repository and a project name\n\n{USAGE}");
+        return Ok(ExitCode::from(2));
+    };
+    let (store, _) = open_store(false)?;
+    cli::import_merges(&store, Path::new(repo.as_str()), project, dry_run)?;
+    Ok(ExitCode::SUCCESS)
 }
 
 /// The database, and the folder invoice PDFs go in (none in demo mode)

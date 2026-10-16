@@ -19,6 +19,10 @@ pub enum ServiceError {
     Storage(#[from] StorageError),
     #[error("the milestone billed by invoice {0} no longer exists")]
     MissingMilestone(String),
+    #[error("no project is named {0:?}")]
+    NoSuchProject(String),
+    #[error("more than one project is named {0:?}")]
+    AmbiguousProject(String),
     #[error("PDFs are not saved in demo mode")]
     NoPdfFolder,
     #[error("GST input credit can only be claimed once your GSTIN is in Settings")]

@@ -6,6 +6,7 @@ mod expense_service;
 mod gstr1;
 mod invoice_builder;
 mod invoice_service;
+pub mod merge_import;
 mod project_service;
 mod report_service;
 pub mod reports;
