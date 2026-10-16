@@ -3,8 +3,8 @@ use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 
 use crate::domain::{
-    DomainError, FiscalYear, Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber, InvoiceParts,
-    InvoiceStatus, InvoiceSummary, MilestoneId, ProjectId,
+    Currency, DomainError, ExchangeRate, FiscalYear, Invoice, InvoiceAmounts, InvoiceKind,
+    InvoiceNumber, InvoiceParts, InvoiceStatus, InvoiceSummary, MilestoneId, ProjectId,
 };
 
 fn date(day: u32) -> NaiveDate {
@@ -34,7 +34,11 @@ fn print() -> InvoicePrint {
 }
 
 fn invoice() -> Invoice {
-    Invoice::issue(InvoiceParts {
+    Invoice::issue(parts()).unwrap()
+}
+
+fn parts() -> InvoiceParts {
+    InvoiceParts {
         number: number(1),
         date: date(1),
         kind: InvoiceKind::Plain,
@@ -42,11 +46,24 @@ fn invoice() -> Invoice {
         milestone_id: MilestoneId::generate(),
         client_name: "Acme".to_owned(),
         milestone_name: "Design".to_owned(),
+        currency: Currency::Inr,
+        exchange_rate: None,
         amounts: InvoiceAmounts::untaxed(BigDecimal::from(1000)),
         print: print(),
         terms: Vec::new(),
         gst: None,
+    }
+}
+
+/// $1,000 at ₹90
+fn usd_invoice() -> Invoice {
+    Invoice::issue(InvoiceParts {
+        kind: InvoiceKind::Export,
+        currency: Currency::Usd,
+        exchange_rate: Some(ExchangeRate::new(BigDecimal::from(90)).unwrap()),
+        ..parts()
     })
+    .unwrap()
 }
 
 #[test]
@@ -129,4 +146,109 @@ fn stored_payments_must_not_exceed_the_total() {
         serde_json::from_value::<Invoice>(v1).map_err(|e| e.to_string()),
         Err(message) if message.contains("old (v1) format")
     ));
+}
+
+#[test]
+fn a_foreign_currency_needs_a_rate_and_rupees_have_none() {
+    let rate = || Some(ExchangeRate::new(BigDecimal::from(90)).unwrap());
+    let usd_without_rate = InvoiceParts {
+        currency: Currency::Usd,
+        ..parts()
+    };
+    assert!(matches!(
+        Invoice::issue(usd_without_rate),
+        Err(DomainError::MissingExchangeRate("USD"))
+    ));
+    let inr_with_rate = InvoiceParts {
+        exchange_rate: rate(),
+        ..parts()
+    };
+    assert!(matches!(
+        Invoice::issue(inr_with_rate),
+        Err(DomainError::UnexpectedExchangeRate)
+    ));
+    let foreign_tax = InvoiceParts {
+        kind: InvoiceKind::Tax,
+        currency: Currency::Eur,
+        exchange_rate: rate(),
+        ..parts()
+    };
+    assert!(matches!(
+        Invoice::issue(foreign_tax),
+        Err(DomainError::ForeignTaxInvoice)
+    ));
+}
+
+#[test]
+fn foreign_amounts_convert_to_rupees_at_the_invoice_rate() {
+    let inv = usd_invoice();
+    assert_eq!(inv.amounts().total, BigDecimal::from(1000));
+    assert_eq!(inv.inr_amounts().total, BigDecimal::from(90_000));
+    assert_eq!(inv.inr_amounts().taxable_value, BigDecimal::from(90_000));
+    assert_eq!(inv.to_inr(&BigDecimal::from(10)), BigDecimal::from(900));
+    assert_eq!(invoice().inr_amounts(), *invoice().amounts());
+}
+
+#[test]
+fn foreign_payments_settle_in_the_currency_and_record_rupees_banked() {
+    let mut inv = usd_invoice();
+    let zero = || BigDecimal::from(0);
+    assert!(matches!(
+        inv.record_payment(date(5), BigDecimal::from(1000), zero()),
+        Err(DomainError::MissingCreditedAmount)
+    ));
+    assert!(matches!(
+        inv.record_foreign_payment(date(5), BigDecimal::from(400), zero()),
+        Err(DomainError::MissingCreditedAmount)
+    ));
+    let first = inv
+        .record_foreign_payment(date(5), BigDecimal::from(400), BigDecimal::from(36_400))
+        .unwrap();
+    assert_eq!(first.received_inr(), &BigDecimal::from(36_400));
+    assert_eq!(inv.status(), InvoiceStatus::PartlyPaid);
+    // The rest at a lower rate still settles exactly: the balance is in dollars
+    inv.record_foreign_payment(date(9), BigDecimal::from(600), BigDecimal::from(53_000))
+        .unwrap();
+    assert!(inv.is_paid());
+
+    let mut rupee = invoice();
+    assert!(matches!(
+        rupee.record_foreign_payment(date(5), BigDecimal::from(10), BigDecimal::from(10)),
+        Err(DomainError::UnexpectedCreditedAmount)
+    ));
+}
+
+#[test]
+fn stored_foreign_payments_keep_their_rules() {
+    let mut inv = usd_invoice();
+    inv.record_foreign_payment(date(5), BigDecimal::from(400), BigDecimal::from(36_000))
+        .unwrap();
+    let json = serde_json::to_value(&inv).unwrap();
+    assert_eq!(json["currency"], "USD");
+    assert_eq!(
+        serde_json::from_value::<Invoice>(json.clone()).unwrap(),
+        inv
+    );
+    let summary = InvoiceSummary::from(&inv);
+    assert_eq!(summary.currency(), Currency::Usd);
+    assert_eq!(summary.balance_inr(), BigDecimal::from(54_000));
+
+    let mut with_tds = json.clone();
+    with_tds["payments"][0]["tds"] = "10".into();
+    assert!(serde_json::from_value::<Invoice>(with_tds).is_err());
+    let mut without_rate = json;
+    without_rate
+        .as_object_mut()
+        .unwrap()
+        .remove("exchange_rate");
+    assert!(serde_json::from_value::<Invoice>(without_rate).is_err());
+}
+
+#[test]
+fn records_without_a_currency_are_rupees() {
+    let mut json = serde_json::to_value(invoice()).unwrap();
+    json.as_object_mut().unwrap().remove("currency");
+    let read = serde_json::from_value::<Invoice>(json).unwrap();
+    assert_eq!(read.currency(), Currency::Inr);
+    assert!(read.exchange_rate().is_none());
 }

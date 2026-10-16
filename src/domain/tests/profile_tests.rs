@@ -1,4 +1,4 @@
-use crate::domain::{BusinessProfile, DomainError, ProfileDraft};
+use crate::domain::{BusinessProfile, Currency, DomainError, ProfileDraft};
 
 fn draft() -> ProfileDraft {
     ProfileDraft {
@@ -13,6 +13,7 @@ fn draft() -> ProfileDraft {
         invoice_prefix: "inv".to_owned(),
         lut_arn: Some("  ".to_owned()),
         terms: vec!["Bank: HDFC 0001234".to_owned()],
+        ..Default::default()
     }
 }
 
@@ -78,4 +79,18 @@ fn round_trips_through_its_draft() {
         serde_json::from_str::<BusinessProfile>(&json).unwrap(),
         profile
     );
+}
+
+#[test]
+fn the_default_currency_is_kept_and_older_profiles_are_in_rupees() {
+    let mut d = draft();
+    d.currency = Currency::Eur;
+    let profile = BusinessProfile::try_from(d).unwrap();
+    assert_eq!(profile.currency(), Currency::Eur);
+    assert_eq!(profile.to_draft().currency, Currency::Eur);
+
+    let mut json = serde_json::to_value(&profile).unwrap();
+    json.as_object_mut().unwrap().remove("currency");
+    let read = serde_json::from_value::<BusinessProfile>(json).unwrap();
+    assert_eq!(read.currency(), Currency::Inr);
 }

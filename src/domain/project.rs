@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use super::billing::amount_for;
 use super::error::require;
-use super::{Billing, DomainError, Milestone, MilestoneId, MilestoneStatus, TimeEntry};
+use super::{Billing, Currency, DomainError, Milestone, MilestoneId, MilestoneStatus, TimeEntry};
 
 /// Lifecycle state of a project, derived from its milestones
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -87,6 +87,8 @@ pub struct ClientDetails {
     /// Address lines, top to bottom; blank lines are dropped
     pub address: Vec<String>,
     pub region: ClientRegion,
+    /// What the client is billed in; anything but INR needs a client abroad
+    pub currency: Currency,
 }
 
 impl ClientDetails {
@@ -137,6 +139,9 @@ pub struct Project {
     client_address: Vec<String>,
     #[serde(default)]
     client_region: ClientRegion,
+    /// Milestone amounts and the hourly rate are in this currency
+    #[serde(default)]
+    currency: Currency,
     billing: Billing,
     milestones: Vec<Milestone>,
     total_amount: BigDecimal,
@@ -154,6 +159,8 @@ struct RawProject {
     client_address: Vec<String>,
     #[serde(default)]
     client_region: ClientRegion,
+    #[serde(default)]
+    currency: Currency,
     billing: Billing,
     #[serde(default)]
     milestones: Vec<Milestone>,
@@ -170,6 +177,7 @@ impl TryFrom<RawProject> for Project {
             client_gstin: raw.client_gstin,
             client_address: raw.client_address,
             client_region: raw.client_region,
+            currency: raw.currency,
             billing: raw.billing,
             milestones: raw.milestones,
             total_amount: BigDecimal::zero(),
@@ -255,6 +263,7 @@ impl Project {
             client_gstin: None,
             client_address: Vec::new(),
             client_region: ClientRegion::default(),
+            currency: Currency::default(),
             billing,
             milestones: Vec::new(),
             total_amount: BigDecimal::zero(),
@@ -289,6 +298,11 @@ impl Project {
         &self.client_region
     }
 
+    /// What milestone amounts, the rate and invoices are in
+    pub fn currency(&self) -> Currency {
+        self.currency
+    }
+
     /// The client as entered, for prefilling an edit form
     pub fn client_details(&self) -> ClientDetails {
         ClientDetails {
@@ -296,6 +310,7 @@ impl Project {
             gstin: self.client_gstin.as_ref().map(|g| g.as_str().to_owned()),
             address: self.client_address.clone(),
             region: self.client_region.clone(),
+            currency: self.currency,
         }
     }
 
@@ -383,7 +398,8 @@ impl Project {
         }
     }
 
-    /// Rename the project or change its client; nothing changes if any value is invalid
+    /// Rename the project or change its client and their currency; nothing changes if any value
+    /// is invalid. The currency is fixed once a milestone is invoiced: billed amounts are in it.
     pub fn update_details(
         &mut self,
         name: impl Into<String>,
@@ -394,6 +410,10 @@ impl Project {
         require(&client.name, "client name")?;
         let gstin = client.gstin.as_deref().map(Gstin::parse).transpose()?;
         validate_region(&client.region, gstin.as_ref())?;
+        validate_currency(client.currency, &client.region)?;
+        if client.currency != self.currency && self.has_billed_milestones() {
+            return Err(DomainError::CurrencyLocked);
+        }
         let address = client
             .address
             .into_iter()
@@ -405,6 +425,7 @@ impl Project {
         self.client_gstin = gstin;
         self.client_address = address;
         self.client_region = client.region;
+        self.currency = client.currency;
         Ok(())
     }
 
@@ -443,11 +464,7 @@ impl Project {
     /// A project may be deleted only while nothing in it has been invoiced: invoiced and paid
     /// milestones are the records income tax and GST filings are built from
     pub fn ensure_deletable(&self) -> Result<(), DomainError> {
-        let billed = self
-            .milestones
-            .iter()
-            .any(|m| m.status() != MilestoneStatus::Pending);
-        if billed {
+        if self.has_billed_milestones() {
             Err(DomainError::HasBilledMilestones)
         } else {
             Ok(())
@@ -476,6 +493,12 @@ impl Project {
         self.milestone_mut(index)?.advance(MilestoneStatus::Paid)?;
         self.refresh();
         Ok(())
+    }
+
+    fn has_billed_milestones(&self) -> bool {
+        self.milestones
+            .iter()
+            .any(|m| m.status() != MilestoneStatus::Pending)
     }
 
     fn milestone(&self, index: usize) -> Result<&Milestone, DomainError> {
@@ -512,6 +535,7 @@ impl Project {
         require(&self.name, "project name")?;
         require(&self.client_name, "client name")?;
         validate_region(&self.client_region, self.client_gstin.as_ref())?;
+        validate_currency(self.currency, &self.client_region)?;
         self.billing.validate()?;
         for milestone in &self.milestones {
             milestone.validate()?;
@@ -543,5 +567,14 @@ fn validate_region(region: &ClientRegion, gstin: Option<&Gstin>) -> Result<(), D
             Ok(())
         }
         ClientRegion::India { .. } => Ok(()),
+    }
+}
+
+/// Clients in India are billed in rupees: their invoices are GST tax invoices
+fn validate_currency(currency: Currency, region: &ClientRegion) -> Result<(), DomainError> {
+    if currency.is_inr() || region.is_abroad() {
+        Ok(())
+    } else {
+        Err(DomainError::ForeignCurrencyInIndia)
     }
 }

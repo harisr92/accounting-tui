@@ -2,8 +2,8 @@ use bigdecimal::{BigDecimal, Zero};
 use chrono::NaiveDate;
 
 use crate::domain::{
-    Billing, ClientDetails, ClientRegion, DomainError, MilestoneStatus, Project, ProjectStatus,
-    ProjectSummary, TimeEntry,
+    Billing, ClientDetails, ClientRegion, Currency, DomainError, MilestoneStatus, Project,
+    ProjectStatus, ProjectSummary, TimeEntry,
 };
 
 const GSTIN: &str = "29AAPFU0939F1ZR";
@@ -350,6 +350,7 @@ fn foreign_clients_have_a_country_and_no_gstin() {
         region: ClientRegion::Abroad {
             country: country.to_owned(),
         },
+        ..ClientDetails::default()
     };
     let p = Project::for_client("Audit", abroad("Germany", None), Billing::Fixed).unwrap();
     assert!(p.client_region().is_abroad());
@@ -383,4 +384,80 @@ fn milestones_keep_their_id_and_invoice_number() {
         loaded.milestones()[0].invoice_number(),
         Some("INV/26-27/001")
     );
+}
+
+fn abroad_in(currency: Currency) -> ClientDetails {
+    ClientDetails {
+        name: "Initrode GmbH".to_owned(),
+        region: ClientRegion::Abroad {
+            country: "Germany".to_owned(),
+        },
+        currency,
+        ..ClientDetails::default()
+    }
+}
+
+#[test]
+fn only_clients_abroad_are_billed_in_a_foreign_currency() {
+    let p = Project::for_client("Audit", abroad_in(Currency::Usd), Billing::Fixed).unwrap();
+    assert_eq!(p.currency(), Currency::Usd);
+    assert_eq!(p.client_details().currency, Currency::Usd);
+
+    let india = ClientDetails {
+        currency: Currency::Eur,
+        ..ClientDetails::named("Acme", Some(GSTIN))
+    };
+    assert!(matches!(
+        Project::for_client("Site", india, Billing::Fixed),
+        Err(DomainError::ForeignCurrencyInIndia)
+    ));
+
+    // Moving a dollar client to India without switching to rupees is refused, and changes nothing
+    let mut p = p;
+    let moved = ClientDetails {
+        currency: Currency::Usd,
+        ..ClientDetails::named("Initrode", None)
+    };
+    assert!(matches!(
+        p.update_details("Audit", moved),
+        Err(DomainError::ForeignCurrencyInIndia)
+    ));
+    assert!(p.client_region().is_abroad());
+    p.update_details("Audit", ClientDetails::named("Initrode", None))
+        .unwrap();
+    assert_eq!(p.currency(), Currency::Inr);
+}
+
+#[test]
+fn the_currency_is_fixed_once_a_milestone_is_invoiced() {
+    let mut p = Project::for_client("Audit", abroad_in(Currency::Usd), Billing::Fixed).unwrap();
+    p.add_milestone("Report", date(), Some(BigDecimal::from(1000)))
+        .unwrap();
+    p.update_details("Audit", abroad_in(Currency::Eur)).unwrap();
+    assert_eq!(p.currency(), Currency::Eur);
+
+    p.invoice_milestone(0, "INV/26-27/001").unwrap();
+    assert!(matches!(
+        p.update_details("Audit", abroad_in(Currency::Gbp)),
+        Err(DomainError::CurrencyLocked)
+    ));
+    assert_eq!(p.currency(), Currency::Eur);
+    p.update_details("Audit v2", abroad_in(Currency::Eur))
+        .unwrap();
+}
+
+#[test]
+fn stored_projects_without_a_currency_are_rupees_and_are_checked() {
+    let p = Project::for_client("Audit", abroad_in(Currency::Gbp), Billing::Fixed).unwrap();
+    let json = serde_json::to_value(&p).unwrap();
+    assert_eq!(json["currency"], "GBP");
+
+    let mut old = json.clone();
+    old.as_object_mut().unwrap().remove("currency");
+    let read = serde_json::from_value::<Project>(old).unwrap();
+    assert_eq!(read.currency(), Currency::Inr);
+
+    let mut tampered = json;
+    tampered["client_region"] = serde_json::json!({"type": "india"});
+    assert!(serde_json::from_value::<Project>(tampered).is_err());
 }

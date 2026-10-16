@@ -52,6 +52,24 @@ pub enum DomainError {
     PaymentBeforeInvoice,
     #[error("GST credit must be less than the amount paid")]
     GstCreditTooLarge,
+    #[error("exchange rate must be greater than zero")]
+    InvalidExchangeRate,
+    #[error("a client in India is billed in INR; pick INR or set the client abroad")]
+    ForeignCurrencyInIndia,
+    #[error("the currency can't change once a milestone is invoiced")]
+    CurrencyLocked,
+    #[error("an invoice in {0} needs the exchange rate it was issued at")]
+    MissingExchangeRate(&'static str),
+    #[error("an invoice in INR has no exchange rate")]
+    UnexpectedExchangeRate,
+    #[error("a GST tax invoice must be in INR")]
+    ForeignTaxInvoice,
+    #[error("clients abroad don't withhold Indian TDS; record the payment without it")]
+    TdsOnForeignInvoice,
+    #[error("enter the rupees credited to your bank for this payment")]
+    MissingCreditedAmount,
+    #[error("rupees credited are only recorded for invoices in a foreign currency")]
+    UnexpectedCreditedAmount,
 }
 
 /// Reject blank text fields

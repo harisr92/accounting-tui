@@ -2,8 +2,8 @@ use accounting_core::{Gstin, HsnMaster, HsnSacEntry};
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 
-use super::DomainError;
 use super::error::require;
+use super::{Currency, DomainError};
 
 /// SAC for IT design and development services, the usual freelance software code
 pub const DEFAULT_SAC: &str = "998314";
@@ -27,6 +27,9 @@ pub struct ProfileDraft {
     /// Printed at the end of every invoice: bank details, payment terms
     #[serde(default)]
     pub terms: Vec<String>,
+    /// What new projects are billed in; clients in India are always billed in INR
+    #[serde(default)]
+    pub currency: Currency,
 }
 
 /// Who is issuing invoices: the freelancer's business
@@ -40,6 +43,7 @@ pub struct BusinessProfile {
     invoice_prefix: String,
     lut_arn: Option<String>,
     terms: Vec<String>,
+    currency: Currency,
 }
 
 impl TryFrom<ProfileDraft> for BusinessProfile {
@@ -82,6 +86,7 @@ impl TryFrom<ProfileDraft> for BusinessProfile {
             invoice_prefix,
             lut_arn,
             terms: non_blank(draft.terms),
+            currency: draft.currency,
         })
     }
 }
@@ -125,6 +130,11 @@ impl BusinessProfile {
         &self.terms
     }
 
+    /// Default billing currency for new projects
+    pub fn currency(&self) -> Currency {
+        self.currency
+    }
+
     /// The profile as entered, for prefilling the Settings form
     pub fn to_draft(&self) -> ProfileDraft {
         ProfileDraft {
@@ -135,6 +145,7 @@ impl BusinessProfile {
             invoice_prefix: self.invoice_prefix.clone(),
             lut_arn: self.lut_arn.clone(),
             terms: self.terms.clone(),
+            currency: self.currency,
         }
     }
 }

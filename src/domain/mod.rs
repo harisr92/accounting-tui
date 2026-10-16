@@ -1,6 +1,7 @@
 //! Pure domain types and rules. No I/O, no UI.
 
 mod billing;
+mod currency;
 mod error;
 mod expense;
 mod fiscal_year;
@@ -11,6 +12,7 @@ mod project;
 mod states;
 
 pub use billing::{Billing, MAX_ENTRY_MINUTES, TimeEntry};
+pub use currency::{Currency, ExchangeRate};
 pub use error::DomainError;
 pub use expense::{Expense, ExpenseCategory, ExpenseId};
 pub use fiscal_year::{FiscalYear, Quarter};

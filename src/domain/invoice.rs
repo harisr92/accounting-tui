@@ -6,7 +6,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 use super::error::require;
-use super::{DomainError, FiscalYear, MilestoneId, ProjectId};
+use super::{Currency, DomainError, ExchangeRate, FiscalYear, MilestoneId, ProjectId};
 
 /// `INV/26-27/004`: prefix, financial year and a sequence that restarts every year
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -61,7 +61,7 @@ impl InvoiceKind {
     }
 }
 
-/// Money on the invoice, in rupees
+/// Money on the invoice, in the invoice's currency
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InvoiceAmounts {
     pub taxable_value: BigDecimal,
@@ -86,6 +86,17 @@ impl InvoiceAmounts {
     pub fn total_tax(&self) -> BigDecimal {
         &self.cgst + &self.sgst + &self.igst
     }
+
+    /// Every amount in rupees at `rate`
+    fn converted(&self, rate: &ExchangeRate) -> Self {
+        Self {
+            taxable_value: rate.to_inr(&self.taxable_value),
+            cgst: rate.to_inr(&self.cgst),
+            sgst: rate.to_inr(&self.sgst),
+            igst: rate.to_inr(&self.igst),
+            total: rate.to_inr(&self.total),
+        }
+    }
 }
 
 /// One receipt against an invoice. A client may pay in parts; each part can have TDS withheld.
@@ -96,12 +107,21 @@ pub struct Payment {
     pub received: BigDecimal,
     /// Tax the client withheld on this payment, claimable in the ITR
     pub tds: BigDecimal,
+    /// Rupees that reached the bank, for an invoice in a foreign currency (where `received` is in
+    /// that currency)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credited_inr: Option<BigDecimal>,
 }
 
 impl Payment {
-    /// How much of the invoice this payment settles
+    /// How much of the invoice this payment settles, in the invoice's currency
     pub fn settled(&self) -> BigDecimal {
         &self.received + &self.tds
+    }
+
+    /// Rupees that reached the bank
+    pub fn received_inr(&self) -> &BigDecimal {
+        self.credited_inr.as_ref().unwrap_or(&self.received)
     }
 }
 
@@ -135,6 +155,11 @@ pub struct Invoice {
     milestone_id: MilestoneId,
     client_name: String,
     milestone_name: String,
+    #[serde(default)]
+    currency: Currency,
+    /// Rupees per unit of `currency`, on the invoice date; `None` for an invoice in rupees
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    exchange_rate: Option<ExchangeRate>,
     amounts: InvoiceAmounts,
     /// The printed document, kept so the PDF can be produced again exactly
     print: InvoicePrint,
@@ -157,6 +182,10 @@ struct RawInvoice {
     milestone_id: MilestoneId,
     client_name: String,
     milestone_name: String,
+    #[serde(default)]
+    currency: Currency,
+    #[serde(default)]
+    exchange_rate: Option<ExchangeRate>,
     amounts: InvoiceAmounts,
     print: InvoicePrint,
     #[serde(default)]
@@ -178,9 +207,10 @@ impl TryFrom<RawInvoice> for Invoice {
         if raw.status.is_some() {
             return Err(DomainError::OutdatedInvoiceFormat);
         }
+        check_currency(raw.currency, raw.exchange_rate.as_ref(), raw.kind)?;
         let mut settled = BigDecimal::zero();
         for payment in &raw.payments {
-            check_payment(raw.date, payment)?;
+            check_payment(raw.date, raw.currency, payment)?;
             settled += payment.settled();
         }
         if settled > raw.amounts.total {
@@ -197,6 +227,8 @@ impl TryFrom<RawInvoice> for Invoice {
             milestone_id: raw.milestone_id,
             client_name: raw.client_name,
             milestone_name: raw.milestone_name,
+            currency: raw.currency,
+            exchange_rate: raw.exchange_rate,
             amounts: raw.amounts,
             print: raw.print,
             terms: raw.terms,
@@ -216,6 +248,9 @@ pub struct InvoiceParts {
     pub milestone_id: MilestoneId,
     pub client_name: String,
     pub milestone_name: String,
+    pub currency: Currency,
+    /// Required for a foreign currency, `None` for rupees
+    pub exchange_rate: Option<ExchangeRate>,
     pub amounts: InvoiceAmounts,
     pub print: InvoicePrint,
     pub terms: Vec<String>,
@@ -224,8 +259,9 @@ pub struct InvoiceParts {
 
 impl Invoice {
     /// A freshly issued, unpaid invoice
-    pub fn issue(parts: InvoiceParts) -> Self {
-        Self {
+    pub fn issue(parts: InvoiceParts) -> Result<Self, DomainError> {
+        check_currency(parts.currency, parts.exchange_rate.as_ref(), parts.kind)?;
+        Ok(Self {
             number: parts.number,
             date: parts.date,
             kind: parts.kind,
@@ -233,12 +269,14 @@ impl Invoice {
             milestone_id: parts.milestone_id,
             client_name: parts.client_name,
             milestone_name: parts.milestone_name,
+            currency: parts.currency,
+            exchange_rate: parts.exchange_rate,
             amounts: parts.amounts,
             print: parts.print,
             terms: parts.terms,
             gst: parts.gst,
             payments: Vec::new(),
-        }
+        })
     }
 
     pub fn number(&self) -> &InvoiceNumber {
@@ -273,8 +311,33 @@ impl Invoice {
         &self.milestone_name
     }
 
+    /// In the invoice's currency
     pub fn amounts(&self) -> &InvoiceAmounts {
         &self.amounts
+    }
+
+    pub fn currency(&self) -> Currency {
+        self.currency
+    }
+
+    pub fn exchange_rate(&self) -> Option<&ExchangeRate> {
+        self.exchange_rate.as_ref()
+    }
+
+    /// The amounts in rupees at the invoice's rate: what GST, the ledger and reports use
+    pub fn inr_amounts(&self) -> InvoiceAmounts {
+        match &self.exchange_rate {
+            Some(rate) => self.amounts.converted(rate),
+            None => self.amounts.clone(),
+        }
+    }
+
+    /// An amount of the invoice's currency in rupees at the invoice's rate
+    pub fn to_inr(&self, amount: &BigDecimal) -> BigDecimal {
+        match &self.exchange_rate {
+            Some(rate) => rate.to_inr(amount),
+            None => amount.clone(),
+        }
     }
 
     pub fn print(&self) -> &InvoicePrint {
@@ -317,24 +380,43 @@ impl Invoice {
         self.status() == InvoiceStatus::Paid
     }
 
-    /// Record a payment of all or part of the balance; `received` reached the bank and `tds`
-    /// was withheld. Returns the payment as recorded (rounded to paise).
+    /// Record a payment of all or part of the balance of an invoice in rupees; `received`
+    /// reached the bank and `tds` was withheld. Returns the payment as recorded (rounded to paise).
     pub fn record_payment(
         &mut self,
         date: NaiveDate,
         received: BigDecimal,
         tds: BigDecimal,
     ) -> Result<Payment, DomainError> {
-        if self.is_paid() {
-            return Err(DomainError::InvoiceAlreadyPaid);
-        }
-        let round = |value: BigDecimal| value.with_scale_round(2, bigdecimal::RoundingMode::HalfUp);
-        let payment = Payment {
+        self.add_payment(Payment {
             date,
             received: round(received),
             tds: round(tds),
-        };
-        check_payment(self.date, &payment)?;
+            credited_inr: None,
+        })
+    }
+
+    /// Record a payment on an invoice in a foreign currency: `received` (in that currency)
+    /// settles the balance, `credited_inr` is what reached the bank at the day's rate
+    pub fn record_foreign_payment(
+        &mut self,
+        date: NaiveDate,
+        received: BigDecimal,
+        credited_inr: BigDecimal,
+    ) -> Result<Payment, DomainError> {
+        self.add_payment(Payment {
+            date,
+            received: round(received),
+            tds: BigDecimal::zero(),
+            credited_inr: Some(round(credited_inr)),
+        })
+    }
+
+    fn add_payment(&mut self, payment: Payment) -> Result<Payment, DomainError> {
+        if self.is_paid() {
+            return Err(DomainError::InvoiceAlreadyPaid);
+        }
+        check_payment(self.date, self.currency, &payment)?;
         let balance = self.balance();
         if payment.settled() > balance {
             return Err(DomainError::PaymentExceedsBalance {
@@ -347,10 +429,45 @@ impl Invoice {
     }
 }
 
-/// A payment on its own: not before the invoice, nothing negative, something paid
-fn check_payment(invoice_date: NaiveDate, payment: &Payment) -> Result<(), DomainError> {
+fn round(value: BigDecimal) -> BigDecimal {
+    value.with_scale_round(2, bigdecimal::RoundingMode::HalfUp)
+}
+
+/// Rupees carry no rate; any other currency needs one and can't be on a GST tax invoice
+fn check_currency(
+    currency: Currency,
+    rate: Option<&ExchangeRate>,
+    kind: InvoiceKind,
+) -> Result<(), DomainError> {
+    match (currency.is_inr(), rate) {
+        (true, Some(_)) => Err(DomainError::UnexpectedExchangeRate),
+        (true, None) => Ok(()),
+        (false, None) => Err(DomainError::MissingExchangeRate(currency.code())),
+        (false, Some(_)) if kind == InvoiceKind::Tax => Err(DomainError::ForeignTaxInvoice),
+        (false, Some(_)) => Ok(()),
+    }
+}
+
+/// A payment on its own: not before the invoice, nothing negative, something paid. A payment in
+/// a foreign currency says what reached the bank in rupees and has no TDS.
+fn check_payment(
+    invoice_date: NaiveDate,
+    currency: Currency,
+    payment: &Payment,
+) -> Result<(), DomainError> {
     if payment.date < invoice_date {
         return Err(DomainError::PaymentBeforeInvoice);
+    }
+    match (currency.is_inr(), &payment.credited_inr) {
+        (true, Some(_)) => return Err(DomainError::UnexpectedCreditedAmount),
+        (false, None) => return Err(DomainError::MissingCreditedAmount),
+        (false, Some(credited)) if *credited <= BigDecimal::zero() => {
+            return Err(DomainError::MissingCreditedAmount);
+        }
+        (false, Some(_)) if !payment.tds.is_zero() => {
+            return Err(DomainError::TdsOnForeignInvoice);
+        }
+        _ => {}
     }
     if payment.received < BigDecimal::zero() || payment.tds < BigDecimal::zero() {
         return Err(DomainError::NegativeAmount);
@@ -369,6 +486,10 @@ pub struct InvoiceSummary {
     kind: InvoiceKind,
     client_name: Box<str>,
     milestone_name: Box<str>,
+    #[serde(default)]
+    currency: Currency,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    exchange_rate: Option<ExchangeRate>,
     total: BigDecimal,
     balance: BigDecimal,
     status: InvoiceStatus,
@@ -399,9 +520,21 @@ impl InvoiceSummary {
         &self.total
     }
 
-    /// What the client still owes
+    /// What the client still owes, in the invoice's currency
     pub fn balance(&self) -> &BigDecimal {
         &self.balance
+    }
+
+    /// What the client still owes, in rupees at the invoice's rate
+    pub fn balance_inr(&self) -> BigDecimal {
+        match &self.exchange_rate {
+            Some(rate) => rate.to_inr(&self.balance),
+            None => self.balance.clone(),
+        }
+    }
+
+    pub fn currency(&self) -> Currency {
+        self.currency
     }
 
     pub fn status(&self) -> InvoiceStatus {
@@ -421,6 +554,8 @@ impl From<&Invoice> for InvoiceSummary {
             kind: invoice.kind,
             client_name: invoice.client_name.as_str().into(),
             milestone_name: invoice.milestone_name.as_str().into(),
+            currency: invoice.currency,
+            exchange_rate: invoice.exchange_rate.clone(),
             total: invoice.amounts.total.clone(),
             balance: invoice.balance(),
             status: invoice.status(),
