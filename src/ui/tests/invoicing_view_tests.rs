@@ -411,14 +411,21 @@ fn settings_switches_and_saves_the_theme() {
 fn settings_picks_the_sync_folder_for_the_next_start() {
     let store = Store::in_memory().unwrap();
     let root = tempfile::tempdir().unwrap();
-    let root_path = std::fs::canonicalize(root.path()).unwrap();
+    let root_path = root.path().to_path_buf();
+    // Paths are compared by what they point at: the picker resolves links (macOS's /var) and
+    // shows Windows paths without `\\?\`
+    let saved = |data_dir: &DataDir| {
+        SyncDir::saved(data_dir)
+            .unwrap()
+            .map(|dir| std::fs::canonicalize(dir.root()).unwrap())
+    };
     let data_dir = DataDir::new(root_path.join("data"));
     std::fs::create_dir_all(root_path.join("data")).unwrap();
     std::fs::create_dir_all(root_path.join("sync/compter")).unwrap();
     SyncDir::save(&data_dir, Some(&root_path.join("sync"))).unwrap();
     let mut app = settings_app(&store, data_dir.clone());
     let shown = screen(&app, W, H);
-    assert!(shown.contains("x stops"), "{shown}");
+    assert!(!shown.contains("Sync folder     off"), "{shown}");
 
     // Opens in the saved folder; Enter goes into compter/, Space chooses it
     app.handle_key(Key::Char('s'));
@@ -427,10 +434,8 @@ fn settings_picks_the_sync_folder_for_the_next_start() {
     app.handle_key(Key::Char(' '));
     let shown = screen(&app, W, H);
     assert!(shown.contains("from the next start"), "{shown}");
-    assert_eq!(
-        SyncDir::saved(&data_dir).unwrap(),
-        Some(SyncDir::new(root_path.join("sync/compter")))
-    );
+    let compter = std::fs::canonicalize(root_path.join("sync").join("compter")).unwrap();
+    assert_eq!(saved(&data_dir), Some(compter.clone()));
 
     // Up twice to the root, then the data folder is refused and the picker stays open
     app.handle_key(Key::Char('s'));
@@ -439,8 +444,11 @@ fn settings_picks_the_sync_folder_for_the_next_start() {
     app.handle_key(Key::Char('k'));
     app.handle_key(Key::Enter);
     app.handle_key(Key::Char(' '));
+    // The message names the temp path, so match one word that wrapping can't split
     let shown = screen(&app, W, H);
-    assert!(shown.contains("must not be inside"), "{shown}");
+    assert!(shown.contains("inside"), "{shown}");
+    assert!(shown.contains("Choose a folder"), "{shown}");
+    assert_eq!(saved(&data_dir), Some(compter));
     app.handle_key(Key::Esc);
 
     app.handle_key(Key::Char('x'));

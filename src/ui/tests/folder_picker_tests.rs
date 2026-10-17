@@ -19,6 +19,7 @@ fn tree() -> TempDir {
     root
 }
 
+/// Compare paths by what they point at: the picker shows Windows paths without `\\?\`
 fn canonical(path: &Path) -> std::path::PathBuf {
     fs::canonicalize(path).unwrap()
 }
@@ -62,21 +63,30 @@ fn opens_folders_goes_up_and_chooses_the_one_shown() {
     picker.handle_key(Key::Char('j'));
     picker.handle_key(Key::Char('j'));
     picker.handle_key(Key::Enter);
-    assert_eq!(picker.dir(), canonical(&root.path().join("gamma")));
+    assert_eq!(
+        canonical(picker.dir()),
+        canonical(&root.path().join("gamma"))
+    );
     picker.handle_key(Key::Enter);
-    assert_eq!(picker.dir(), canonical(&root.path().join("gamma/inner")));
+    assert_eq!(
+        canonical(picker.dir()),
+        canonical(&root.path().join("gamma/inner"))
+    );
 
     picker.handle_key(Key::Backspace);
     picker.handle_key(Key::Backspace);
-    assert_eq!(picker.dir(), canonical(root.path()));
+    assert_eq!(canonical(picker.dir()), canonical(root.path()));
     // The folder just left stays under the cursor
     assert_eq!(picker.handle_key(Key::Enter), PickerEvent::Moved);
-    assert_eq!(picker.dir(), canonical(&root.path().join("gamma")));
-
     assert_eq!(
-        picker.handle_key(Key::Char(' ')),
-        PickerEvent::Chosen(canonical(&root.path().join("gamma")))
+        canonical(picker.dir()),
+        canonical(&root.path().join("gamma"))
     );
+
+    let PickerEvent::Chosen(chosen) = picker.handle_key(Key::Char(' ')) else {
+        panic!("Space chooses the folder shown");
+    };
+    assert_eq!(canonical(&chosen), canonical(&root.path().join("gamma")));
     assert_eq!(picker.handle_key(Key::Esc), PickerEvent::Cancel);
 }
 
@@ -85,7 +95,10 @@ fn starts_at_the_nearest_folder_that_exists() {
     let root = tree();
     let missing = root.path().join("alpha/gone/deeper");
     let picker = FolderPicker::open("Pick", Some(&missing));
-    assert_eq!(picker.dir(), canonical(&root.path().join("alpha")));
+    assert_eq!(
+        canonical(picker.dir()),
+        canonical(&root.path().join("alpha"))
+    );
     assert!(shown(&picker).contains("no folders here"));
 }
 

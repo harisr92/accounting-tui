@@ -57,7 +57,7 @@ impl FolderPicker {
             .unwrap_or_else(|| PathBuf::from("."));
         let mut picker = Self {
             title,
-            dir: fs::canonicalize(&dir).unwrap_or(dir),
+            dir: canonical(dir),
             entries: Vec::new(),
             selection: Selection::default(),
             show_hidden: false,
@@ -222,6 +222,18 @@ impl FolderPicker {
         // An error names a path, so it may need more than one line
         let status = Paragraph::new(vec![Line::default(), status]).wrap(Wrap { trim: false });
         frame.render_widget(status, status_area);
+    }
+}
+
+/// `dir` made absolute with links resolved. Windows answers with `\\?\C:\…`, which users don't
+/// expect to see or have saved, so a plain drive path drops that prefix.
+fn canonical(dir: PathBuf) -> PathBuf {
+    let Ok(full) = fs::canonicalize(&dir) else {
+        return dir;
+    };
+    match full.to_str().and_then(|path| path.strip_prefix(r"\\?\")) {
+        Some(plain) if plain.as_bytes().get(1) == Some(&b':') => PathBuf::from(plain),
+        _ => full,
     }
 }
 
