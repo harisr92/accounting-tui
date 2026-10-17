@@ -113,6 +113,11 @@ pub trait SettingsRepository {
 
     fn save_profile(&mut self, profile: &BusinessProfile) -> Result<(), StorageError>;
 
+    /// The colour theme; the default until one is chosen
+    fn load_appearance(&self) -> Result<Appearance, StorageError>;
+
+    fn save_appearance(&mut self, appearance: Appearance) -> Result<(), StorageError>;
+
     /// A stored logo; `None` if no logo has that id
     fn load_logo(&self, id: LogoId) -> Result<Option<Logo>, StorageError>;
 

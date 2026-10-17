@@ -16,7 +16,7 @@ use compter_tui::app::App;
 use compter_tui::cli;
 use compter_tui::demo;
 use compter_tui::event::{Event, Events};
-use compter_tui::services::{ExpenseService, InvoiceService, ReportService};
+use compter_tui::services::{ExpenseService, InvoiceService, PreferencesService, ReportService};
 use compter_tui::storage::{DataDir, Store};
 use compter_tui::ui::views::{
     DashboardView, ExpensesView, InvoicesView, ProjectsView, ReportsView, SettingsView,
@@ -76,7 +76,13 @@ fn main() -> Result<ExitCode> {
     let expenses =
         ExpensesView::new(ExpenseService::new(repo.clone())).wrap_err("could not load expenses")?;
     let report_view = ReportsView::new(reports()).wrap_err("could not load reports")?;
-    let settings = SettingsView::new(invoices()).wrap_err("could not load settings")?;
+    let settings = SettingsView::new(invoices(), PreferencesService::new(repo.clone()))
+        .wrap_err("could not load settings")?;
+    let appearance = PreferencesService::new(repo.clone())
+        .appearance()
+        .wrap_err("could not load the theme")?;
+    // https://no-color.org: set and not empty
+    let no_color = std::env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty());
 
     let views: Vec<Box<dyn View>> = vec![
         Box::new(dashboard),
@@ -86,7 +92,7 @@ fn main() -> Result<ExitCode> {
         Box::new(report_view),
         Box::new(settings),
     ];
-    let mut app = App::new(views, Theme::default());
+    let mut app = App::with_colour(views, Theme::new(appearance, no_color), no_color);
 
     enable_raw_mode()?;
     // Restore even when setup or the loop fails, so the shell isn't left in raw mode

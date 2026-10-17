@@ -361,6 +361,24 @@ impl SettingsRepository for RedbRepository {
         Ok(())
     }
 
+    fn load_appearance(&self) -> Result<Appearance, StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(SETTINGS)?;
+        let row = table.get(APPEARANCE_KEY)?;
+        row.map(|value| decode(SETTINGS.name(), APPEARANCE_KEY, value.value()))
+            .transpose()
+            .map(Option::unwrap_or_default)
+    }
+
+    fn save_appearance(&mut self, appearance: Appearance) -> Result<(), StorageError> {
+        let bytes = encode(SETTINGS.name(), APPEARANCE_KEY, &appearance)?;
+        let txn = self.db.begin_write()?;
+        txn.open_table(SETTINGS)?
+            .insert(APPEARANCE_KEY, bytes.as_slice())?;
+        txn.commit()?;
+        Ok(())
+    }
+
     fn load_logo(&self, id: LogoId) -> Result<Option<Logo>, StorageError> {
         let txn = self.db.begin_read()?;
         let table = txn.open_table(LOGOS)?;

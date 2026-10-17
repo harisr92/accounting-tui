@@ -9,4 +9,5 @@ mod projects_view_tests;
 mod reporting_view_tests;
 mod selection_tests;
 mod support;
+mod theme_tests;
 mod widgets_tests;
