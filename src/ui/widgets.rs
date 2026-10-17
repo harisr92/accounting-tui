@@ -8,7 +8,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Row};
 
 use super::theme::{Theme, Tone};
-use crate::domain::{Currency, MilestoneStatus, ProjectStatus};
+use crate::domain::{Currency, InvoiceStatus, MilestoneStatus, ProjectStatus};
 
 /// Bordered block whose border lights up when the pane has focus
 pub fn panel<'a>(title: &'a str, focused: bool, theme: &Theme) -> Block<'a> {
@@ -121,6 +121,22 @@ impl Toned for MilestoneStatus {
             Self::Pending => Tone::Neutral,
             Self::Invoiced => Tone::Warning,
             Self::Paid => Tone::Success,
+            Self::Credited => Tone::Neutral,
+        }
+    }
+}
+
+impl Toned for InvoiceStatus {
+    fn label(self) -> &'static str {
+        InvoiceStatus::label(self)
+    }
+
+    fn tone(self) -> Tone {
+        match self {
+            Self::Issued => Tone::Warning,
+            Self::PartlyPaid => Tone::Info,
+            Self::Paid => Tone::Success,
+            Self::Credited => Tone::Neutral,
         }
     }
 }

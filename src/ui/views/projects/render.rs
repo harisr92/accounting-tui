@@ -1,3 +1,4 @@
+use bigdecimal::Zero;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
@@ -264,7 +265,7 @@ fn render_summary(frame: &mut Frame, area: Rect, project: &Project, theme: &Them
     let billing = Line::from(vec![Span::styled("Billing ", theme.dim()), billing]);
     frame.render_widget(billing, billing_area);
 
-    let stats = [
+    let mut stats = vec![
         (
             "Total excl. GST",
             money_in(project.total_amount(), currency),
@@ -275,5 +276,9 @@ fn render_summary(frame: &mut Frame, area: Rect, project: &Project, theme: &Them
             money_in(&project.outstanding_amount(), currency),
         ),
     ];
+    let credited = project.credited_amount();
+    if !credited.is_zero() {
+        stats.insert(2, ("Credited", money_in(&credited, currency)));
+    }
     stat_tiles(frame, stats_area, &stats, theme);
 }

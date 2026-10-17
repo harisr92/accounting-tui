@@ -18,7 +18,7 @@ pub enum ProjectStatus {
     Active,
     /// Every milestone is invoiced, some payment is outstanding
     Completed,
-    /// Every milestone is paid
+    /// Every milestone is paid, or cancelled by credit notes
     Paid,
 }
 
@@ -35,9 +35,7 @@ impl ProjectStatus {
         let pending = milestones
             .iter()
             .any(|m| m.status() == MilestoneStatus::Pending);
-        let all_paid = milestones
-            .iter()
-            .all(|m| m.status() == MilestoneStatus::Paid);
+        let all_paid = milestones.iter().all(|m| m.status().is_settled());
         match (milestones.is_empty(), pending, all_paid) {
             (true, ..) | (_, true, _) => Self::Active,
             (_, _, true) => Self::Paid,
@@ -532,6 +530,34 @@ impl Project {
         self.milestone_mut(index)?.advance(MilestoneStatus::Paid)?;
         self.refresh();
         Ok(())
+    }
+
+    /// Record a credit note taking `amount` (before GST) off an invoiced milestone
+    pub fn credit_milestone(
+        &mut self,
+        index: usize,
+        amount: &BigDecimal,
+    ) -> Result<(), DomainError> {
+        self.milestone_mut(index)?.credit(amount)?;
+        self.refresh();
+        Ok(())
+    }
+
+    /// Mark a milestone whose invoice credit notes cancelled in full, with nothing paid
+    pub fn cancel_milestone(&mut self, index: usize) -> Result<(), DomainError> {
+        self.milestone_mut(index)?
+            .advance(MilestoneStatus::Credited)?;
+        self.refresh();
+        Ok(())
+    }
+
+    /// Archived projects are finished: new milestones go on an active project
+    fn ensure_not_archived(&self) -> Result<(), DomainError> {
+        if self.archived {
+            Err(DomainError::ProjectArchived)
+        } else {
+            Ok(())
+        }
     }
 
     fn has_billed_milestones(&self) -> bool {

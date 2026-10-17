@@ -414,6 +414,9 @@ impl<R: Repository> ProjectsView<R> {
         if milestone.status() != MilestoneStatus::Invoiced {
             let why = match milestone.status() {
                 MilestoneStatus::Paid => "This milestone is already paid",
+                MilestoneStatus::Credited => {
+                    "This milestone's invoice was cancelled by credit notes"
+                }
                 _ => "Invoice the milestone first (i)",
             };
             return Action::Notify(Notice::info(why));

@@ -15,6 +15,8 @@ pub enum MilestoneStatus {
     Pending,
     Invoiced,
     Paid,
+    /// Its invoice was cancelled in full by credit notes, with nothing paid
+    Credited,
 }
 
 impl MilestoneStatus {
@@ -23,7 +25,13 @@ impl MilestoneStatus {
             Self::Pending => "PENDING",
             Self::Invoiced => "INVOICED",
             Self::Paid => "PAID",
+            Self::Credited => "CREDITED",
         }
+    }
+
+    /// Nothing more will be billed or received for it
+    pub const fn is_settled(self) -> bool {
+        matches!(self, Self::Paid | Self::Credited)
     }
 }
 
@@ -68,6 +76,10 @@ pub struct Milestone {
     /// Set when the milestone is invoiced; absent on records from before invoicing existed
     #[serde(default, skip_serializing_if = "Option::is_none")]
     invoice_number: Option<String>,
+    /// Taken back by credit notes on its invoice, before GST: part of `amount` that will never be
+    /// received
+    #[serde(default, skip_serializing_if = "Zero::is_zero")]
+    credited: BigDecimal,
 }
 
 /// Unvalidated shape of a [`Milestone`]; project-level rules are checked by [`super::Project`]
@@ -84,6 +96,8 @@ struct RawMilestone {
     time_entries: Vec<TimeEntry>,
     #[serde(default)]
     invoice_number: Option<String>,
+    #[serde(default)]
+    credited: BigDecimal,
 }
 
 impl TryFrom<RawMilestone> for Milestone {
@@ -98,6 +112,7 @@ impl TryFrom<RawMilestone> for Milestone {
             status: raw.status,
             time_entries: raw.time_entries,
             invoice_number: raw.invoice_number,
+            credited: raw.credited,
         };
         milestone.validate()?;
         Ok(milestone)
@@ -114,6 +129,7 @@ impl Milestone {
             status: MilestoneStatus::Pending,
             time_entries: Vec::new(),
             invoice_number: None,
+            credited: BigDecimal::zero(),
         }
     }
 
@@ -139,6 +155,16 @@ impl Milestone {
 
     pub fn status(&self) -> MilestoneStatus {
         self.status
+    }
+
+    /// Taken back by credit notes, before GST
+    pub fn credited(&self) -> &BigDecimal {
+        &self.credited
+    }
+
+    /// What was billed and not taken back: `amount` less `credited`
+    pub fn net_amount(&self) -> BigDecimal {
+        &self.amount - &self.credited
     }
 
     pub fn time_entries(&self) -> &[TimeEntry] {
@@ -197,15 +223,32 @@ impl Milestone {
         Ok(())
     }
 
-    /// Move one step along Pending → Invoiced → Paid
+    /// Record a credit note taking `amount` (before GST) off an invoiced milestone's billing
+    pub(super) fn credit(&mut self, amount: &BigDecimal) -> Result<(), DomainError> {
+        if self.status != MilestoneStatus::Invoiced {
+            return Err(DomainError::NotInvoiced);
+        }
+        let credited = &self.credited + amount;
+        if *amount <= BigDecimal::zero() || credited > self.amount {
+            return Err(DomainError::CreditExceedsMilestone);
+        }
+        self.credited = credited;
+        Ok(())
+    }
+
+    /// Move one step along Pending → Invoiced → Paid, or Invoiced → Credited once credit notes
+    /// have cancelled the whole invoice
     pub(super) fn advance(&mut self, to: MilestoneStatus) -> Result<(), DomainError> {
-        use MilestoneStatus::{Invoiced, Paid, Pending};
+        use MilestoneStatus::{Credited, Invoiced, Paid, Pending};
 
         match (self.status, to) {
             (Pending, Invoiced) if self.amount <= BigDecimal::zero() => {
                 Err(DomainError::NothingToInvoice)
             }
-            (Pending, Invoiced) | (Invoiced, Paid) => {
+            (Invoiced, Credited) if self.credited != self.amount => {
+                Err(DomainError::CreditExceedsMilestone)
+            }
+            (Pending, Invoiced) | (Invoiced, Paid) | (Invoiced, Credited) => {
                 self.status = to;
                 Ok(())
             }
@@ -217,6 +260,15 @@ impl Milestone {
         require(&self.name, "milestone name")?;
         if self.amount < BigDecimal::zero() {
             return Err(DomainError::NonPositiveAmount);
+        }
+        let credit_allowed = self.status != MilestoneStatus::Pending || self.credited.is_zero();
+        let fully_credited = self.credited == self.amount;
+        if self.credited < BigDecimal::zero()
+            || self.credited > self.amount
+            || !credit_allowed
+            || (self.status == MilestoneStatus::Credited && !fully_credited)
+        {
+            return Err(DomainError::CreditExceedsMilestone);
         }
         self.time_entries.iter().try_for_each(TimeEntry::validate)
     }
