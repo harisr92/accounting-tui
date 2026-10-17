@@ -1,5 +1,6 @@
 //! Rendering only: reads `App` state, never mutates domain data
 
+pub mod filter;
 mod footer;
 pub mod form;
 mod header;
