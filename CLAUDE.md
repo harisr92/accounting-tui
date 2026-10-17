@@ -32,7 +32,7 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - Once a milestone is invoiced its amount is the billed record: it is frozen and never recomputed (e.g. after a rate change).
 - Deserialisation goes through a `Raw*` struct + `TryFrom` (`#[serde(try_from = ...)]`) that runs the same `validate()` as the constructors.
 - Status changes go through the explicit transition methods (`invoice_milestone`, `record_payment`). No status setters.
-- Schema history: v2 replaced an invoice's `status` with `payments` (`storage/migrations.rs::payments_list`). Domain decoding refuses a v1 invoice (`OutdatedInvoiceFormat`) rather than read a paid one as unpaid.
+- Schema history: v2 replaced an invoice's `status` with `payments` (`storage/migrations.rs::payments_list`). Domain decoding refuses a v1 invoice (`OutdatedInvoiceFormat`) rather than read a paid one as unpaid. v3 added credit notes and `MilestoneStatus::Credited` with no rows to rewrite (`credit_notes` step), so older builds refuse a file they would misread.
 - Billing records are never destroyed: invoiced or paid milestones can't be edited or removed, and a project containing any can't be deleted (`Project::ensure_deletable`, checked in the service). New delete paths must respect this.
 - Money is `BigDecimal`, rounded with `with_scale_round(2, RoundingMode::HalfUp)`. Durations are whole minutes (`u32`).
 - Reuse accounting-core value types (`Gstin`) instead of re-validating strings.
@@ -58,14 +58,15 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 
 ## Invoicing
 
-- Invoices are billing records: **immutable once issued**. Only `Invoice::record_payment` changes one, by appending to its payments. Corrections will be credit notes (step 7); never edit or delete an invoice.
+- Invoices are billing records: **immutable once issued**. Only `Invoice::record_payment` and `Invoice::apply_credit` change one, by appending to its payments or its credits. Correct an invoice with a credit note; never edit or delete one.
 - Numbers come only from `InvoiceRepository::next_sequence` + `InvoiceNumber::new`, and `issue` refuses a stale sequence. Never build a number by hand or reuse one.
 - The kind (tax / export / plain) is decided in one place, `services::invoice_builder::build`, from the seller's GSTIN and the client's region. Tax invoices go through accounting-core (`GstInvoice`, `validate_invoice`, `InvoicePrint::from_invoice`, `to_entries`). Don't recompute GST in compter.
 - An invoice stores its `InvoicePrint` and `terms`. PDFs are rendered from those (`render_pdf`), never rebuilt from the current project or settings.
 - The logo is snapshotted like the terms: each invoice stores the `LogoId` it was issued with, and `render` loads that logo, never the profile's current one. Logos live in the `logos` table as raw image bytes (the one table not written through `codec`), checked by `Logo::from_stored` on load, and rows are never deleted. `set_logo` test-renders a new logo so an image accounting-core can't draw is refused in Settings.
 - Render the PDF **before** saving an invoice, so an unprintable document is never issued. Write the file after the commit; a failed write is reported, never rolled back.
 - Ledger account ids live only in `services/chart.rs`. Every posting is checked with `DefaultTransactionValidator`, and its accounts are passed along so storage creates any that are missing.
-- Payments may be partial: each is `{date, received, tds}`, and their sum never exceeds the total (`Invoice::record_payment`, checked again on load). Invoice status (Issued / PartlyPaid / Paid) is derived from the payments, never stored. The milestone is marked paid only by the payment that settles the invoice.
+- Payments may be partial: each is `{date, received, tds}`, and their sum never exceeds the total (`Invoice::record_payment`, checked again on load). Invoice status (Issued / PartlyPaid / Paid / Credited) is derived from the payments and credits, never stored. The milestone is marked paid only by the payment or credit note that settles the invoice.
+- Credit notes (`domain::CreditNote`) are billing records too, numbered `CN/<yy-yy>/<seq>` from `next_credit_sequence` and written with the invoice they credit in one `CreditRecord`. `services::credit_note_builder::build` is the one place a note is made: accounting-core's `CreditNote` for tax invoices, compter's own print for export and plain ones, always at the invoice's rate. A note credits only what is still due (never a refund), and `credit_note_deadline` (30 November after the invoice's year) is enforced for tax and export invoices. Every note is recorded on its milestone (`Project::credit_milestone`, before GST), so `paid_amount` counts only money received. A note that leaves nothing due settles the milestone: `cancel_milestone` (CREDITED) when nothing was paid, `record_payment` (PAID) otherwise. The note's posting is `cn-<number>`, reversing the invoice's legs onto `4190 Credit Notes`.
 - Each payment posts its own ledger transaction, `pay-<number>-<n>`: Dr Bank (received), Dr `1250 TDS Receivable` (tds), Cr Receivable (both). Payments from schema v1 kept their original id `pay-<number>`.
 
 ### Currency
@@ -81,9 +82,10 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - Reports are computed on demand and never stored. `services::reports` is pure (a `YearReportBuilder` fed one invoice at a time). `ReportService` streams invoices with `InvoiceRepository::scan_invoices`, so it never holds them all in memory.
 - Year-bound figures use `FiscalYear` / `Quarter`. Don't compare month numbers by hand. Billing counts by invoice date; payments and TDS count by payment date.
 - Don't use accounting-core's `generate_income_statement` for a year: it sums balances *as of* the end date, so earlier years leak in. Build year figures from invoice and expense records.
-- GSTR-1 is quarterly (QRMP): `services::gstr1` builds each month with accounting-core's `Gstr1Return::build` and merges them. compter adds only what accounting-core lacks: 6A exports and table 13. When accounting-core gains quarters or exports, delete compter's version.
+- GSTR-1 is quarterly (QRMP): `services::gstr1` builds each month with accounting-core's `Gstr1Return::build` (invoices and GST credit notes) and merges them. compter adds only what accounting-core lacks: 6A exports, `cdnur`/`EXPWOP` for credit notes on exports, and table 13. The monthly IFF is the same month build, cut to `b2b` and `cdnr`; months filed by IFF lose their B2B sections from the quarter but keep HSN and table 13. When accounting-core gains quarters or exports, delete compter's version.
+- Reports subtract a credit note in the year and quarter of its own date (`YearReportBuilder::add_credit_note`).
 - Returns are written under `<data dir>/returns/<year>/` with `write_file`. Plain invoices never go into a return.
-- Expenses post like invoices: one transaction (`exp-<id>`) with the expense, written together through `ExpenseRepository`. Input credit needs a GSTIN in the profile. Deleting an expense removes its posting in the same write.
+- Expenses post like invoices: one transaction (`exp-<id>`) with the expense, written together through `ExpenseRepository`. Input credit needs a GSTIN in the profile. Editing an expense replaces its posting, and deleting one removes it, in the same write.
 - Tabs that show a year use `ui::views::year::YearPicker` (`[` / `]`). Rows of figures use `widgets::stat_tiles`.
 - Table headers come from `widgets::header(titles, right_aligned_columns, theme)`. Amount and duration cells are right-aligned, and their titles must be too, so they line up (checked by `ui/tests/alignment_tests.rs`).
 
@@ -94,13 +96,16 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - **Open/closed**: every tab is a `ui::view::View`. Add a screen by implementing `View` and registering it in `main.rs`. Don't add per-tab `match` arms to `App` or `ui::draw`.
 - **Liskov**: any `View` must work through `&dyn View`. A view returns `Action::Ignored` for keys it doesn't own so global bindings still work.
 - **Interface segregation**: narrow traits (`ProjectRepository`, `InvoiceRepository`, `SettingsRepository`), not one god storage trait.
+- Settings that aren't the business profile (the theme) go through `PreferencesService`, not `InvoiceService`.
 - **Dependency inversion**: services and views take data or traits through their constructors. Concrete types (`FileStorage`) are only built in `main.rs`. Tests use in-memory implementations.
 
 ## DRY
 
-- Colours and styles come only from `ui::theme::Theme`. No `Color::` literals in views.
+- Colours and styles come only from `ui::theme::Theme`. No `Color::` literals in views. Themes are presets chosen by `domain::Appearance` (saved in settings, switched with `Action::Theme`); `NO_COLOR` forces the monochrome one. A new style is a `Theme` field set in every preset.
 - Use the shared helpers in `ui::widgets`: `panel` (bordered block with focus styling), `modal` (cleared, centred, focused box), `money`, `duration`, `status_span`/`Toned`, `centered_rect`.
 - List and table navigation goes through `ui::selection::{Selection, Nav}`. Don't hand-roll wrap-around or j/k mapping.
+- Searchable lists use `ui::filter::Filter` (`/` opens it, `Esc` clears it) and keep a `visible: Vec<usize>` of positions into their rows; the selection moves over `visible`.
+- Archived projects (`Project::archive`, finished only) stay in storage and reports; only the Projects list hides them.
 - Key hints are defined once as `&'static [KeyHint]`. The footer and the help popup both render from that one slice. The footer always shows `FOOTER_HINTS` (`? help · q quit`) on the right; view hints fill the left and may be cut off on narrow screens.
 - All input goes through `ui::form`: build a `Form` from `Field::text` / `Field::choice`, and use `Confirm` before anything irreversible. Don't write another text-input widget.
 - Parse what the user typed only in `ui/form/parse.rs` (money, dates, durations, optional text). Give a field a live `with_preview` when its input could be misread (durations).
