@@ -46,8 +46,8 @@ const USAGE: &str = "usage: compter [--demo] [-V | --version] [-h | --help]
 Data is stored in $COMPTER_HOME, $XDG_DATA_HOME/compter, or else %APPDATA%\\compter on Windows
 and ~/.local/share/compter elsewhere.
 
-To use several devices, set $COMPTER_SYNC_DIR to a folder Google Drive, OneDrive, Dropbox or
-iCloud syncs. compter publishes a snapshot there on exit and picks up a newer one on start;
+To use several devices, set a sync folder in Settings (s) to a folder Google Drive, OneDrive,
+Dropbox or iCloud syncs; $COMPTER_SYNC_DIR overrides it. compter publishes a snapshot there on exit and picks up a newer one on start;
 quit compter on one device before opening it on another.";
 
 fn main() -> Result<ExitCode> {
@@ -105,9 +105,13 @@ fn run_tui(store: &Store, data_dir: Option<DataDir>, notice: Option<Notice>) -> 
     let expenses =
         ExpensesView::new(ExpenseService::new(repo.clone())).wrap_err("could not load expenses")?;
     let report_view = ReportsView::new(reports()).wrap_err("could not load reports")?;
-    let settings = SettingsView::new(invoices(), PreferencesService::new(repo.clone()))
-        .wrap_err("could not load settings")?;
-    let appearance = PreferencesService::new(repo.clone())
+    let preferences = || {
+        PreferencesService::new(repo.clone(), data_dir.clone())
+            .with_sync_override(SyncDir::from_env())
+    };
+    let settings =
+        SettingsView::new(invoices(), preferences()).wrap_err("could not load settings")?;
+    let appearance = preferences()
         .appearance()
         .wrap_err("could not load the theme")?;
     // https://no-color.org: set and not empty
@@ -166,11 +170,13 @@ fn resolve_sync(args: &[String]) -> Result<ExitCode> {
             return Ok(ExitCode::from(2));
         }
     };
-    let Some(sync_dir) = SyncDir::from_env() else {
-        eprintln!("COMPTER_SYNC_DIR is not set, so there is nothing to sync");
+    let dir = DataDir::from_env()?;
+    let Some((sync_dir, _)) = SyncDir::configured(&dir, SyncDir::from_env())? else {
+        eprintln!(
+            "no sync folder is set (Settings, or $COMPTER_SYNC_DIR), so there is nothing to sync"
+        );
         return Ok(ExitCode::from(2));
     };
-    let dir = DataDir::from_env()?;
     SyncSession::resolve(&dir, &sync_dir, &sync::device_name_from_env(), resolution)?;
     println!("synced with {}", sync_dir.root().display());
     Ok(ExitCode::SUCCESS)
@@ -184,7 +190,7 @@ struct Opened {
     sync: Option<SyncSession>,
 }
 
-/// The database, brought up to date from `$COMPTER_SYNC_DIR` first when that is set
+/// The database, brought up to date from the sync folder first when one is set
 fn open_store(demo_mode: bool) -> Result<Opened> {
     if demo_mode {
         let store = demo::store().wrap_err("could not build the demo data")?;
@@ -195,8 +201,8 @@ fn open_store(demo_mode: bool) -> Result<Opened> {
         });
     }
     let dir = DataDir::from_env()?;
-    let sync = SyncDir::from_env()
-        .map(|sync_dir| SyncSession::begin(&dir, sync_dir, sync::device_name_from_env()))
+    let sync = SyncDir::configured(&dir, SyncDir::from_env())?
+        .map(|(sync_dir, _)| SyncSession::begin(&dir, sync_dir, sync::device_name_from_env()))
         .transpose()?;
     let store = Store::open(&dir)
         .wrap_err_with(|| format!("could not open {}", dir.database_path().display()))?;

@@ -1,4 +1,6 @@
-//! Settings tab: the business profile invoices are issued under
+//! Settings tab: the business profile invoices are issued under, and this device's preferences
+
+use std::path::Path;
 
 use crate::ui::key::Key;
 use accounting_core::HsnMaster;
@@ -13,7 +15,8 @@ use crate::domain::{
 };
 use crate::services::{InvoiceService, PreferencesService};
 use crate::storage::Repository;
-use crate::ui::form::{Field, Form, parse};
+use crate::storage::sync::{SyncDir, SyncSource};
+use crate::ui::form::{Field, FolderPicker, Form, parse};
 use crate::ui::theme::Theme;
 use crate::ui::view::{Action, KeyHint, Notice, View};
 use crate::ui::widgets::panel;
@@ -22,6 +25,8 @@ const HINTS: &[KeyHint] = &[
     KeyHint::new("e", "edit business details"),
     KeyHint::new("l", "set logo"),
     KeyHint::new("t", "next theme"),
+    KeyHint::new("s", "sync folder"),
+    KeyHint::new("x", "stop syncing"),
 ];
 
 const NAME: usize = 0;
@@ -38,6 +43,7 @@ const LOGO_FILE: usize = 0;
 enum Modal {
     Profile(Form),
     Logo(Form),
+    Sync(FolderPicker),
 }
 
 /// What the Settings tab shows about the current logo; the bytes stay in storage
@@ -47,13 +53,15 @@ struct LogoInfo {
     bytes: usize,
 }
 
-/// Shows the business profile; `e` edits it, `l` sets the logo, `t` changes the theme
+/// Shows the business profile; `e` edits it, `l` sets the logo, `t` changes the theme, `s` picks
+/// the sync folder and `x` turns syncing off
 pub struct SettingsView<R> {
     service: InvoiceService<R>,
     preferences: PreferencesService<R>,
     profile: Option<BusinessProfile>,
     appearance: Appearance,
     logo: Option<LogoInfo>,
+    sync: Option<(SyncDir, SyncSource)>,
     modal: Option<Modal>,
 }
 
@@ -65,12 +73,14 @@ impl<R: Repository> SettingsView<R> {
         let profile = service.profile()?;
         let logo = logo_info(&service)?;
         let appearance = preferences.appearance()?;
+        let sync = preferences.sync_folder()?;
         Ok(Self {
             service,
             preferences,
             profile,
             appearance,
             logo,
+            sync,
             modal: None,
         })
     }
@@ -79,6 +89,7 @@ impl<R: Repository> SettingsView<R> {
         self.profile = self.service.profile()?;
         self.logo = logo_info(&self.service)?;
         self.appearance = self.preferences.appearance()?;
+        self.sync = self.preferences.sync_folder()?;
         Ok(())
     }
 
@@ -117,6 +128,25 @@ impl<R: Repository> SettingsView<R> {
         } else {
             "Logo removed from new invoices"
         }))
+    }
+
+    fn submit_sync(&mut self, path: Option<&Path>) -> Result<Notice, String> {
+        self.preferences
+            .set_sync_folder(path)
+            .map_err(|e| e.to_string())?;
+        self.sync = self.preferences.sync_folder().map_err(|e| e.to_string())?;
+        Ok(Notice::success(
+            match (
+                path.is_some(),
+                self.sync.as_ref().map(|(_, source)| *source),
+            ) {
+                (_, Some(SyncSource::Env)) => {
+                    "Saved, but $COMPTER_SYNC_DIR overrides it while it is set"
+                }
+                (true, _) => "Sync folder saved: compter syncs through it from the next start",
+                (false, _) => "Sync turned off from the next start",
+            },
+        ))
     }
 }
 
@@ -204,12 +234,15 @@ impl<R: Repository> View for SettingsView<R> {
             Span::raw(self.appearance.label()),
             Span::styled("   t switches: dark, light, monochrome", theme.dim()),
         ]));
+        lines.push(sync_line(self.sync.as_ref(), theme));
         let body = Paragraph::new(lines)
             .wrap(Wrap { trim: false })
             .block(block);
         frame.render_widget(body, area);
-        if let Some(Modal::Profile(form) | Modal::Logo(form)) = &self.modal {
-            form.render(frame, theme);
+        match &self.modal {
+            Some(Modal::Profile(form) | Modal::Logo(form)) => form.render(frame, theme),
+            Some(Modal::Sync(picker)) => picker.render(frame, theme),
+            None => {}
         }
     }
 
@@ -223,6 +256,11 @@ impl<R: Repository> View for SettingsView<R> {
             Some(Modal::Logo(form)) => {
                 let (form, action) = form.step(key, |form| self.submit_logo(form));
                 self.modal = form.map(Modal::Logo);
+                return action;
+            }
+            Some(Modal::Sync(picker)) => {
+                let (picker, action) = picker.step(key, |dir| self.submit_sync(Some(dir)));
+                self.modal = picker.map(Modal::Sync);
                 return action;
             }
             None => {}
@@ -246,15 +284,34 @@ impl<R: Repository> View for SettingsView<R> {
                 }
                 Err(error) => Action::Notify(Notice::error(error.to_string())),
             },
+            Key::Char('s') => {
+                let saved = self
+                    .sync
+                    .as_ref()
+                    .filter(|(_, source)| *source == SyncSource::Settings)
+                    .map(|(dir, _)| dir.root());
+                self.modal = Some(Modal::Sync(FolderPicker::open(
+                    "Choose a folder Google Drive, OneDrive, Dropbox or iCloud syncs",
+                    saved,
+                )));
+                Action::Handled
+            }
+            Key::Char('x') if self.sync.is_none() => {
+                Action::Notify(Notice::info("Sync is already off"))
+            }
+            Key::Char('x') => match self.submit_sync(None) {
+                Ok(notice) => Action::Notify(notice),
+                Err(error) => Action::Notify(Notice::error(error)),
+            },
             _ => Action::Ignored,
         }
     }
 
     fn key_hints(&self) -> &'static [KeyHint] {
-        if self.modal.is_some() {
-            Form::HINTS
-        } else {
-            HINTS
+        match self.modal {
+            Some(Modal::Profile(_) | Modal::Logo(_)) => Form::HINTS,
+            Some(Modal::Sync(_)) => FolderPicker::HINTS,
+            None => HINTS,
         }
     }
 
@@ -263,6 +320,26 @@ impl<R: Repository> View for SettingsView<R> {
             .err()
             .map(|error| Notice::error(error.to_string()))
     }
+}
+
+fn sync_line<'a>(sync: Option<&'a (SyncDir, SyncSource)>, theme: &Theme) -> Line<'a> {
+    let label = Span::styled(format!("{:<16}", "Sync folder"), theme.dim());
+    let Some((dir, source)) = sync else {
+        return Line::from(vec![
+            label,
+            Span::raw("off"),
+            Span::styled("   s picks one to share data between devices", theme.dim()),
+        ]);
+    };
+    let note = match source {
+        SyncSource::Env => "   set by $COMPTER_SYNC_DIR, which overrides s",
+        SyncSource::Settings => "   s changes it, x stops syncing; from the next start",
+    };
+    Line::from(vec![
+        label,
+        Span::raw(dir.root().display().to_string()),
+        Span::styled(note, theme.dim()),
+    ])
 }
 
 fn profile_lines<'a>(

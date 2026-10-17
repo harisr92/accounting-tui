@@ -6,7 +6,7 @@ use ratatui::backend::TestBackend;
 
 use crate::app::App;
 use crate::services::{ExpenseService, InvoiceService, PreferencesService, ReportService};
-use crate::storage::Store;
+use crate::storage::{DataDir, Store};
 use crate::ui::draw;
 use crate::ui::theme::Theme;
 use crate::ui::view::View;
@@ -30,11 +30,23 @@ pub fn invoicing_app(store: &Store) -> App {
         Box::new(
             SettingsView::new(
                 InvoiceService::new(repo.clone(), None),
-                PreferencesService::new(repo),
+                PreferencesService::new(repo, None),
             )
             .unwrap(),
         ),
     ];
+    App::new(views, Theme::default())
+}
+
+/// Only the Settings tab on `store`, keeping this device's settings in `data_dir`
+pub fn settings_app(store: &Store, data_dir: DataDir) -> App {
+    let repo = store.repository();
+    let view = SettingsView::new(
+        InvoiceService::new(repo.clone(), None),
+        PreferencesService::new(repo, Some(data_dir)),
+    )
+    .unwrap();
+    let views: Vec<Box<dyn View>> = vec![Box::new(view)];
     App::new(views, Theme::default())
 }
 

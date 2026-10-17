@@ -84,7 +84,7 @@ Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Un
 
 **Reports tab**: `[`/`]` change the year, `g` exports the GSTR-1 for a quarter, `i` exports a month's IFF. See [Reports](#reports).
 
-**Settings tab**: `e` edits your business details: name, address, GSTIN, SAC code, invoice prefix, LUT ARN, and terms such as bank details. They must be filled in before the first invoice. `l` sets a logo (path to a PNG or JPEG under 1 MB; blank removes it), printed at the top left of new invoices. `t` switches the theme: dark, light (for light terminal backgrounds) or monochrome. The choice is saved. With [`NO_COLOR`](https://no-color.org) set, every theme is drawn without colour.
+**Settings tab**: `e` edits your business details: name, address, GSTIN, SAC code, invoice prefix, LUT ARN, and terms such as bank details. They must be filled in before the first invoice. `l` sets a logo (path to a PNG or JPEG under 1 MB; blank removes it), printed at the top left of new invoices. `t` switches the theme: dark, light (for light terminal backgrounds) or monochrome. The choice is saved. `s` opens a folder browser to pick the folder this device syncs through, and `x` stops syncing (see [Using several devices](#using-several-devices)). With [`NO_COLOR`](https://no-color.org) set, every theme is drawn without colour.
 
 **Forms**: type to edit, `Backspace` deletes, `Ctrl-u` clears the field. `Tab`/`↓` and `Shift-Tab`/`↑` move between fields, and `Space`/`←→` change a choice. `Enter` saves and `Esc` cancels. If something is wrong, the form stays open with the reason shown in red and your input kept.
 
@@ -304,7 +304,7 @@ src/
     └── views/
         ├── projects/    ProjectsView: state and keys, rendering, forms, issue/pay
         ├── invoices/    InvoicesView: list, search, open PDF, record payment, credit notes
-        ├── settings/    SettingsView: business profile, logo and theme
+        ├── settings/    SettingsView: business profile, logo, theme and sync folder
         ├── payment.rs   the payment form shared by Projects and Invoices
         ├── dashboard/   DashboardView: this year and unpaid invoices
         ├── expenses/    ExpensesView: add, edit, delete, search, by year
@@ -357,7 +357,9 @@ The app opens the file on start, before the terminal is taken over, so an error 
 
 Don't put `compter.redb` itself in Google Drive, OneDrive, Dropbox or iCloud. redb's lock only works on one machine, a sync client can upload the file halfway through a write, and edits made on two devices become a "conflict copy" that silently drops one side. Invoice numbers have to stay sequential, so two devices' changes can't be merged either.
 
-Instead, point `COMPTER_SYNC_DIR` at a synced folder, on every device:
+Instead, on every device, open **Settings** and press `s` to pick a synced folder, e.g. `~/Library/CloudStorage/GoogleDrive-you@example.com/My Drive/compter-sync`. The browser opens in the current sync folder (or your home folder): `j`/`k` move, `Enter` opens a folder, `Backspace` goes up, `~` jumps home, `.` shows hidden folders, and `Space` chooses the folder shown. It must exist and be apart from the data folder. The choice belongs to the device (each one may see the folder at a different path), so it is saved in `device.json` in the data folder, not in the database, and takes effect the next time compter starts. Press `x` to stop syncing.
+
+`COMPTER_SYNC_DIR`, when set, overrides that setting, which is handy for scripts:
 
 ```bash
 export COMPTER_SYNC_DIR="$HOME/Library/CloudStorage/GoogleDrive-you@example.com/My Drive/compter-sync"

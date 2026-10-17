@@ -6,8 +6,9 @@ use crate::domain::{
     Billing, BusinessProfile, ClientDetails, ClientRegion, Currency, InvoiceStatus,
     MilestoneStatus, ProfileDraft, Project,
 };
-use crate::storage::{InvoiceRepository, ProjectRepository, SettingsRepository, Store};
-use crate::ui::tests::support::{invoicing_app, screen, type_keys};
+use crate::storage::sync::SyncDir;
+use crate::storage::{DataDir, InvoiceRepository, ProjectRepository, SettingsRepository, Store};
+use crate::ui::tests::support::{invoicing_app, screen, settings_app, type_keys};
 
 const W: u16 = 120;
 /// A 2x1 pixel RGB PNG that accounting-core can draw
@@ -404,4 +405,49 @@ fn settings_switches_and_saves_the_theme() {
         crate::domain::Appearance::Light
     );
     assert_eq!(app.theme().key().fg, Some(ratatui::style::Color::Blue));
+}
+
+#[test]
+fn settings_picks_the_sync_folder_for_the_next_start() {
+    let store = Store::in_memory().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let root_path = std::fs::canonicalize(root.path()).unwrap();
+    let data_dir = DataDir::new(root_path.join("data"));
+    std::fs::create_dir_all(root_path.join("data")).unwrap();
+    std::fs::create_dir_all(root_path.join("sync/compter")).unwrap();
+    SyncDir::save(&data_dir, Some(&root_path.join("sync"))).unwrap();
+    let mut app = settings_app(&store, data_dir.clone());
+    let shown = screen(&app, W, H);
+    assert!(shown.contains("x stops"), "{shown}");
+
+    // Opens in the saved folder; Enter goes into compter/, Space chooses it
+    app.handle_key(Key::Char('s'));
+    assert!(screen(&app, W, H).contains("compter/"));
+    app.handle_key(Key::Enter);
+    app.handle_key(Key::Char(' '));
+    let shown = screen(&app, W, H);
+    assert!(shown.contains("from the next start"), "{shown}");
+    assert_eq!(
+        SyncDir::saved(&data_dir).unwrap(),
+        Some(SyncDir::new(root_path.join("sync/compter")))
+    );
+
+    // Up twice to the root, then the data folder is refused and the picker stays open
+    app.handle_key(Key::Char('s'));
+    app.handle_key(Key::Backspace);
+    app.handle_key(Key::Backspace);
+    app.handle_key(Key::Char('k'));
+    app.handle_key(Key::Enter);
+    app.handle_key(Key::Char(' '));
+    let shown = screen(&app, W, H);
+    assert!(shown.contains("must not be inside"), "{shown}");
+    app.handle_key(Key::Esc);
+
+    app.handle_key(Key::Char('x'));
+    let shown = screen(&app, W, H);
+    assert!(shown.contains("Sync turned off"), "{shown}");
+    assert!(shown.contains("Sync folder     off"), "{shown}");
+    assert!(SyncDir::saved(&data_dir).unwrap().is_none());
+    app.handle_key(Key::Char('x'));
+    assert!(screen(&app, W, H).contains("already off"));
 }

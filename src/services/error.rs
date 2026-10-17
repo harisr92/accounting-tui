@@ -3,6 +3,7 @@ use accounting_core::{LedgerError, PdfError};
 use super::InvoicingError;
 use crate::domain::DomainError;
 use crate::storage::StorageError;
+use crate::storage::sync::SyncError;
 
 /// A use-case failed: a domain rule, invoicing prerequisites, the ledger, PDF output or storage
 #[derive(Debug, thiserror::Error)]
@@ -41,6 +42,10 @@ pub enum ServiceError {
     },
     #[error("logo {0} is missing from the database")]
     MissingLogo(crate::domain::LogoId),
+    #[error(transparent)]
+    Sync(#[from] SyncError),
+    #[error("sync is off in demo mode")]
+    NoSyncInDemo,
     #[error("could not open {path} in a PDF viewer")]
     OpenPdf {
         path: std::path::PathBuf,

@@ -1,6 +1,7 @@
 mod alignment_tests;
 mod draw_tests;
 mod filter_tests;
+mod folder_picker_tests;
 mod form_tests;
 mod invoicing_view_tests;
 mod key_tests;

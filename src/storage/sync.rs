@@ -54,6 +54,10 @@ pub enum SyncError {
     NoSnapshot(PathBuf),
     #[error("there is no database on this device to publish")]
     NoLocalDatabase,
+    #[error("{0} is not a folder")]
+    NotAFolder(PathBuf),
+    #[error("the sync folder and compter's data folder {0} must not be inside one another")]
+    InsideDataDir(PathBuf),
     #[error("could not read or write {path}")]
     Io {
         path: PathBuf,
@@ -81,11 +85,41 @@ impl SyncDir {
         Self { root: root.into() }
     }
 
-    /// `$COMPTER_SYNC_DIR`; syncing is off when it isn't set
+    /// `$COMPTER_SYNC_DIR`, which overrides the folder saved in Settings
     pub fn from_env() -> Option<Self> {
         env::var_os("COMPTER_SYNC_DIR")
             .filter(|value| !value.is_empty())
             .map(Self::new)
+    }
+
+    /// The folder this device syncs through: `env` (see [`Self::from_env`]), else the one saved
+    /// in Settings; syncing is off when neither is set
+    pub fn configured(
+        data: &DataDir,
+        env: Option<Self>,
+    ) -> Result<Option<(Self, SyncSource)>, SyncError> {
+        if let Some(dir) = env {
+            return Ok(Some((dir, SyncSource::Env)));
+        }
+        Ok(Self::saved(data)?.map(|dir| (dir, SyncSource::Settings)))
+    }
+
+    /// The folder saved in Settings on this device
+    pub fn saved(data: &DataDir) -> Result<Option<Self>, SyncError> {
+        let settings = read_json::<DeviceSettings>(&data.device_settings_path())?;
+        Ok(settings.and_then(|s| s.sync_dir).map(Self::new))
+    }
+
+    /// Sync this device through `dir` from the next start, or stop syncing when `None`. The
+    /// folder must exist and be apart from the data folder, whose database it would clash with.
+    pub fn save(data: &DataDir, dir: Option<&Path>) -> Result<(), SyncError> {
+        if let Some(dir) = dir {
+            check_folder(data, dir)?;
+        }
+        let path = data.device_settings_path();
+        let mut settings = read_json::<DeviceSettings>(&path)?.unwrap_or_default();
+        settings.sync_dir = dir.map(Path::to_path_buf);
+        write_json(&path, &settings)
     }
 
     pub fn root(&self) -> &Path {
@@ -116,6 +150,36 @@ impl SyncDir {
         found.sort();
         found
     }
+}
+
+/// Where the sync folder in use was set
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncSource {
+    /// `$COMPTER_SYNC_DIR`, which overrides Settings
+    Env,
+    Settings,
+}
+
+/// What this device keeps in `device.json`
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct DeviceSettings {
+    #[serde(default)]
+    sync_dir: Option<PathBuf>,
+}
+
+fn check_folder(data: &DataDir, dir: &Path) -> Result<(), SyncError> {
+    let folder = fs::canonicalize(dir)
+        .ok()
+        .filter(|folder| folder.is_dir())
+        .ok_or_else(|| SyncError::NotAFolder(dir.to_path_buf()))?;
+    // The data folder may not exist yet on a first start; then nothing can overlap it
+    let Ok(home) = fs::canonicalize(data.root()) else {
+        return Ok(());
+    };
+    if folder.starts_with(&home) || home.starts_with(&folder) {
+        return Err(SyncError::InsideDataDir(data.root().to_path_buf()));
+    }
+    Ok(())
 }
 
 fn is_conflict_copy(name: &str) -> bool {

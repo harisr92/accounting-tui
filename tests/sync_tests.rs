@@ -4,7 +4,9 @@ use std::fs;
 
 use chrono::{Duration, Utc};
 use compter_tui::domain::{Billing, Project};
-use compter_tui::storage::sync::{Lease, Manifest, Resolution, SyncDir, SyncError, SyncSession};
+use compter_tui::storage::sync::{
+    Lease, Manifest, Resolution, SyncDir, SyncError, SyncSession, SyncSource,
+};
 use compter_tui::storage::{DataDir, ProjectRepository, StorageError, Store};
 use tempfile::TempDir;
 
@@ -270,4 +272,44 @@ fn keeping_a_half_synced_snapshot_leaves_the_local_copy_in_place() {
         !sync.lease_path().exists(),
         "a failed resolve releases the lease"
     );
+}
+
+#[test]
+fn the_folder_saved_in_settings_is_used_unless_the_variable_overrides_it() {
+    let device = Device::new("laptop");
+    let (_folder, sync) = sync_dir();
+    assert!(SyncDir::configured(&device.data, None).unwrap().is_none());
+
+    SyncDir::save(&device.data, Some(sync.root())).unwrap();
+    assert_eq!(
+        SyncDir::configured(&device.data, None).unwrap(),
+        Some((sync.clone(), SyncSource::Settings))
+    );
+    let other = tempfile::tempdir().unwrap();
+    assert_eq!(
+        SyncDir::configured(&device.data, Some(SyncDir::new(other.path()))).unwrap(),
+        Some((SyncDir::new(other.path()), SyncSource::Env))
+    );
+
+    SyncDir::save(&device.data, None).unwrap();
+    assert!(SyncDir::saved(&device.data).unwrap().is_none());
+}
+
+#[test]
+fn a_sync_folder_must_exist_and_stay_apart_from_the_data() {
+    let device = Device::new("laptop");
+    let missing = device.data.root().parent().unwrap().join("no-such-folder");
+    assert!(matches!(
+        SyncDir::save(&device.data, Some(&missing)),
+        Err(SyncError::NotAFolder(_))
+    ));
+    let inside = device.data.root().join("sync");
+    fs::create_dir_all(&inside).unwrap();
+    for folder in [device.data.root(), inside.as_path()] {
+        assert!(matches!(
+            SyncDir::save(&device.data, Some(folder)),
+            Err(SyncError::InsideDataDir(_))
+        ));
+    }
+    assert!(SyncDir::saved(&device.data).unwrap().is_none());
 }

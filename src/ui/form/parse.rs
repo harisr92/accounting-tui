@@ -64,6 +64,14 @@ pub fn duration_minutes(input: &str) -> ParseResult<u32> {
     from_hours.checked_add(minutes).ok_or(INVALID)
 }
 
+/// `$HOME`, or `%USERPROFILE%` on Windows: what a leading `~` stands for
+pub fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .filter(|home| !home.is_empty())
+        .map(PathBuf::from)
+}
+
 /// Trimmed text, or `None` when blank
 pub fn optional(input: &str) -> Option<String> {
     let input = input.trim();
@@ -82,10 +90,9 @@ pub fn path(input: &str) -> Option<PathBuf> {
     if input.is_empty() {
         return None;
     }
-    let home = || std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
     let expanded = match input.strip_prefix('~') {
         Some(rest) if rest.is_empty() || rest.starts_with(['/', '\\']) => {
-            home().map(|home| PathBuf::from(home).join(rest.trim_start_matches(['/', '\\'])))
+            home_dir().map(|home| home.join(rest.trim_start_matches(['/', '\\'])))
         }
         _ => None,
     };

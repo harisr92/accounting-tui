@@ -54,6 +54,7 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - A logical write that touches several tables (a project + its summary) happens in **one** write transaction. Return before `commit()` to abort.
 - redb's per-operation errors convert into `StorageError` via `?`. Map `StorageError` to accounting-core errors with `LedgerError::from`.
 - accounting-core's store traits are async; we implement them with sync redb calls and drive them with `pollster::block_on`. Don't add an async runtime.
+- Settings that belong to one device (the sync folder) live in `device.json` in the data dir, not in redb: sync runs before the store opens, and the database travels between devices. Read and write them only through `storage::sync` (`SyncDir::saved` / `save`), via `PreferencesService`. `$COMPTER_SYNC_DIR` overrides the saved folder; it is read only in `main.rs` and injected.
 - Tests use `Store::in_memory()`. Tests that reopen the file use `tempfile` and go in the top-level `tests/`.
 
 ## Invoicing
@@ -107,7 +108,7 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - Searchable lists use `ui::filter::Filter` (`/` opens it, `Esc` clears it) and keep a `visible: Vec<usize>` of positions into their rows; the selection moves over `visible`.
 - Archived projects (`Project::archive`, finished only) stay in storage and reports; only the Projects list hides them.
 - Key hints are defined once as `&'static [KeyHint]`. The footer and the help popup both render from that one slice. The footer always shows `FOOTER_HINTS` (`? help · q quit`) on the right; view hints fill the left and may be cut off on narrow screens.
-- All input goes through `ui::form`: build a `Form` from `Field::text` / `Field::choice`, and use `Confirm` before anything irreversible. Don't write another text-input widget.
+- All input goes through `ui::form`: build a `Form` from `Field::text` / `Field::choice`, use `Confirm` before anything irreversible, and `FolderPicker` (run with `step`, like a form) to choose a folder. Don't write another text-input widget.
 - Parse what the user typed only in `ui/form/parse.rs` (money, dates, durations, optional text). Give a field a live `with_preview` when its input could be misread (durations).
 - Modals belong to the view that opened them. While one is open the view takes **every** key, so typing never triggers shortcuts. Only `Ctrl-c` is handled by `App` first.
 - Run forms through `Form::step(key, submit)`: it handles cancel, submit, and keeping the form open with the error on a failed submit. Errors outside forms go to the footer as `Notice::error`.

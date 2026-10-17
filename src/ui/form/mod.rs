@@ -1,11 +1,13 @@
-//! Modal input: a vertical list of fields, and a yes/no confirmation
+//! Modal input: a vertical list of fields, a yes/no confirmation, and a folder picker
 
 mod confirm;
 mod field;
+mod folder_picker;
 pub mod parse;
 
 pub use confirm::Confirm;
 pub use field::{Field, Preview};
+pub use folder_picker::{FolderPicker, PickerEvent};
 
 use crate::ui::key::Key;
 use ratatui::Frame;

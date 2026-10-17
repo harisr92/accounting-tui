@@ -65,6 +65,12 @@ impl DataDir {
         self.root.join("sync.json")
     }
 
+    /// Settings that belong to this device rather than the business, like the sync folder. Kept
+    /// out of the database, which is replaced when a snapshot is pulled, and never published.
+    pub fn device_settings_path(&self) -> PathBuf {
+        self.root.join("device.json")
+    }
+
     /// `<root>/compter.conflict-20261017-093000.redb`: the local copy a resolved conflict replaced
     pub fn conflict_backup_path(&self, at: DateTime<Utc>) -> PathBuf {
         self.root.join(format!(
