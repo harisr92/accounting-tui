@@ -139,8 +139,10 @@ impl<R> ProjectsView<R> {
         // display row is its index plus the entry rows shown above it
         let mut rows = Vec::with_capacity(project.milestones().len());
         let mut selected_row = None;
+        let mut selected_end = 0;
         for (index, m) in project.milestones().iter().enumerate() {
-            if index == self.milestone_sel.index() {
+            let selected = index == self.milestone_sel.index();
+            if selected {
                 selected_row = Some(rows.len());
             }
             let currency = project.currency();
@@ -150,14 +152,25 @@ impl<R> ProjectsView<R> {
             if self.open_logs.contains(&m.id()) {
                 rows.extend(time_log_rows(m, &columns, theme));
             }
+            if selected {
+                selected_end = rows.len();
+            }
         }
+        // Scroll so the selected milestone's open log is visible too, keeping the milestone
+        // itself on screen when its log is taller than the panel (borders and header take 3)
+        let visible = usize::from(area.height.saturating_sub(3));
+        let offset = selected_end
+            .saturating_sub(visible)
+            .min(selected_row.unwrap_or_default());
         let table = Table::new(rows, columns.iter().map(|c| c.width()))
             .header(header(&titles, &right, theme))
             .column_spacing(1)
             .block(block)
             .row_highlight_style(theme.selected)
             .highlight_symbol("> ");
-        let mut state = TableState::default().with_selected(selected_row);
+        let mut state = TableState::default()
+            .with_offset(offset)
+            .with_selected(selected_row);
         frame.render_stateful_widget(table, area, &mut state);
     }
 }

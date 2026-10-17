@@ -231,3 +231,15 @@ fn fixed_price_milestones_have_no_log() {
     type_keys(&mut app, "\to");
     assert!(screen(&app, W, H).contains("Fixed-price milestones have no time log"));
 }
+
+#[test]
+fn opening_a_log_at_the_bottom_scrolls_it_into_view() {
+    let store = demo::store().unwrap();
+    let mut app = mobile_app(&store);
+    // At this height Beta is the last row the milestone panel shows
+    const SHORT: u16 = 15;
+    type_keys(&mut app, "jo");
+    let screen = screen(&app, W, SHORT);
+    assert!(screen.contains("> Beta"), "{screen}");
+    assert!(screen.contains("└ "), "{screen}");
+}
