@@ -53,6 +53,12 @@ impl App {
         }
     }
 
+    /// Show `notice` in the footer, as a view's `Action::Notify` would
+    pub fn notify(&mut self, notice: Notice) {
+        self.notice = Some((notice, NOTICE_TICKS));
+        self.dirty = true;
+    }
+
     pub fn is_running(&self) -> bool {
         self.running
     }

@@ -278,6 +278,7 @@ src/
 │   ├── migrations.rs    upgrade steps between schema versions
 │   ├── files.rs         atomic file writes (invoice PDFs)
 │   ├── data_dir.rs      where compter.redb and invoices/ live
+│   ├── sync.rs          hand the database between devices through a synced folder
 │   └── error.rs         StorageError
 ├── domain/              pure types and rules
 │   ├── project.rs       Project, ClientDetails/ClientRegion, ProjectStatus, mutations
@@ -351,6 +352,29 @@ Everything lives in one [redb](https://www.redb.org) database file, `compter.red
 - `store.ledger()`: an accounting-core `AccountStore` + `TransactionStore`, so `Ledger::new(store.ledger())` works directly
 
 The app opens the file on start, before the terminal is taken over, so an error like "already open" prints normally.
+
+### Using several devices
+
+Don't put `compter.redb` itself in Google Drive, OneDrive, Dropbox or iCloud. redb's lock only works on one machine, a sync client can upload the file halfway through a write, and edits made on two devices become a "conflict copy" that silently drops one side. Invoice numbers have to stay sequential, so two devices' changes can't be merged either.
+
+Instead, point `COMPTER_SYNC_DIR` at a synced folder, on every device:
+
+```bash
+export COMPTER_SYNC_DIR="$HOME/Library/CloudStorage/GoogleDrive-you@example.com/My Drive/compter-sync"
+```
+
+Each device keeps its own database in its data folder. compter hands it over through the synced folder:
+
+- **On exit**, if the database changed, compter copies it to `compter.redb` in the synced folder, then writes `manifest.json`, which numbers the snapshot and records its SHA-256.
+- **On start**, if the manifest is newer than what this device last synced, compter pulls in the snapshot. It does this only when the local copy is unchanged since then, and only once the snapshot's hash matches the manifest, so a half-synced file is never used.
+- **While open**, `lease.json` names the device using compter and is refreshed every minute. Another device refuses to start while it's fresh, and takes it over after 5 minutes (a crash). Name devices with `COMPTER_DEVICE`; the host name is the default.
+
+**Quit compter on one device, and wait for the sync client, before opening it on another.** If both devices changed the data anyway, compter refuses to open and tells you. Settle it on the device you are at:
+
+- `compter sync --keep-remote` replaces this device's data with the snapshot, and keeps the old file as `compter.conflict-<time>.redb`.
+- `compter sync --keep-local` publishes this device's data as the newest snapshot.
+
+Conflict copies made by the sync client (`compter (1).redb` and the like) are never read; compter shows a warning in the footer when it finds them. Invoice PDFs and returns stay in each device's data folder.
 
 ## Roadmap
 
