@@ -2,6 +2,8 @@ use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+use chrono::{DateTime, Utc};
+
 use super::StorageError;
 
 const DATABASE_FILE: &str = "compter.redb";
@@ -56,6 +58,19 @@ impl DataDir {
 
     pub fn database_path(&self) -> PathBuf {
         self.root.join(DATABASE_FILE)
+    }
+
+    /// What this device's database was last synced from, see `storage::sync`
+    pub fn sync_state_path(&self) -> PathBuf {
+        self.root.join("sync.json")
+    }
+
+    /// `<root>/compter.conflict-20261017-093000.redb`: the local copy a resolved conflict replaced
+    pub fn conflict_backup_path(&self, at: DateTime<Utc>) -> PathBuf {
+        self.root.join(format!(
+            "compter.conflict-{}.redb",
+            at.format("%Y%m%d-%H%M%S")
+        ))
     }
 
     /// `<root>/returns/2026-27/GSTR1-Q2-2026-27.json`

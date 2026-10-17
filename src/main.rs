@@ -17,16 +17,22 @@ use compter_tui::cli;
 use compter_tui::demo;
 use compter_tui::event::{Event, Events};
 use compter_tui::services::{ExpenseService, InvoiceService, PreferencesService, ReportService};
+use compter_tui::storage::sync::{self, Resolution, SyncDir, SyncSession};
 use compter_tui::storage::{DataDir, Store};
 use compter_tui::ui::views::{
     DashboardView, ExpensesView, InvoicesView, ProjectsView, ReportsView, SettingsView,
 };
-use compter_tui::ui::{self, theme::Theme, view::View};
+use compter_tui::ui::{
+    self,
+    theme::Theme,
+    view::{Notice, View},
+};
 
 const TICK_RATE: Duration = Duration::from_millis(250);
 
 const USAGE: &str = "usage: compter [--demo] [-V | --version] [-h | --help]
        compter import-merges <repo> <project> [--dry-run]
+       compter sync (--keep-local | --keep-remote)
 
   --demo           try compter on sample projects kept in memory; nothing is saved
   -V, --version    display version information
@@ -34,14 +40,23 @@ const USAGE: &str = "usage: compter [--demo] [-V | --version] [-h | --help]
 
   import-merges    add a milestone to an hourly project for each merge into the main branch
                    of a git repository, timed from the previous merge (8h at most across days)
+  sync             settle a conflict between devices: publish this device's data, or replace it
+                   with the synced snapshot (the old file is kept as compter.conflict-*.redb)
 
 Data is stored in $COMPTER_HOME, $XDG_DATA_HOME/compter, or else %APPDATA%\\compter on Windows
-and ~/.local/share/compter elsewhere.";
+and ~/.local/share/compter elsewhere.
+
+To use several devices, set $COMPTER_SYNC_DIR to a folder Google Drive, OneDrive, Dropbox or
+iCloud syncs. compter publishes a snapshot there on exit and picks up a newer one on start;
+quit compter on one device before opening it on another.";
 
 fn main() -> Result<ExitCode> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("import-merges") {
         return import_merges(&args[1..]);
+    }
+    if args.first().map(String::as_str) == Some("sync") {
+        return resolve_sync(&args[1..]);
     }
     let mut demo_mode = false;
     for arg in &args {
@@ -64,7 +79,21 @@ fn main() -> Result<ExitCode> {
 
     install_hooks()?;
     // Open the database before raw mode, so errors like "already open" print normally
-    let (store, data_dir) = open_store(demo_mode)?;
+    let Opened {
+        store,
+        data_dir,
+        sync,
+    } = open_store(demo_mode)?;
+    let notice = sync.as_ref().and_then(conflict_notice);
+    let result = run_tui(&store, data_dir, notice);
+    if let Some(session) = sync {
+        finish_sync(session, store)?;
+    }
+    result.map(|()| ExitCode::SUCCESS)
+}
+
+/// Build the tabs and run them; every repository is dropped on return, so the store can close
+fn run_tui(store: &Store, data_dir: Option<DataDir>, notice: Option<Notice>) -> Result<()> {
     let repo = store.repository();
     let invoices = || InvoiceService::new(repo.clone(), data_dir.clone());
     let projects =
@@ -93,12 +122,15 @@ fn main() -> Result<ExitCode> {
         Box::new(settings),
     ];
     let mut app = App::with_colour(views, Theme::new(appearance, no_color), no_color);
+    if let Some(notice) = notice {
+        app.notify(notice);
+    }
 
     enable_raw_mode()?;
     // Restore even when setup or the loop fails, so the shell isn't left in raw mode
     let result = run_fullscreen(&mut app);
     restore_terminal()?;
-    result.map(|()| ExitCode::SUCCESS)
+    result
 }
 
 fn run_fullscreen(app: &mut App) -> Result<()> {
@@ -115,21 +147,85 @@ fn import_merges(args: &[String]) -> Result<ExitCode> {
         eprintln!("import-merges needs a repository and a project name\n\n{USAGE}");
         return Ok(ExitCode::from(2));
     };
-    let (store, _) = open_store(false)?;
-    cli::import_merges(&store, Path::new(repo.as_str()), project, dry_run)?;
+    let Opened { store, sync, .. } = open_store(false)?;
+    let result = cli::import_merges(&store, Path::new(repo.as_str()), project, dry_run);
+    if let Some(session) = sync {
+        finish_sync(session, store)?;
+    }
+    result?;
     Ok(ExitCode::SUCCESS)
 }
 
-/// The database, and the folder invoice PDFs go in (none in demo mode)
-fn open_store(demo_mode: bool) -> Result<(Store, Option<DataDir>)> {
+/// `compter sync (--keep-local | --keep-remote)`
+fn resolve_sync(args: &[String]) -> Result<ExitCode> {
+    let resolution = match args {
+        [flag] if flag == "--keep-local" => Resolution::KeepLocal,
+        [flag] if flag == "--keep-remote" => Resolution::KeepRemote,
+        _ => {
+            eprintln!("sync needs --keep-local or --keep-remote\n\n{USAGE}");
+            return Ok(ExitCode::from(2));
+        }
+    };
+    let Some(sync_dir) = SyncDir::from_env() else {
+        eprintln!("COMPTER_SYNC_DIR is not set, so there is nothing to sync");
+        return Ok(ExitCode::from(2));
+    };
+    let dir = DataDir::from_env()?;
+    SyncSession::resolve(&dir, &sync_dir, &sync::device_name_from_env(), resolution)?;
+    println!("synced with {}", sync_dir.root().display());
+    Ok(ExitCode::SUCCESS)
+}
+
+/// An open database, with the sync session that must publish it on exit
+struct Opened {
+    store: Store,
+    /// The folder invoice PDFs go in (none in demo mode)
+    data_dir: Option<DataDir>,
+    sync: Option<SyncSession>,
+}
+
+/// The database, brought up to date from `$COMPTER_SYNC_DIR` first when that is set
+fn open_store(demo_mode: bool) -> Result<Opened> {
     if demo_mode {
         let store = demo::store().wrap_err("could not build the demo data")?;
-        return Ok((store, None));
+        return Ok(Opened {
+            store,
+            data_dir: None,
+            sync: None,
+        });
     }
     let dir = DataDir::from_env()?;
+    let sync = SyncDir::from_env()
+        .map(|sync_dir| SyncSession::begin(&dir, sync_dir, sync::device_name_from_env()))
+        .transpose()?;
     let store = Store::open(&dir)
         .wrap_err_with(|| format!("could not open {}", dir.database_path().display()))?;
-    Ok((store, Some(dir)))
+    Ok(Opened {
+        store,
+        data_dir: Some(dir),
+        sync,
+    })
+}
+
+/// Tell the user about conflict copies a sync client left, which compter never reads
+fn conflict_notice(session: &SyncSession) -> Option<Notice> {
+    let copies = session.conflict_copies();
+    let first = copies.first()?;
+    Some(Notice::error(format!(
+        "sync folder has {} conflict cop{} ({first}); compter ignores them",
+        copies.len(),
+        if copies.len() == 1 { "y" } else { "ies" },
+    )))
+}
+
+fn finish_sync(session: SyncSession, store: Store) -> Result<()> {
+    if let Some(generation) = session
+        .finish(store)
+        .wrap_err("could not publish to the sync folder; your data is safe on this device")?
+    {
+        println!("published snapshot {generation} to the sync folder");
+    }
+    Ok(())
 }
 
 fn run<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut App) -> Result<()>

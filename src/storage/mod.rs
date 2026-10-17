@@ -9,6 +9,7 @@ mod migrations;
 mod redb_repository;
 mod repository;
 mod store;
+pub mod sync;
 mod tables;
 
 pub use data_dir::DataDir;

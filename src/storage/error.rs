@@ -19,6 +19,8 @@ pub enum StorageError {
     },
     #[error("the database is already open in another compter process")]
     AlreadyOpen,
+    #[error("the database is still in use and can't be closed")]
+    StillInUse,
     #[error(
         "database schema version {0} is newer than this compter supports ({SCHEMA_VERSION}); upgrade compter"
     )]

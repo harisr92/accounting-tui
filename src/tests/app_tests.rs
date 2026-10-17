@@ -2,7 +2,7 @@ use crate::ui::key::Key;
 
 use crate::app::App;
 use crate::ui::theme::Theme;
-use crate::ui::view::View;
+use crate::ui::view::{Notice, View};
 use crate::ui::views::PlaceholderView;
 
 fn app() -> App {
@@ -43,4 +43,20 @@ fn quits() {
     let mut app = app();
     app.handle_key(Key::Char('q'));
     assert!(!app.is_running());
+}
+
+#[test]
+fn startup_notice_shows_until_it_times_out() {
+    let mut app = app();
+    app.take_dirty();
+    app.notify(Notice::error("sync folder has 1 conflict copy"));
+    assert!(app.take_dirty());
+    assert_eq!(
+        app.notice(),
+        Some(&Notice::error("sync folder has 1 conflict copy"))
+    );
+    for _ in 0..20 {
+        app.on_tick();
+    }
+    assert_eq!(app.notice(), None);
 }

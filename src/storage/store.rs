@@ -47,6 +47,13 @@ impl Store {
         RedbLedgerStorage::new(Arc::clone(&self.db))
     }
 
+    /// Close the file, so it can be copied. Fails while a repository still shares it.
+    pub fn close(self) -> Result<(), StorageError> {
+        Arc::try_unwrap(self.db)
+            .map(drop)
+            .map_err(|_| StorageError::StillInUse)
+    }
+
     #[cfg(test)]
     pub(super) fn database(&self) -> &Database {
         &self.db
