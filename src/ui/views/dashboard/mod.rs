@@ -47,7 +47,7 @@ impl<R: Repository> DashboardView<R> {
             .invoices
             .list()?
             .into_iter()
-            .filter(|s| !s.is_paid())
+            .filter(|s| !s.is_settled())
             .collect();
         unpaid.reverse();
         self.unpaid = unpaid;

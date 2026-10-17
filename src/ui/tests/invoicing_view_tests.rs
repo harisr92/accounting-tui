@@ -327,3 +327,81 @@ fn a_logo_waits_for_the_business_details() {
     let shown = screen(&app, W, H);
     assert!(shown.contains("before a logo"), "{shown}");
 }
+
+#[test]
+fn a_credit_note_is_confirmed_then_cancels_the_invoice() {
+    let (store, project) = store_with_milestone(true);
+    let mut app = invoicing_app(&store);
+    type_keys(&mut app, "\tiy");
+    app.handle_key(Key::Char('2'));
+
+    // A reason is required
+    app.handle_key(Key::Char('c'));
+    app.handle_key(Key::Enter);
+    let missing = screen(&app, W, H);
+    assert!(missing.contains("reason for the credit note"), "{missing}");
+
+    // Prefilled with the whole taxable value
+    type_keys(&mut app, "\t\tBilled in error\n");
+    let question = screen(&app, W, H);
+    assert!(question.contains("Issue CN/"), "{question}");
+    assert!(question.contains("₹59,000.00"), "{question}");
+    assert_eq!(
+        store.repository().list_invoices().unwrap()[0].status(),
+        InvoiceStatus::Issued
+    );
+
+    app.handle_key(Key::Char('y'));
+    let after = screen(&app, W, H);
+    assert!(after.contains("Issued credit note CN/"), "{after}");
+    assert!(after.contains("CREDITED"), "{after}");
+    assert!(after.contains("CN/26-27/001"), "{after}");
+    assert_eq!(
+        store.repository().list_invoices().unwrap()[0].status(),
+        InvoiceStatus::Credited
+    );
+    assert_eq!(
+        milestone_status(&store, &project),
+        MilestoneStatus::Credited
+    );
+
+    // Nothing is left to credit
+    app.handle_key(Key::Char('c'));
+    assert!(screen(&app, W, H).contains("Nothing is due"));
+
+    // Projects shows it as credited, not paid
+    app.handle_key(Key::Char('1'));
+    let projects = screen(&app, W, H);
+    assert!(projects.contains("CREDITED"), "{projects}");
+    assert!(projects.contains("Credited"), "{projects}");
+}
+
+#[test]
+fn search_narrows_invoices() {
+    let (store, _) = store_with_milestone(true);
+    let mut app = invoicing_app(&store);
+    type_keys(&mut app, "\tiy");
+    app.handle_key(Key::Char('2'));
+    app.handle_key(Key::Char('/'));
+    type_keys(&mut app, "globex\n");
+    let screen_text = screen(&app, W, H);
+    assert!(screen_text.contains("No invoices match"), "{screen_text}");
+    app.handle_key(Key::Esc);
+    assert!(screen(&app, W, H).contains("Acme"));
+}
+
+#[test]
+fn settings_switches_and_saves_the_theme() {
+    let (store, _) = store_with_milestone(true);
+    let mut app = invoicing_app(&store);
+    app.handle_key(Key::Char('3'));
+    assert!(screen(&app, W, H).contains("dark"));
+    app.handle_key(Key::Char('t'));
+    let after = screen(&app, W, H);
+    assert!(after.contains("Theme: light"), "{after}");
+    assert_eq!(
+        store.repository().load_appearance().unwrap(),
+        crate::domain::Appearance::Light
+    );
+    assert_eq!(app.theme().key().fg, Some(ratatui::style::Color::Blue));
+}
