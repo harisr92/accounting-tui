@@ -22,6 +22,8 @@ fn dashboard_lists_what_clients_still_owe() {
         assert!(screen.contains(unpaid), "missing {unpaid}");
     }
     assert!(!screen.contains("NDC/26-27/002"), "paid invoice listed");
+    assert!(screen.contains("Invoiced (net)"), "{screen}");
+    assert!(screen.contains("Credit notes"), "{screen}");
 }
 
 #[test]
