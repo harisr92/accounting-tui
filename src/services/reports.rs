@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 
 use bigdecimal::{BigDecimal, Zero};
 
-use crate::domain::{Expense, ExpenseCategory, FiscalYear, Invoice, InvoiceKind, Quarter};
+use crate::domain::{
+    CreditNote, Expense, ExpenseCategory, FiscalYear, Invoice, InvoiceKind, Quarter,
+};
 
 /// Share of gross receipts deemed to be profit under section 44ADA
 pub const PRESUMPTIVE_PERCENT: u32 = 50;
@@ -60,8 +62,12 @@ pub struct ClientYear {
 pub struct YearReport {
     pub year: FiscalYear,
     pub invoice_count: usize,
-    /// Taxable value of invoices dated in the year: the gross receipts for income tax
+    /// Taxable value of invoices dated in the year, less credit notes dated in it: the gross
+    /// receipts for income tax
     pub gross_receipts: BigDecimal,
+    /// Taxable value taken back by credit notes dated in the year (already out of
+    /// `gross_receipts`)
+    pub credited: BigDecimal,
     /// Part of `gross_receipts` from clients abroad
     pub export_receipts: BigDecimal,
     /// Invoice totals including GST, for invoices dated in the year
@@ -114,6 +120,7 @@ impl YearReportBuilder {
                 year,
                 invoice_count: 0,
                 gross_receipts: zero(),
+                credited: zero(),
                 export_receipts: zero(),
                 invoiced_total: zero(),
                 received: zero(),
@@ -176,6 +183,32 @@ impl YearReportBuilder {
             client.received += received;
             client.tds += &payment.tds;
         }
+    }
+
+    /// Count a credit note dated in the year: it takes its value and GST back out of the year's
+    /// billing (the invoice's balance already shows it in `outstanding`)
+    pub fn add_credit_note(&mut self, note: &CreditNote) {
+        if !self.report.year.contains(note.date()) {
+            return;
+        }
+        let amounts = note.inr_amounts();
+        let r = &mut self.report;
+        r.gross_receipts -= &amounts.taxable_value;
+        r.credited += &amounts.taxable_value;
+        r.invoiced_total -= &amounts.total;
+        if note.kind() == InvoiceKind::Export {
+            r.export_receipts -= &amounts.taxable_value;
+        }
+        if let Some(q) = r
+            .quarters
+            .iter_mut()
+            .find(|q| q.quarter.contains(note.date()))
+        {
+            q.cgst -= &amounts.cgst;
+            q.sgst -= &amounts.sgst;
+            q.igst -= &amounts.igst;
+        }
+        self.client(note.client_name()).invoiced -= &amounts.taxable_value;
     }
 
     pub fn add_expenses(&mut self, expenses: &[Expense]) {

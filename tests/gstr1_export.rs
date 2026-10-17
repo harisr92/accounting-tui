@@ -36,7 +36,9 @@ fn quarterly_gstr1_json_is_written() {
         .unwrap();
 
     let reports = ReportService::new(store.repository(), Some(data_dir));
-    let (path, gstr1) = reports.export_gstr1(Quarter::containing(date)).unwrap();
+    let (path, gstr1) = reports
+        .export_gstr1(Quarter::containing(date), &[])
+        .unwrap();
     assert_eq!(
         path,
         dir.path().join("returns/2026-27/GSTR1-Q2-2026-27.json")

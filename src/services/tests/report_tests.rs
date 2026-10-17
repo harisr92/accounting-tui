@@ -77,3 +77,28 @@ fn previous_year_sees_only_the_plain_invoice() {
     );
     assert_eq!(report.outstanding, rupees(0));
 }
+
+#[test]
+fn credit_notes_come_off_the_year_they_are_dated_in() {
+    let store = demo::store().unwrap();
+    let mut invoices = crate::services::InvoiceService::new(store.repository(), None);
+    // Frontend, ₹60,000 + GST, half paid
+    let number = crate::domain::InvoiceNumber::from_stored("NDC/26-27/004");
+    let draft = crate::services::CreditDraft {
+        date: NaiveDate::from_ymd_opt(2027, 1, 15).unwrap(),
+        taxable_value: rupees(10_000),
+        reason: "Discount".to_owned(),
+    };
+    let note = invoices.issue_credit(&number, draft).unwrap().note;
+    let tax = note.amounts().total_tax();
+
+    let reports = ReportService::new(store.repository(), None);
+    let report = reports.year(fy(2026)).unwrap();
+    assert_eq!(report.gross_receipts, rupees(240_750));
+    assert_eq!(report.credited, rupees(10_000));
+    assert_eq!(report.outstanding, rupees(95_285) - rupees(10_000) - &tax);
+    let q4 = &report.quarters[3];
+    assert_eq!(q4.output(), -tax);
+    // The next year is untouched
+    assert_eq!(reports.year(fy(2027)).unwrap().credited, rupees(0));
+}

@@ -1,15 +1,16 @@
-//! Reports tab: a financial year for income tax and GST, and the quarterly GSTR-1 export
+//! Reports tab: a financial year for income tax and GST, the quarterly GSTR-1 export and the
+//! monthly IFF
 
 use crate::ui::key::Key;
 use bigdecimal::Zero;
-use chrono::Local;
+use chrono::{Local, Months, NaiveDate};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Row, Table, Wrap};
 
 use super::year::{self, YearPicker};
-use crate::domain::Quarter;
+use crate::domain::{FiscalYear, Quarter};
 use crate::services::reports::{PRESUMPTIVE_PERCENT, YearReport};
 use crate::services::{ReportService, ServiceError};
 use crate::storage::Repository;
@@ -18,20 +19,36 @@ use crate::ui::theme::{Theme, Tone};
 use crate::ui::view::{Action, KeyHint, Notice, View};
 use crate::ui::widgets::{header, money, panel, stat_tiles};
 
-const HINTS: &[KeyHint] = &[year::HINT, KeyHint::new("g", "export GSTR-1")];
+const HINTS: &[KeyHint] = &[
+    year::HINT,
+    KeyHint::new("g", "export GSTR-1"),
+    KeyHint::new("i", "export IFF"),
+];
 const QUARTER_OPTIONS: &[&str] = &[
     "Q1 (Apr-Jun)",
     "Q2 (Jul-Sep)",
     "Q3 (Oct-Dec)",
     "Q4 (Jan-Mar)",
 ];
+/// Which of the quarter's first two months had their B2B invoices filed in an IFF
+const FURNISHED_OPTIONS: &[&str] = &["neither", "1st month", "2nd month", "both"];
+/// The months an IFF can be filed for: the first two of each quarter
+const IFF_MONTHS: &[&str] = &["Apr", "May", "Jul", "Aug", "Oct", "Nov", "Jan", "Feb"];
+
+const QUARTER: usize = 0;
+const FURNISHED: usize = 1;
+
+/// The export form that is open; it takes every key
+enum Modal {
+    Gstr1(Form),
+    Iff(Form),
+}
 
 pub struct ReportsView<R> {
     service: ReportService<R>,
     year: YearPicker,
     report: Option<YearReport>,
-    /// Quarter picker for the GSTR-1 export
-    form: Option<Form>,
+    modal: Option<Modal>,
 }
 
 impl<R: Repository> ReportsView<R> {
@@ -40,7 +57,7 @@ impl<R: Repository> ReportsView<R> {
             service,
             year: YearPicker::current(),
             report: None,
-            form: None,
+            modal: None,
         };
         view.reload()?;
         Ok(view)
@@ -65,21 +82,67 @@ impl<R: Repository> ReportsView<R> {
     }
 
     fn export(&mut self, form: &Form) -> Result<Notice, String> {
-        let quarter = self.year.year().quarters()[form.choice(0).min(3)];
+        let quarter = self.year.year().quarters()[form.choice(QUARTER).min(3)];
+        let [first, second, _] = quarter.months();
+        let furnished: &[(i32, u32)] = match form.choice(FURNISHED) {
+            1 => &[first],
+            2 => &[second],
+            3 => &[first, second],
+            _ => &[],
+        };
         let (path, gstr1) = self
             .service
-            .export_gstr1(quarter)
+            .export_gstr1(quarter, furnished)
             .map_err(|e| e.to_string())?;
         Ok(Notice::success(format!(
-            "GSTR-1 {} {}: {} tax invoice(s), {} export(s) saved to {}",
+            "GSTR-1 {} {}: {} tax invoice(s), {} export(s), {} credit note(s) saved to {}",
             quarter.label(),
             quarter.year().label(),
             gstr1.tax_invoices,
             gstr1.exports,
-            path.file_name()
-                .map(|f| f.to_string_lossy())
-                .unwrap_or_default()
+            gstr1.credit_notes,
+            file_name(&path)
         )))
+    }
+
+    fn export_iff(&mut self, form: &Form) -> Result<Notice, String> {
+        let choice = form.choice(0).min(IFF_MONTHS.len() - 1);
+        let quarter = self.year.year().quarters()[choice / 2];
+        let month = quarter.months()[choice % 2];
+        let (path, iff) = self.service.export_iff(month).map_err(|e| e.to_string())?;
+        Ok(Notice::success(format!(
+            "IFF {} {}: {} B2B invoice(s), {} credit note(s) saved to {}",
+            IFF_MONTHS[choice],
+            month.0,
+            iff.invoices,
+            iff.credit_notes,
+            file_name(&path)
+        )))
+    }
+
+    /// The IFF month to offer first: the latest first-or-second month that has ended
+    fn default_iff_month(&self) -> usize {
+        let today = Local::now().date_naive();
+        let year = self.year.year();
+        if year > FiscalYear::containing(today) {
+            return 0;
+        }
+        let ended = |(y, m): (i32, u32)| {
+            NaiveDate::from_ymd_opt(y, m, 1).is_some_and(|first| {
+                first
+                    .checked_add_months(Months::new(1))
+                    .is_some_and(|next| next <= today)
+            })
+        };
+        let months: Vec<(i32, u32)> = year
+            .quarters()
+            .iter()
+            .flat_map(|q| {
+                let [first, second, _] = q.months();
+                [first, second]
+            })
+            .collect();
+        months.into_iter().rposition(ended).unwrap_or(0)
     }
 }
 
@@ -112,6 +175,9 @@ impl<R: Repository> View for ReportsView<R> {
             ("TDS", money(&report.tds)),
             ("Outstanding", money(&report.outstanding)),
         ];
+        if !report.credited.is_zero() {
+            income.insert(2, ("Credit notes", money(&report.credited)));
+        }
         if !report.exchange_difference.is_zero() {
             income.push(("Exchange gain", money(&report.exchange_difference)));
         }
@@ -121,16 +187,24 @@ impl<R: Repository> View for ReportsView<R> {
         render_gst(frame, gst_area, report, theme);
         render_clients(frame, clients_area, report, theme);
 
-        if let Some(form) = &self.form {
+        if let Some(Modal::Gstr1(form) | Modal::Iff(form)) = &self.modal {
             form.render(frame, theme);
         }
     }
 
     fn handle_key(&mut self, key: Key) -> Action {
-        if let Some(form) = self.form.take() {
-            let (form, action) = form.step(key, |form| self.export(form));
-            self.form = form;
-            return action;
+        match self.modal.take() {
+            Some(Modal::Gstr1(form)) => {
+                let (form, action) = form.step(key, |form| self.export(form));
+                self.modal = form.map(Modal::Gstr1);
+                return action;
+            }
+            Some(Modal::Iff(form)) => {
+                let (form, action) = form.step(key, |form| self.export_iff(form));
+                self.modal = form.map(Modal::Iff);
+                return action;
+            }
+            None => {}
         }
         if self.year.handle(key) {
             return match self.reload() {
@@ -142,7 +216,17 @@ impl<R: Repository> View for ReportsView<R> {
             Key::Char('g') => {
                 let quarter =
                     Field::choice("Quarter", QUARTER_OPTIONS).with_choice(self.default_quarter());
-                self.form = Some(Form::new("Export GSTR-1", vec![quarter]));
+                let furnished = Field::choice("IFF filed", FURNISHED_OPTIONS);
+                self.modal = Some(Modal::Gstr1(Form::new(
+                    "Export GSTR-1",
+                    vec![quarter, furnished],
+                )));
+                Action::Handled
+            }
+            Key::Char('i') => {
+                let month =
+                    Field::choice("Month", IFF_MONTHS).with_choice(self.default_iff_month());
+                self.modal = Some(Modal::Iff(Form::new("Export IFF (B2B)", vec![month])));
                 Action::Handled
             }
             _ => Action::Ignored,
@@ -150,7 +234,7 @@ impl<R: Repository> View for ReportsView<R> {
     }
 
     fn key_hints(&self) -> &'static [KeyHint] {
-        if self.form.is_some() {
+        if self.modal.is_some() {
             Form::HINTS
         } else {
             HINTS
@@ -160,6 +244,12 @@ impl<R: Repository> View for ReportsView<R> {
     fn on_activate(&mut self) -> Option<Notice> {
         self.reload().err().map(|e| Notice::error(e.to_string()))
     }
+}
+
+fn file_name(path: &std::path::Path) -> std::borrow::Cow<'_, str> {
+    path.file_name()
+        .map(|f| f.to_string_lossy())
+        .unwrap_or_default()
 }
 
 fn render_income_tax(frame: &mut Frame, area: Rect, report: &YearReport, theme: &Theme) {
