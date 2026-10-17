@@ -1,4 +1,4 @@
-use crate::domain::{BusinessProfile, Logo, LogoId, ProfileDraft};
+use crate::domain::{Appearance, BusinessProfile, Logo, LogoId, ProfileDraft};
 use crate::storage::{SettingsRepository, Store};
 
 const PNG_HEADER: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR";
@@ -48,4 +48,15 @@ fn an_unknown_logo_is_none() {
         store.repository().load_logo(LogoId::generate()).unwrap(),
         None
     );
+}
+
+#[test]
+fn the_theme_is_dark_until_one_is_saved() {
+    let store = Store::in_memory().unwrap();
+    let mut repo = store.repository();
+    assert_eq!(repo.load_appearance().unwrap(), Appearance::Dark);
+    repo.save_appearance(Appearance::Light).unwrap();
+    assert_eq!(repo.load_appearance().unwrap(), Appearance::Light);
+    // It is kept apart from the business profile
+    assert!(repo.load_profile().unwrap().is_none());
 }

@@ -5,7 +5,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
 use crate::app::App;
-use crate::services::{ExpenseService, InvoiceService, ReportService};
+use crate::services::{ExpenseService, InvoiceService, PreferencesService, ReportService};
 use crate::storage::Store;
 use crate::ui::draw;
 use crate::ui::theme::Theme;
@@ -27,7 +27,13 @@ pub fn invoicing_app(store: &Store) -> App {
     let views: Vec<Box<dyn View>> = vec![
         Box::new(ProjectsView::new(repo.clone(), None).unwrap()),
         Box::new(InvoicesView::new(InvoiceService::new(repo.clone(), None)).unwrap()),
-        Box::new(SettingsView::new(InvoiceService::new(repo, None)).unwrap()),
+        Box::new(
+            SettingsView::new(
+                InvoiceService::new(repo.clone(), None),
+                PreferencesService::new(repo),
+            )
+            .unwrap(),
+        ),
     ];
     App::new(views, Theme::default())
 }

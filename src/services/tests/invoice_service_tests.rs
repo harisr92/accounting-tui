@@ -320,3 +320,188 @@ fn a_logo_needs_a_profile_first() {
         Err(ServiceError::Invoicing(InvoicingError::NoProfile))
     ));
 }
+
+fn credit(taxable: i64, reason: &str) -> crate::services::CreditDraft {
+    crate::services::CreditDraft {
+        date: date(),
+        taxable_value: rupees(taxable),
+        reason: reason.to_owned(),
+    }
+}
+
+#[test]
+fn a_part_credit_reverses_its_share_of_tax_and_lowers_the_balance() {
+    let (store, mut service, project) = setup();
+    let milestone = project.milestones()[0].id();
+    let number = service
+        .issue(project.id(), milestone, date(), None)
+        .unwrap()
+        .invoice
+        .number()
+        .clone();
+
+    let preview = service
+        .preview_credit(&number, credit(10_000, "Discount agreed"))
+        .unwrap();
+    assert_eq!(preview.number.as_str(), "CN/26-27/001");
+    assert_eq!(preview.amounts.igst, rupees(1_800));
+    assert_eq!(preview.balance_after, rupees(47_200));
+    let year = crate::domain::FiscalYear::containing(date());
+    assert_eq!(store.repository().next_credit_sequence(year).unwrap(), 1);
+
+    let credited = service
+        .issue_credit(&number, credit(10_000, "Discount agreed"))
+        .unwrap();
+    assert_eq!(credited.note.number(), &preview.number);
+    assert_eq!(credited.invoice.balance(), rupees(47_200));
+    assert_eq!(credited.invoice.status(), InvoiceStatus::Issued);
+    assert!(credited.note.gst().is_some());
+
+    assert_eq!(balance(&store, chart::RECEIVABLE), rupees(47_200));
+    assert_eq!(balance(&store, chart::IGST_OUTPUT), rupees(7_200));
+    assert_eq!(balance(&store, chart::CREDIT_NOTES), rupees(10_000));
+    let stored = store.repository().load_invoice(&number).unwrap();
+    assert_eq!(stored.credits()[0].number.as_str(), "CN/26-27/001");
+    assert_eq!(
+        store.repository().list_invoices().unwrap()[0].balance(),
+        &rupees(47_200)
+    );
+    // The milestone is still waiting for the rest, which is ₹40,000 before GST
+    let project = store.repository().load(project.id()).unwrap();
+    assert_eq!(project.milestones()[0].status(), MilestoneStatus::Invoiced);
+    assert_eq!(project.milestones()[0].credited(), &rupees(10_000));
+    assert_eq!(project.outstanding_amount(), rupees(40_000));
+}
+
+#[test]
+fn a_full_credit_cancels_the_invoice_and_its_milestone() {
+    let (store, mut service, project) = setup();
+    let milestone = project.milestones()[0].id();
+    let number = service
+        .issue(project.id(), milestone, date(), None)
+        .unwrap()
+        .invoice
+        .number()
+        .clone();
+    let credited = service
+        .issue_credit(&number, credit(50_000, "Billed in error"))
+        .unwrap();
+    assert_eq!(credited.invoice.status(), InvoiceStatus::Credited);
+    assert_eq!(balance(&store, chart::RECEIVABLE), rupees(0));
+    assert!(store.repository().list_invoices().unwrap()[0].is_settled());
+    let project = store.repository().load(project.id()).unwrap();
+    assert_eq!(project.milestones()[0].status(), MilestoneStatus::Credited);
+    // Nothing was received, and nothing is still owed
+    assert_eq!(project.paid_amount(), rupees(0));
+    assert_eq!(project.credited_amount(), rupees(50_000));
+    assert_eq!(project.outstanding_amount(), rupees(0));
+    assert_eq!(project.status(), ProjectStatus::Paid);
+
+    // Nothing is left to credit or pay
+    assert!(service.issue_credit(&number, credit(1, "again")).is_err());
+    assert!(
+        service
+            .record_payment(&number, date(), rupees(1), rupees(0))
+            .is_err()
+    );
+}
+
+#[test]
+fn a_credit_never_refunds_what_was_paid() {
+    let (store, mut service, project) = setup();
+    let milestone = project.milestones()[0].id();
+    let number = service
+        .issue(project.id(), milestone, date(), None)
+        .unwrap()
+        .invoice
+        .number()
+        .clone();
+    // ₹11,800 is still due: ₹10,000 plus IGST
+    service
+        .record_payment(&number, date(), rupees(47_200), rupees(0))
+        .unwrap();
+    assert!(matches!(
+        service.issue_credit(&number, credit(11_000, "Discount")),
+        Err(ServiceError::Domain(
+            DomainError::CreditExceedsBalance { .. }
+        ))
+    ));
+    // The rest can be credited, and that settles it
+    let credited = service
+        .issue_credit(&number, credit(10_000, "Write off the rest"))
+        .unwrap();
+    assert_eq!(credited.invoice.status(), InvoiceStatus::Paid);
+    assert_eq!(balance(&store, chart::RECEIVABLE), rupees(0));
+    let project = store.repository().load(project.id()).unwrap();
+    assert_eq!(project.milestones()[0].status(), MilestoneStatus::Paid);
+    // Paid counts only what was received: ₹50,000 billed, ₹10,000 of it credited
+    assert_eq!(project.paid_amount(), rupees(40_000));
+    assert_eq!(project.credited_amount(), rupees(10_000));
+    assert_eq!(project.outstanding_amount(), rupees(0));
+}
+
+#[test]
+fn credits_on_a_foreign_invoice_are_at_its_rate_without_gst() {
+    let store = Store::in_memory().unwrap();
+    let mut service = InvoiceService::new(store.repository(), None);
+    service
+        .save_profile(profile_draft(Some(SELLER_GSTIN), Some("AD2904260000001")))
+        .unwrap();
+    let project = fixed_project(foreign_client(Currency::Eur), 1_000);
+    store.repository().save(&project).unwrap();
+    let rate = ExchangeRate::new(BigDecimal::from(90)).unwrap();
+    let number = service
+        .issue(
+            project.id(),
+            project.milestones()[0].id(),
+            date(),
+            Some(rate),
+        )
+        .unwrap()
+        .invoice
+        .number()
+        .clone();
+
+    let credited = service
+        .issue_credit(&number, credit(1_000, "Cancelled"))
+        .unwrap();
+    assert!(credited.note.gst().is_none());
+    assert_eq!(credited.note.currency(), Currency::Eur);
+    assert_eq!(credited.note.inr_amounts().total, rupees(90_000));
+    assert_eq!(credited.invoice.status(), InvoiceStatus::Credited);
+    assert_eq!(balance(&store, chart::RECEIVABLE), rupees(0));
+    assert_eq!(balance(&store, chart::CREDIT_NOTES), rupees(90_000));
+}
+
+#[test]
+fn credit_notes_close_on_30_november_after_the_invoice_year() {
+    let (_store, mut service, project) = setup();
+    let number = service
+        .issue(project.id(), project.milestones()[0].id(), date(), None)
+        .unwrap()
+        .invoice
+        .number()
+        .clone();
+    // Invoiced in FY 2026-27, so the last day is 30 November 2027
+    let late = crate::services::CreditDraft {
+        date: chrono::NaiveDate::from_ymd_opt(2027, 12, 1).unwrap(),
+        ..credit(1_000, "Late discount")
+    };
+    assert!(matches!(
+        service.preview_credit(&number, late),
+        Err(ServiceError::Invoicing(InvoicingError::CreditNoteTooLate(day)))
+            if day == chrono::NaiveDate::from_ymd_opt(2027, 11, 30).unwrap()
+    ));
+}
+
+#[test]
+fn invoices_cannot_take_the_credit_note_prefix() {
+    let store = Store::in_memory().unwrap();
+    let mut service = InvoiceService::new(store.repository(), None);
+    let mut draft = profile_draft(Some(SELLER_GSTIN), None);
+    draft.invoice_prefix = "cn".to_owned();
+    assert!(matches!(
+        service.save_profile(draft),
+        Err(ServiceError::Domain(DomainError::ReservedInvoicePrefix(_)))
+    ));
+}

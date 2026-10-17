@@ -40,6 +40,10 @@ pub enum InvoicingError {
     NotPending,
     #[error("enter the exchange rate (rupees per {0}) to invoice in {0}")]
     MissingExchangeRate(Currency),
+    #[error("a credit note on this invoice had to be issued by {0} (GST section 34)")]
+    CreditNoteTooLate(NaiveDate),
+    #[error("this tax invoice has no GST record to credit")]
+    MissingGstRecord,
     #[error("invoice is not compliant: {}", .0.join("; "))]
     NotCompliant(Vec<String>),
     #[error(transparent)]

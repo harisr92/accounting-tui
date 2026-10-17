@@ -1,0 +1,26 @@
+{
+  "id": "1bb6b2be-7d19-4636-9c5d-a4b44e8ffa2a",
+  "name": "Website",
+  "client_name": "Acme",
+  "client_gstin": "29AAPFU0939F1ZR",
+  "client_region": {
+    "type": "india"
+  },
+  "currency": "INR",
+  "billing": {
+    "type": "fixed"
+  },
+  "milestones": [
+    {
+      "id": "b6969f7d-1d7a-4a70-a8b8-7cca112a0ba8",
+      "name": "Design",
+      "amount": "50000.00",
+      "due_date": "2026-10-15",
+      "status": "CREDITED",
+      "invoice_number": "INV/26-27/001",
+      "credited": "50000.00"
+    }
+  ],
+  "total_amount": "50000.00",
+  "status": "PAID"
+}

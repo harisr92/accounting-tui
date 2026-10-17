@@ -8,10 +8,10 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Wrap};
 
 use crate::domain::{
-    BusinessProfile, Currency, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, FiscalYear, InvoiceNumber,
-    LogoFormat, ProfileDraft,
+    Appearance, BusinessProfile, Currency, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, FiscalYear,
+    InvoiceNumber, LogoFormat, ProfileDraft,
 };
-use crate::services::InvoiceService;
+use crate::services::{InvoiceService, PreferencesService};
 use crate::storage::Repository;
 use crate::ui::form::{Field, Form, parse};
 use crate::ui::theme::Theme;
@@ -21,6 +21,7 @@ use crate::ui::widgets::panel;
 const HINTS: &[KeyHint] = &[
     KeyHint::new("e", "edit business details"),
     KeyHint::new("l", "set logo"),
+    KeyHint::new("t", "next theme"),
 ];
 
 const NAME: usize = 0;
@@ -46,21 +47,29 @@ struct LogoInfo {
     bytes: usize,
 }
 
-/// Shows the business profile; `e` edits it, `l` sets the logo
+/// Shows the business profile; `e` edits it, `l` sets the logo, `t` changes the theme
 pub struct SettingsView<R> {
     service: InvoiceService<R>,
+    preferences: PreferencesService<R>,
     profile: Option<BusinessProfile>,
+    appearance: Appearance,
     logo: Option<LogoInfo>,
     modal: Option<Modal>,
 }
 
 impl<R: Repository> SettingsView<R> {
-    pub fn new(service: InvoiceService<R>) -> Result<Self, crate::services::ServiceError> {
+    pub fn new(
+        service: InvoiceService<R>,
+        preferences: PreferencesService<R>,
+    ) -> Result<Self, crate::services::ServiceError> {
         let profile = service.profile()?;
         let logo = logo_info(&service)?;
+        let appearance = preferences.appearance()?;
         Ok(Self {
             service,
+            preferences,
             profile,
+            appearance,
             logo,
             modal: None,
         })
@@ -69,6 +78,7 @@ impl<R: Repository> SettingsView<R> {
     fn reload(&mut self) -> Result<(), crate::services::ServiceError> {
         self.profile = self.service.profile()?;
         self.logo = logo_info(&self.service)?;
+        self.appearance = self.preferences.appearance()?;
         Ok(())
     }
 
@@ -177,7 +187,7 @@ impl<R: Repository> View for SettingsView<R> {
 
     fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let block = panel("Business profile", false, theme);
-        let lines = match &self.profile {
+        let mut lines = match &self.profile {
             None => vec![
                 Line::raw("Not set up yet."),
                 Line::default(),
@@ -188,6 +198,12 @@ impl<R: Repository> View for SettingsView<R> {
             ],
             Some(p) => profile_lines(p, self.logo, theme),
         };
+        lines.push(Line::default());
+        lines.push(Line::from(vec![
+            Span::styled(format!("{:<16}", "Theme"), theme.dim()),
+            Span::raw(self.appearance.label()),
+            Span::styled("   t switches: dark, light, monochrome", theme.dim()),
+        ]));
         let body = Paragraph::new(lines)
             .wrap(Wrap { trim: false })
             .block(block);
@@ -223,6 +239,13 @@ impl<R: Repository> View for SettingsView<R> {
                 self.modal = Some(Modal::Logo(logo_form()));
                 Action::Handled
             }
+            Key::Char('t') => match self.preferences.next_appearance() {
+                Ok(appearance) => {
+                    self.appearance = appearance;
+                    Action::Theme(appearance)
+                }
+                Err(error) => Action::Notify(Notice::error(error.to_string())),
+            },
             _ => Action::Ignored,
         }
     }

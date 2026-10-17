@@ -1,21 +1,28 @@
-//! Quarterly GSTR-1 (QRMP). accounting-core builds one month at a time, so the quarter is three
-//! monthly returns merged, plus the sections it doesn't cover: exports (table 6A) and a
-//! document summary (table 13) that includes them.
+//! Quarterly GSTR-1 (QRMP), and the monthly IFF. accounting-core builds one month at a time, so
+//! the quarter is three monthly returns merged, plus the sections it doesn't cover: exports
+//! (table 6A), credit notes on exports (9B `cdnur`, `EXPWOP`) and a document summary (table 13)
+//! that includes them.
+//!
+//! Under QRMP the B2B invoices of a quarter's first two months may be furnished early through
+//! the IFF. Those months' B2B invoices and credit notes are then left out of the quarter's
+//! return; they still count in its HSN summary and table 13.
 
 use std::collections::BTreeMap;
 
 use accounting_core::returns::{
-    B2csRow, DocIssue, DocSeries, DocSummary, Gstr1Return, HsnRow, NilRow,
+    B2csRow, CREDIT_NOTES_DOC_TYPE, DocIssue, DocSeries, DocSummary, Gstr1Return, HsnRow, NilRow,
     OUTWARD_INVOICES_DOC_TYPE, ReturnPeriod, SERVICES_UQC,
 };
 use accounting_core::{Gstin, Gstr1Error, HsnMaster};
 use bigdecimal::BigDecimal;
+use chrono::{Datelike, NaiveDate};
 use serde_json::{Value, json};
 
-use crate::domain::{Invoice, InvoiceKind, Quarter};
+use crate::domain::{CreditNote, Invoice, InvoiceKind, Quarter};
 
-/// Table 13 serial number for outward invoices
+/// Table 13 serial numbers for outward invoices and credit notes
 const OUTWARD_INVOICES_DOC_NUM: usize = 1;
+const CREDIT_NOTES_DOC_NUM: usize = 5;
 
 /// A quarter's return as GST portal JSON, with what went into it
 #[derive(Debug, Clone)]
@@ -23,13 +30,25 @@ pub struct QuarterlyGstr1 {
     pub json: Value,
     pub tax_invoices: usize,
     pub exports: usize,
+    pub credit_notes: usize,
 }
 
-/// Build the GSTR-1 for `quarter` from its tax and export invoices (plain ones don't belong)
+/// A month's IFF as GST portal JSON: its B2B invoices and the credit notes on B2B invoices
+#[derive(Debug, Clone)]
+pub struct MonthlyIff {
+    pub json: Value,
+    pub invoices: usize,
+    pub credit_notes: usize,
+}
+
+/// Build the GSTR-1 for `quarter` from its tax and export invoices and the credit notes on them
+/// (plain ones don't belong). The B2B part of the months in `furnished` went in an IFF.
 pub fn quarterly_gstr1(
     filer: &Gstin,
     quarter: Quarter,
     invoices: &[Invoice],
+    notes: &[CreditNote],
+    furnished: &[(i32, u32)],
     master: &HsnMaster,
 ) -> Result<QuarterlyGstr1, Gstr1Error> {
     let in_quarter = |kind| {
@@ -37,30 +56,45 @@ pub fn quarterly_gstr1(
             .iter()
             .filter(move |i| i.kind() == kind && quarter.contains(i.date()))
     };
+    let notes_in_quarter = |kind| {
+        notes
+            .iter()
+            .filter(move |n| n.kind() == kind && quarter.contains(n.date()))
+    };
     let [first, second, last] = quarter.months();
     let mut merged =
         Gstr1Return::build(filer, ReturnPeriod::new(last.0, last.1)?, &[], &[], master)?;
-    let mut tax_invoices = 0;
     for (year, month) in [first, second, last] {
-        let period = ReturnPeriod::new(year, month)?;
-        let month_invoices: Vec<_> = in_quarter(InvoiceKind::Tax)
-            .filter(|i| period.contains(i.date()))
-            .filter_map(|i| i.gst().cloned())
-            .collect();
-        if month_invoices.is_empty() {
-            continue;
+        if let Some(mut built) = month_return(filer, (year, month), invoices, notes, master)? {
+            if furnished.contains(&(year, month)) {
+                built.b2b.clear();
+                built.cdnr.clear();
+            }
+            merge(&mut merged, built);
         }
-        tax_invoices += month_invoices.len();
-        let month_return = Gstr1Return::build(filer, period, &month_invoices, &[], master)?;
-        merge(&mut merged, month_return);
     }
+    // What the return reports: B2B documents of furnished months went in their IFF
+    let reported =
+        |date: NaiveDate, b2b: bool| !(b2b && furnished.contains(&(date.year(), date.month())));
+    let tax_invoices = in_quarter(InvoiceKind::Tax)
+        .filter(|i| reported(i.date(), i.gst().is_some_and(|g| g.buyer.is_registered())))
+        .count();
+    let credit_notes = notes_in_quarter(InvoiceKind::Tax)
+        .filter(|n| reported(n.date(), n.gst().is_some_and(|g| g.buyer.is_registered())))
+        .count();
 
     let exports: Vec<&Invoice> = in_quarter(InvoiceKind::Export).collect();
-    add_export_hsn(&mut merged, &exports, master);
-    let billed: Vec<&Invoice> = in_quarter(InvoiceKind::Tax)
+    let export_notes: Vec<&CreditNote> = notes_in_quarter(InvoiceKind::Export).collect();
+    add_export_hsn(&mut merged, &exports, &export_notes, master);
+    let billed: Vec<&str> = in_quarter(InvoiceKind::Tax)
         .chain(exports.iter().copied())
+        .map(|i| i.number().as_str())
         .collect();
-    merged.doc_issue = doc_issue(&billed);
+    let credited: Vec<&str> = notes_in_quarter(InvoiceKind::Tax)
+        .chain(export_notes.iter().copied())
+        .map(|n| n.number().as_str())
+        .collect();
+    merged.doc_issue = doc_issue(&billed, &credited);
     renumber(&mut merged.hsn.b2b);
     renumber(&mut merged.hsn.b2c);
 
@@ -68,11 +102,83 @@ pub fn quarterly_gstr1(
     if !exports.is_empty() {
         json["exp"] = export_section(&exports);
     }
+    if !export_notes.is_empty() {
+        let mut cdnur = json
+            .get("cdnur")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        cdnur.extend(export_notes.iter().map(|note| export_note(note)));
+        json["cdnur"] = Value::Array(cdnur);
+    }
     Ok(QuarterlyGstr1 {
         json,
         tax_invoices,
         exports: exports.len(),
+        credit_notes: credit_notes + export_notes.len(),
     })
+}
+
+/// The IFF for one month: its B2B invoices (table 4A) and credit notes on B2B invoices (9B)
+pub fn monthly_iff(
+    filer: &Gstin,
+    month: (i32, u32),
+    invoices: &[Invoice],
+    notes: &[CreditNote],
+    master: &HsnMaster,
+) -> Result<MonthlyIff, Gstr1Error> {
+    let period = ReturnPeriod::new(month.0, month.1)?;
+    let built = month_return(filer, month, invoices, notes, master)?;
+    let mut json = serde_json::json!({ "gstin": filer, "fp": period });
+    if let Some(built) = built {
+        let built = serde_json::to_value(&built)?;
+        for section in ["b2b", "cdnr"] {
+            if let Some(rows) = built.get(section) {
+                json[section] = rows.clone();
+            }
+        }
+    }
+    let b2b =
+        |gst: Option<&accounting_core::GstInvoice>| gst.is_some_and(|g| g.buyer.is_registered());
+    let invoices = invoices
+        .iter()
+        .filter(|i| i.kind() == InvoiceKind::Tax && period.contains(i.date()) && b2b(i.gst()))
+        .count();
+    let credit_notes = notes
+        .iter()
+        .filter(|n| period.contains(n.date()) && n.gst().is_some_and(|g| g.buyer.is_registered()))
+        .count();
+    Ok(MonthlyIff {
+        json,
+        invoices,
+        credit_notes,
+    })
+}
+
+/// accounting-core's return for one month's tax invoices and the GST credit notes dated in it;
+/// `None` for a month with neither
+fn month_return(
+    filer: &Gstin,
+    (year, month): (i32, u32),
+    invoices: &[Invoice],
+    notes: &[CreditNote],
+    master: &HsnMaster,
+) -> Result<Option<Gstr1Return>, Gstr1Error> {
+    let period = ReturnPeriod::new(year, month)?;
+    let month_invoices: Vec<_> = invoices
+        .iter()
+        .filter(|i| i.kind() == InvoiceKind::Tax && period.contains(i.date()))
+        .filter_map(|i| i.gst().cloned())
+        .collect();
+    let month_notes: Vec<_> = notes
+        .iter()
+        .filter(|n| period.contains(n.date()))
+        .filter_map(|n| n.gst().cloned())
+        .collect();
+    if month_invoices.is_empty() && month_notes.is_empty() {
+        return Ok(None);
+    }
+    Gstr1Return::build(filer, period, &month_invoices, &month_notes, master).map(Some)
 }
 
 /// Fold one month's return into the quarter's
@@ -114,6 +220,17 @@ fn merge(quarter: &mut Gstr1Return, month: Gstr1Return) {
             None => quarter.nil.rows.push(row),
         }
     }
+    for party in month.cdnr {
+        match quarter
+            .cdnr
+            .iter_mut()
+            .find(|p| p.buyer_gstin == party.buyer_gstin)
+        {
+            Some(existing) => existing.notes.extend(party.notes),
+            None => quarter.cdnr.push(party),
+        }
+    }
+    quarter.cdnur.extend(month.cdnur);
     merge_hsn(&mut quarter.hsn.b2b, month.hsn.b2b);
     merge_hsn(&mut quarter.hsn.b2c, month.hsn.b2c);
 }
@@ -170,38 +287,65 @@ fn renumber(rows: &mut [HsnRow]) {
     }
 }
 
-/// Exports in the HSN summary at 0%, reported with supplies to unregistered recipients
-fn add_export_hsn(merged: &mut Gstr1Return, exports: &[&Invoice], master: &HsnMaster) {
-    let rows = exports.iter().filter_map(|invoice| {
+/// Exports in the HSN summary at 0%, reported with supplies to unregistered recipients; credit
+/// notes on exports take their value back out
+fn add_export_hsn(
+    merged: &mut Gstr1Return,
+    exports: &[&Invoice],
+    notes: &[&CreditNote],
+    master: &HsnMaster,
+) {
+    let invoices = exports.iter().filter_map(|invoice| {
         let row = invoice.print().rows.first()?;
-        let taxable = invoice.inr_amounts().taxable_value;
-        Some(HsnRow {
-            number: 0,
-            hsn_sac: row.hsn_sac.clone(),
-            description: master
-                .lookup(&row.hsn_sac)
-                .map_or_else(|| row.description.clone(), |e| e.description.clone()),
-            uqc: SERVICES_UQC.to_owned(),
-            quantity: BigDecimal::from(0),
-            total_value: taxable.clone(),
-            taxable_value: taxable,
-            igst: BigDecimal::from(0),
-            cgst: BigDecimal::from(0),
-            sgst: BigDecimal::from(0),
-            cess: BigDecimal::from(0),
-            rate: BigDecimal::from(0),
-        })
+        Some((row, invoice.inr_amounts().taxable_value))
+    });
+    let notes = notes.iter().filter_map(|note| {
+        let row = note.print().rows.first()?;
+        Some((row, -note.inr_amounts().taxable_value))
+    });
+    let rows = invoices.chain(notes).map(|(row, taxable)| HsnRow {
+        number: 0,
+        hsn_sac: row.hsn_sac.clone(),
+        description: master
+            .lookup(&row.hsn_sac)
+            .map_or_else(|| row.description.clone(), |e| e.description.clone()),
+        uqc: SERVICES_UQC.to_owned(),
+        quantity: BigDecimal::from(0),
+        total_value: taxable.clone(),
+        taxable_value: taxable,
+        igst: BigDecimal::from(0),
+        cgst: BigDecimal::from(0),
+        sgst: BigDecimal::from(0),
+        cess: BigDecimal::from(0),
+        rate: BigDecimal::from(0),
     });
     merge_hsn(&mut merged.hsn.b2c, rows.collect());
 }
 
-/// Table 13: one series per prefix and year, from the first to the last number issued
-fn doc_issue(invoices: &[&Invoice]) -> DocIssue {
-    let mut series: BTreeMap<String, Vec<&str>> = BTreeMap::new();
-    for invoice in invoices {
-        let number = invoice.number().as_str();
-        let prefix = number.rsplit_once('/').map_or(number, |(prefix, _)| prefix);
-        series.entry(prefix.to_owned()).or_default().push(number);
+/// Table 13: invoices and credit notes, each with one series per prefix and year, from the first
+/// to the last number issued
+fn doc_issue(invoices: &[&str], notes: &[&str]) -> DocIssue {
+    let documents = [
+        doc_summary(
+            OUTWARD_INVOICES_DOC_NUM,
+            OUTWARD_INVOICES_DOC_TYPE,
+            invoices,
+        ),
+        doc_summary(CREDIT_NOTES_DOC_NUM, CREDIT_NOTES_DOC_TYPE, notes),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    DocIssue { documents }
+}
+
+fn doc_summary(doc_num: usize, doc_type: &str, numbers: &[&str]) -> Option<DocSummary> {
+    let mut series: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for number in numbers {
+        let prefix = number
+            .rsplit_once('/')
+            .map_or(*number, |(prefix, _)| prefix);
+        series.entry(prefix).or_default().push(number);
     }
     let series: Vec<DocSeries> = series
         .into_values()
@@ -218,28 +362,42 @@ fn doc_issue(invoices: &[&Invoice]) -> DocIssue {
             })
         })
         .collect();
-    let documents = if series.is_empty() {
-        Vec::new()
-    } else {
-        vec![DocSummary {
-            doc_num: OUTWARD_INVOICES_DOC_NUM,
-            doc_type: OUTWARD_INVOICES_DOC_TYPE.to_owned(),
-            series,
-        }]
-    };
-    DocIssue { documents }
+    (!series.is_empty()).then(|| DocSummary {
+        doc_num,
+        doc_type: doc_type.to_owned(),
+        series,
+    })
+}
+
+/// Returns are in rupees, two decimals, as JSON numbers
+fn portal_number(amount: &BigDecimal) -> Value {
+    serde_json::from_str(
+        &amount
+            .with_scale_round(2, bigdecimal::RoundingMode::HalfUp)
+            .to_string(),
+    )
+    .unwrap_or(Value::Null)
+}
+
+/// Table 9B `cdnur`: a credit note on an export without payment of IGST
+fn export_note(note: &CreditNote) -> Value {
+    let amounts = note.inr_amounts();
+    json!({
+        "typ": "EXPWOP",
+        "ntty": "C",
+        "nt_num": note.number().as_str(),
+        "nt_dt": note.date().format("%d-%m-%Y").to_string(),
+        "val": portal_number(&amounts.total),
+        "itms": [{
+            "num": 1,
+            "itm_det": { "rt": 0, "txval": portal_number(&amounts.taxable_value), "iamt": 0, "csamt": 0 },
+        }],
+    })
 }
 
 /// Table 6A: exports of services under LUT, without payment of IGST
 fn export_section(exports: &[&Invoice]) -> Value {
-    let number = |amount: &BigDecimal| -> Value {
-        serde_json::from_str(
-            &amount
-                .with_scale_round(2, bigdecimal::RoundingMode::HalfUp)
-                .to_string(),
-        )
-        .unwrap_or(Value::Null)
-    };
+    let number = portal_number;
     let invoices: Vec<Value> = exports
         .iter()
         .map(|invoice| {

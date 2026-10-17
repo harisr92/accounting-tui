@@ -27,12 +27,19 @@ pub struct App {
     notice: Option<(Notice, u8)>,
     fiscal_year: FiscalYear,
     theme: Theme,
+    /// `NO_COLOR` was set: every theme is drawn without colour
+    no_color: bool,
     running: bool,
     dirty: bool,
 }
 
 impl App {
     pub fn new(views: Vec<Box<dyn View>>, theme: Theme) -> Self {
+        Self::with_colour(views, theme, false)
+    }
+
+    /// An app whose theme changes keep honouring `no_color`
+    pub fn with_colour(views: Vec<Box<dyn View>>, theme: Theme, no_color: bool) -> Self {
         Self {
             views,
             active: 0,
@@ -40,6 +47,7 @@ impl App {
             notice: None,
             fiscal_year: FiscalYear::containing(Local::now().date_naive()),
             theme,
+            no_color,
             running: true,
             dirty: true,
         }
@@ -116,6 +124,19 @@ impl App {
             Action::Handled => return,
             Action::Notify(notice) => {
                 self.notice = Some((notice, NOTICE_TICKS));
+                return;
+            }
+            Action::Theme(appearance) => {
+                self.theme = Theme::new(appearance, self.no_color);
+                let text = if self.no_color {
+                    format!(
+                        "Theme: {} (NO_COLOR is set: shown without colour)",
+                        appearance.label()
+                    )
+                } else {
+                    format!("Theme: {}", appearance.label())
+                };
+                self.notice = Some((Notice::success(text), NOTICE_TICKS));
                 return;
             }
             Action::Ignored => {}

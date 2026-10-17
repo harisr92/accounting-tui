@@ -186,3 +186,23 @@ fn projects_are_found_by_exact_name() {
         Err(ServiceError::AmbiguousProject(_))
     ));
 }
+
+#[test]
+fn archiving_is_saved_with_the_summary() {
+    let mut repo = Store::in_memory().unwrap().repository();
+    let mut service = ProjectService::new(repo.clone());
+    let id = service.create(draft("Site", Billing::Fixed)).unwrap().id();
+    assert!(service.set_archived(id, true).is_err());
+    assert!(!service.list().unwrap()[0].is_archived());
+
+    service.add_milestone(id, milestone(Some(500))).unwrap();
+    let mut project = service.load(id).unwrap();
+    project.invoice_milestone(0, "T-1").unwrap();
+    repo.save(&project).unwrap();
+
+    service.set_archived(id, true).unwrap();
+    assert!(service.load(id).unwrap().is_archived());
+    assert!(service.list().unwrap()[0].is_archived());
+    service.set_archived(id, false).unwrap();
+    assert!(!service.list().unwrap()[0].is_archived());
+}

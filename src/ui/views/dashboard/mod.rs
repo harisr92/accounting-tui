@@ -15,6 +15,9 @@ use crate::ui::view::{Notice, View};
 use crate::ui::views::year::YearPicker;
 use crate::ui::widgets::{header, money, money_in, panel, stat_tiles};
 
+/// Room for a label like "Invoiced (net)" or an amount like ₹12,34,567.00, with a gap
+const TILE_WIDTH: u16 = 15;
+
 /// After this many days an unpaid invoice is shown as overdue
 const OVERDUE_DAYS: i64 = 30;
 
@@ -47,7 +50,7 @@ impl<R: Repository> DashboardView<R> {
             .invoices
             .list()?
             .into_iter()
-            .filter(|s| !s.is_paid())
+            .filter(|s| !s.is_settled())
             .collect();
         unpaid.reverse();
         self.unpaid = unpaid;
@@ -61,22 +64,40 @@ impl<R: Repository> View for DashboardView<R> {
     }
 
     fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
-        let [year_area, unpaid_area] =
-            Layout::vertical([Constraint::Length(4), Constraint::Min(3)]).areas(area);
-        if let Some(report) = &self.report {
-            let title = format!("This year, {} · amounts excl. GST", report.year.label());
-            let block = panel(&title, false, theme);
-            let inner = block.inner(year_area);
-            frame.render_widget(block, year_area);
-            let stats = [
-                ("Invoiced", money(&report.gross_receipts)),
+        let stats = self.report.as_ref().map(|report| {
+            [
+                ("Invoiced (net)", money(&report.gross_receipts)),
+                ("Credit notes", money(&report.credited)),
                 ("Received", money(&report.received)),
                 ("Outstanding", money(&report.outstanding)),
                 ("TDS", money(&report.tds)),
                 ("Expenses", money(&report.expenses)),
                 ("Profit", money(&report.books_profit())),
-            ];
-            stat_tiles(frame, inner, &stats, theme);
+            ]
+        });
+        // One row of tiles when they all fit, else two
+        let tile_rows: u16 = if area.width >= TILE_WIDTH * 7 + 2 {
+            1
+        } else {
+            2
+        };
+        let [year_area, unpaid_area] =
+            Layout::vertical([Constraint::Length(2 + tile_rows * 2), Constraint::Min(3)])
+                .areas(area);
+        if let (Some(report), Some(stats)) = (&self.report, &stats) {
+            let title = format!("This year, {} · amounts excl. GST", report.year.label());
+            let block = panel(&title, false, theme);
+            let inner = block.inner(year_area);
+            frame.render_widget(block, year_area);
+            if tile_rows == 1 {
+                stat_tiles(frame, inner, stats, theme);
+            } else {
+                let [top, bottom] =
+                    Layout::vertical([Constraint::Length(2), Constraint::Length(2)]).areas(inner);
+                let (first, second) = stats.split_at(4);
+                stat_tiles(frame, top, first, theme);
+                stat_tiles(frame, bottom, second, theme);
+            }
         }
 
         let block = panel("Waiting for payment", false, theme);

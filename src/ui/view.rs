@@ -5,6 +5,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 
 use super::theme::{Theme, Tone};
+use crate::domain::Appearance;
 
 /// A transient footer message
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,6 +44,8 @@ pub enum Action {
     Handled,
     /// Handled; show a transient message in the footer
     Notify(Notice),
+    /// Handled; draw the whole app in this theme from now on
+    Theme(Appearance),
 }
 
 /// A key binding shown in the footer and the help popup

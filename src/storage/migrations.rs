@@ -19,7 +19,7 @@ use crate::domain::Invoice;
 pub(super) type Migration = fn(&WriteTransaction) -> Result<(), StorageError>;
 
 /// `MIGRATIONS[i]` upgrades schema version `i + 1` to `i + 2`
-pub(super) const MIGRATIONS: &[Migration] = &[payments_list];
+pub(super) const MIGRATIONS: &[Migration] = &[payments_list, credit_notes];
 
 /// Run every step from `from` up to the current version, inside the caller's transaction
 pub(super) fn upgrade(txn: &WriteTransaction, from: u32) -> Result<(), StorageError> {
@@ -53,6 +53,13 @@ fn payments_list(txn: &WriteTransaction) -> Result<(), StorageError> {
         let invoice: Invoice = decode(INVOICES.name(), &key, &v2)?;
         put_invoice(txn, &invoice)?;
     }
+    Ok(())
+}
+
+/// v2 → v3: nothing to rewrite. Credit notes added tables (created by `Store::init`), defaulted
+/// fields and the CREDITED milestone status. The version moves so an older compter refuses the
+/// file instead of reading a credited invoice as still owed in full.
+fn credit_notes(_txn: &WriteTransaction) -> Result<(), StorageError> {
     Ok(())
 }
 

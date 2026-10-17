@@ -1,6 +1,8 @@
 //! Pure domain types and rules. No I/O, no UI.
 
+mod appearance;
 mod billing;
+mod credit_note;
 mod currency;
 mod error;
 mod expense;
@@ -12,13 +14,15 @@ mod profile;
 mod project;
 mod states;
 
+pub use appearance::Appearance;
 pub use billing::{Billing, MAX_ENTRY_MINUTES, TimeEntry};
+pub use credit_note::{CREDIT_NOTE_PREFIX, CreditNote, CreditNoteParts};
 pub use currency::{Currency, ExchangeRate};
 pub use error::DomainError;
 pub use expense::{Expense, ExpenseCategory, ExpenseId};
 pub use fiscal_year::{FiscalYear, Quarter};
 pub use invoice::{
-    Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber, InvoiceParts, InvoiceStatus,
+    Credit, Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber, InvoiceParts, InvoiceStatus,
     InvoiceSummary, Payment,
 };
 pub use logo::{Logo, LogoFormat, LogoId, MAX_LOGO_BYTES};

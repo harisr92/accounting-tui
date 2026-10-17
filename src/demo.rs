@@ -9,7 +9,7 @@ use crate::domain::{
     Billing, ClientDetails, ClientRegion, Currency, DEFAULT_SAC, DomainError, ExchangeRate,
     ExpenseCategory, MilestoneId, ProfileDraft, Project, TimeEntry,
 };
-use crate::services::{ExpenseService, InvoiceService, ServiceError};
+use crate::services::{ExpenseDraft, ExpenseService, InvoiceService, ServiceError};
 use crate::storage::{ProjectRepository, Store};
 
 fn date(year: i32, month: u32, day: u32) -> NaiveDate {
@@ -263,7 +263,13 @@ pub fn store() -> Result<Store, ServiceError> {
             180,
         ),
     ] {
-        expenses.add(day, category, what, rupee(amount), rupee(credit))?;
+        expenses.add(ExpenseDraft {
+            date: day,
+            category,
+            description: what.to_owned(),
+            amount: rupee(amount),
+            gst_credit: rupee(credit),
+        })?;
     }
     Ok(store)
 }

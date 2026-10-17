@@ -18,7 +18,7 @@ pub enum ProjectStatus {
     Active,
     /// Every milestone is invoiced, some payment is outstanding
     Completed,
-    /// Every milestone is paid
+    /// Every milestone is paid, or cancelled by credit notes
     Paid,
 }
 
@@ -35,9 +35,7 @@ impl ProjectStatus {
         let pending = milestones
             .iter()
             .any(|m| m.status() == MilestoneStatus::Pending);
-        let all_paid = milestones
-            .iter()
-            .all(|m| m.status() == MilestoneStatus::Paid);
+        let all_paid = milestones.iter().all(|m| m.status().is_settled());
         match (milestones.is_empty(), pending, all_paid) {
             (true, ..) | (_, true, _) => Self::Active,
             (_, _, true) => Self::Paid,
@@ -146,6 +144,9 @@ pub struct Project {
     milestones: Vec<Milestone>,
     total_amount: BigDecimal,
     status: ProjectStatus,
+    /// Hidden from the project list; kept, like every billed project, for tax records
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    archived: bool,
 }
 
 /// Unvalidated shape of a [`Project`]; derived fields are ignored when loading
@@ -164,6 +165,8 @@ struct RawProject {
     billing: Billing,
     #[serde(default)]
     milestones: Vec<Milestone>,
+    #[serde(default)]
+    archived: bool,
 }
 
 impl TryFrom<RawProject> for Project {
@@ -182,6 +185,7 @@ impl TryFrom<RawProject> for Project {
             milestones: raw.milestones,
             total_amount: BigDecimal::zero(),
             status: ProjectStatus::Active,
+            archived: raw.archived,
         };
         project.validate()?;
         project.refresh();
@@ -199,6 +203,8 @@ pub struct ProjectSummary {
     client_name: Box<str>,
     status: ProjectStatus,
     total_amount: BigDecimal,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    archived: bool,
 }
 
 impl ProjectSummary {
@@ -221,6 +227,10 @@ impl ProjectSummary {
     pub fn total_amount(&self) -> &BigDecimal {
         &self.total_amount
     }
+
+    pub fn is_archived(&self) -> bool {
+        self.archived
+    }
 }
 
 impl From<&Project> for ProjectSummary {
@@ -231,6 +241,7 @@ impl From<&Project> for ProjectSummary {
             client_name: project.client_name.as_str().into(),
             status: project.status,
             total_amount: project.total_amount.clone(),
+            archived: project.archived,
         }
     }
 }
@@ -268,6 +279,7 @@ impl Project {
             milestones: Vec::new(),
             total_amount: BigDecimal::zero(),
             status: ProjectStatus::Active,
+            archived: false,
         };
         project.update_details(name, client)?;
         project.validate()?;
@@ -335,18 +347,42 @@ impl Project {
         self.status
     }
 
-    /// Sum of milestones already paid
+    pub fn is_archived(&self) -> bool {
+        self.archived
+    }
+
+    /// Hide a finished project from the list. Only finished work is archived: every milestone
+    /// invoiced, so nothing is left to bill.
+    pub fn archive(&mut self) -> Result<(), DomainError> {
+        if self.status == ProjectStatus::Active {
+            return Err(DomainError::ProjectNotFinished);
+        }
+        self.archived = true;
+        Ok(())
+    }
+
+    /// Bring an archived project back to the list
+    pub fn unarchive(&mut self) {
+        self.archived = false;
+    }
+
+    /// Sum of milestones already paid, less what credit notes took off them
     pub fn paid_amount(&self) -> BigDecimal {
         self.milestones
             .iter()
             .filter(|m| m.status() == MilestoneStatus::Paid)
-            .map(Milestone::amount)
+            .map(Milestone::net_amount)
             .sum()
     }
 
-    /// Amount still to be received
+    /// Taken back from the client by credit notes, before GST
+    pub fn credited_amount(&self) -> BigDecimal {
+        self.milestones.iter().map(Milestone::credited).sum()
+    }
+
+    /// Amount still to be received: billed or to bill, less what was paid or credited
     pub fn outstanding_amount(&self) -> BigDecimal {
-        &self.total_amount - self.paid_amount()
+        &self.total_amount - self.paid_amount() - self.credited_amount()
     }
 
     /// Add a pending milestone and return its position
@@ -359,6 +395,7 @@ impl Project {
         due_date: NaiveDate,
         amount: Option<BigDecimal>,
     ) -> Result<usize, DomainError> {
+        self.ensure_not_archived()?;
         let name = name.into();
         require(&name, "milestone name")?;
         let amount = self.resolve_amount(amount)?;
@@ -493,6 +530,34 @@ impl Project {
         self.milestone_mut(index)?.advance(MilestoneStatus::Paid)?;
         self.refresh();
         Ok(())
+    }
+
+    /// Record a credit note taking `amount` (before GST) off an invoiced milestone
+    pub fn credit_milestone(
+        &mut self,
+        index: usize,
+        amount: &BigDecimal,
+    ) -> Result<(), DomainError> {
+        self.milestone_mut(index)?.credit(amount)?;
+        self.refresh();
+        Ok(())
+    }
+
+    /// Mark a milestone whose invoice credit notes cancelled in full, with nothing paid
+    pub fn cancel_milestone(&mut self, index: usize) -> Result<(), DomainError> {
+        self.milestone_mut(index)?
+            .advance(MilestoneStatus::Credited)?;
+        self.refresh();
+        Ok(())
+    }
+
+    /// Archived projects are finished: new milestones go on an active project
+    fn ensure_not_archived(&self) -> Result<(), DomainError> {
+        if self.archived {
+            Err(DomainError::ProjectArchived)
+        } else {
+            Ok(())
+        }
     }
 
     fn has_billed_milestones(&self) -> bool {

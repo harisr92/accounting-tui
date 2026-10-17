@@ -28,7 +28,7 @@ Tab focus · j/k move · n new · i invoice · 1-9/←→ tabs · ? help · q qu
 
 ## Status
 
-**Steps 1–6 of 7 are done.** Track projects, milestones and hours. Issue GST tax invoices, export invoices under LUT or plain invoices as PDFs, and record payments including TDS. Record business expenses. See each financial year for income tax (44ADA and regular books) and GST, and export the quarterly GSTR-1. Everything is posted to an accounting-core ledger and saved as you go.
+**All 7 steps are done.** Track projects, milestones and hours, and archive finished projects. Issue GST tax invoices, export invoices under LUT or plain invoices as PDFs, record payments including TDS, and correct invoices with credit notes. Record and edit business expenses. See each financial year for income tax (44ADA and regular books) and GST, and export the quarterly GSTR-1 and the monthly IFF. Search the project, invoice and expense lists, and pick a dark, light or monochrome theme. Everything is posted to an accounting-core ledger and saved as you go.
 
 ## Build and run
 
@@ -65,6 +65,9 @@ Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Un
 | any | `n` | new project |
 | project list | `e` | edit name, client, GSTIN, billing or hourly rate |
 | project list | `x` | delete the project (asks first; only while nothing in it is invoiced) |
+| project list | `A` | archive a finished project (nothing pending), or restore an archived one |
+| project list | `H` | show or hide archived projects (hidden by default; their names are dimmed) |
+| project list | `/` | search projects by name or client; `Esc` clears the search |
 | milestones | `a` | add a milestone |
 | milestones | `e` / `x` | edit / delete a pending milestone (delete asks first) |
 | milestones | `t` | log time on an hourly milestone |
@@ -73,15 +76,15 @@ Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Un
 | milestones | `i` | invoice a pending milestone: shows the number, total and tax, then asks |
 | milestones | `p` | record a payment, whole or part, for an invoiced milestone |
 
-**Invoices tab**: `j`/`k` move, `o` opens the PDF in your viewer (it's regenerated if the file is missing), `p` records a payment, whole or part. The list shows each invoice's amount due and status (ISSUED, PART PAID, PAID); below it, the selected invoice's payments. The title shows the total still outstanding.
+**Invoices tab**: `j`/`k` move, `o` opens the PDF in your viewer (it's regenerated if the file is missing), `p` records a payment, whole or part, `c` issues a credit note (see [Credit notes](#credit-notes)), `O` opens the latest credit note's PDF, and `/` searches by number, client, milestone, kind or status (`Esc` clears it). The list shows each invoice's amount due and status (ISSUED, PART PAID, PAID, CREDITED); below it, the selected invoice's payments and credit notes. The title shows the total still outstanding.
 
-**Dashboard tab**: this financial year's invoiced, received, outstanding, TDS, expenses and books profit, plus every unpaid invoice and how long it has been waiting (red after 30 days).
+**Dashboard tab**: this financial year's invoiced (net of credit notes), credit notes, received, outstanding, TDS, expenses and books profit (the tiles wrap onto two rows on narrow screens), plus every unpaid invoice and how long it has been waiting (red after 30 days).
 
-**Expenses tab**: `a` adds an expense (date, category, description, amount paid including GST, and the GST you claim back as input credit), `x` deletes one (asks first), `[`/`]` change the year.
+**Expenses tab**: `a` adds an expense (date, category, description, amount paid including GST, and the GST you claim back as input credit), `e` edits one (its ledger posting is replaced in the same write), `x` deletes one (asks first), `/` searches by description or category, `[`/`]` change the year.
 
-**Reports tab**: `[`/`]` change the year, `g` exports the GSTR-1 for a quarter. See [Reports](#reports).
+**Reports tab**: `[`/`]` change the year, `g` exports the GSTR-1 for a quarter, `i` exports a month's IFF. See [Reports](#reports).
 
-**Settings tab**: `e` edits your business details: name, address, GSTIN, SAC code, invoice prefix, LUT ARN, and terms such as bank details. They must be filled in before the first invoice. `l` sets a logo (path to a PNG or JPEG under 1 MB; blank removes it), printed at the top left of new invoices.
+**Settings tab**: `e` edits your business details: name, address, GSTIN, SAC code, invoice prefix, LUT ARN, and terms such as bank details. They must be filled in before the first invoice. `l` sets a logo (path to a PNG or JPEG under 1 MB; blank removes it), printed at the top left of new invoices. `t` switches the theme: dark, light (for light terminal backgrounds) or monochrome. The choice is saved. With [`NO_COLOR`](https://no-color.org) set, every theme is drawn without colour.
 
 **Forms**: type to edit, `Backspace` deletes, `Ctrl-u` clears the field. `Tab`/`↓` and `Shift-Tab`/`↑` move between fields, and `Space`/`←→` change a choice. `Enter` saves and `Esc` cancels. If something is wrong, the form stays open with the reason shown in red and your input kept.
 
@@ -97,7 +100,7 @@ Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Un
 | SAC code | must be in the GST rate list; the field shows its description and rate |
 | payment | received + TDS can be any part of what is still due, never more. Received is prefilled with the balance and TDS with 0; the hint shows 10% of the taxable value |
 
-An invoiced milestone is locked: it can't be edited, deleted or have time added. A project with any invoiced or paid milestone can't be deleted either, because those milestones are the billing records your tax and GST filings come from. Changing an hourly rate re-prices only pending milestones. Fixed and hourly billing can only be switched while a project has no milestones.
+An invoiced milestone is locked: it can't be edited, deleted or have time added. A project with any invoiced or paid milestone can't be deleted either, because those milestones are the billing records your tax and GST filings come from. Archive it instead: an archived project leaves the list but keeps its records, still counts in reports, and can still receive payments. New milestones need it restored first. Changing an hourly rate re-prices only pending milestones. Fixed and hourly billing can only be switched while a project has no milestones.
 
 ## Data model
 
@@ -117,7 +120,8 @@ pub struct Milestone {
     name: String,
     amount: BigDecimal,             // fixed: agreed amount; hourly: derived from time
     due_date: NaiveDate,
-    status: MilestoneStatus,        // PENDING | INVOICED | PAID
+    status: MilestoneStatus,        // PENDING | INVOICED | PAID | CREDITED
+    credited: BigDecimal,           // taken back by credit notes, before GST
     time_entries: Vec<TimeEntry>,   // hourly only: date, minutes, note
 }
 ```
@@ -133,7 +137,8 @@ Fields are private. All changes go through `Project` methods, which validate the
 | From | To | Method | Rule |
 |------|----|--------|------|
 | PENDING | INVOICED | `invoice_milestone` | amount must be > 0 |
-| INVOICED | PAID | `record_payment` | when the invoice's payments add up to its total |
+| INVOICED | PAID | `record_payment` | when payments (and any credit notes) settle the invoice |
+| INVOICED | CREDITED | `cancel_milestone` | when credit notes cancel the whole invoice and nothing was paid |
 
 Once a milestone is invoiced it is locked: no more time entries and it can't be removed. Any other transition returns `DomainError::InvalidTransition`.
 
@@ -143,7 +148,7 @@ Once a milestone is invoiced it is locked: no more time entries and it can't be 
 |--------|------|
 | ACTIVE | no milestones yet, or any milestone is pending |
 | COMPLETED | none pending, at least one invoiced but unpaid |
-| PAID | every milestone is paid |
+| PAID | every milestone is paid or credited |
 
 **Serialisation**: projects are serde types (JSON in step 3). Loading runs the same validation as the constructors (names, GSTIN, amounts, rate, billing consistency) and recomputes `total_amount`, `status` and the amounts of pending hourly milestones. Derived values in the file are never trusted. The exception is the amount of an invoiced or paid milestone: it is the billed record, so it is kept as stored (it must be > 0) and does not follow later rate changes.
 
@@ -176,10 +181,24 @@ The financial year is the Indian April–March year (`FY 2026-27`).
 | 2300 / 2310 / 2320 CGST / SGST / IGST Output | liability | GST on tax invoices |
 | 4100 Service Revenue | income | invoices to Indian clients |
 | 4110 Export Revenue | income | invoices to clients abroad |
+| 4190 Credit Notes | income (contra) | value taken back by credit notes |
 | 1300 Input GST | asset | GST on expenses claimed as input credit |
 | 5100–5190 expense accounts | expense | one per category: software, equipment, internet & phone, travel, rent & coworking, professional fees, other |
 
 **Payments** can come in parts. Each payment records the amount that reached your bank and any TDS the client withheld on it, and is posted to the ledger on its own (`pay-INV/26-27/004-1`, `-2`, …). An invoice is ISSUED until the first payment, PART PAID while a balance remains, and PAID when the payments add up to its total. A payment larger than the balance is refused. The milestone turns PAID only with the final payment. Reports count each payment, and its TDS, on its own date.
+
+## Credit notes
+
+An issued invoice is never edited. To correct one, issue a **credit note** against it: `c` in the Invoices tab, then the date, the amount to take back **before GST**, and the reason. compter shows the note, with its GST and what will still be due, and asks before issuing it.
+
+- Notes are numbered in their own series, `CN/26-27/001`, which restarts every April.
+- On a tax invoice, accounting-core builds the note (`CreditNote`) at the invoice's GST rate and posts the invoice's legs reversed: Dr 4190 Credit Notes and the output GST, Cr Receivable. Notes on export and plain invoices carry no GST and post Dr 4190, Cr Receivable. A note on an invoice in a foreign currency is at the invoice's exchange rate.
+- A note takes back only what is still due. It can't refund money already received.
+- Under GST section 34(2), a note against a tax or export invoice must be issued by **30 November after the end of the invoice's financial year**: 30 November 2026 for invoices dated April 2025 to March 2026. Later notes are refused. If you file your annual return earlier, that date is the deadline instead, and compter can't know it.
+- Each note is recorded on the invoice's milestone (`credited`, before GST), so the project's **Paid** counts only money received and its **Outstanding** drops by the credit. The project summary shows a **Credited** tile once any credit exists.
+- A note that leaves nothing due settles the invoice and its milestone: CREDITED if nothing was paid, PAID otherwise.
+- The PDF is written to `<data dir>/invoices/2026-27/CN-26-27-001.pdf`, rendered before anything is saved, like an invoice's. It prints the original invoice's number and date and the reason.
+- Reports subtract a note in the year and quarter it is dated in: gross receipts, GST and the client's invoiced figure. GSTR-1 reports it in table 9B (`cdnr` for registered clients, `cdnur` against large B2CL invoices, `cdnur`/`EXPWOP` for exports) and in table 13.
 
 **Known limitation**: accounting-core's PDF layout always prints a GST supply line ("Intra-state (CGST + SGST)") and a seller GSTIN line, even on a plain invoice. compter adds "no GST is charged on this invoice" as the first term so the document is unambiguous.
 
@@ -189,7 +208,7 @@ The Reports tab shows one financial year (April–March). All figures are comput
 
 | Section | What it shows |
 |---------|---------------|
-| Income | invoices dated in the year; **gross receipts** (their value excl. GST) and how much of that is exports; money **received** and **TDS** withheld on payments dated in the year; what is still **outstanding** |
+| Income | invoices dated in the year; **gross receipts** (their value excl. GST, less credit notes dated in the year) and how much of that is exports; money **received** and **TDS** withheld on payments dated in the year; what is still **outstanding** |
 | Income tax | **44ADA income**, 50% of gross receipts, next to **books profit** (gross receipts − expenses). It flags receipts over the ₹75 lakh 44ADA limit, and a books profit below 44ADA income, since declaring the lower figure needs a tax audit (44AB) when income is over the basic exemption |
 | GST | per quarter: CGST, SGST and IGST charged, input credit from expenses, and the net payable (or credit carried forward) |
 | Clients | per client: invoiced, received and TDS, to match against Form 26AS |
@@ -206,7 +225,10 @@ Assumptions:
   - **Table 13**, the documents-issued summary, covering tax and export invoices
 - Plain invoices are not reported: they are issued while unregistered.
 - Exports are added to the HSN summary's B2C section at 0%. **Confirm this against the current portal rules before filing.** The shipping-bill fields are left out, since services have no shipping bill.
-- Monthly IFF uploads for B2B invoices aren't generated. Everything is in the quarterly return.
+- Credit notes dated in the quarter go into table 9B and table 13 (see [Credit notes](#credit-notes)).
+- **IFF** filed for the first or second month? Say so in the export form ("IFF filed"), and those months' B2B invoices and B2B credit notes are left out of the quarter's return. They still count in its HSN summary and table 13.
+
+**IFF (monthly, QRMP)**: `i`, pick one of a quarter's first two months, and compter writes that month's B2B invoices (table 4A) and credit notes on B2B invoices (9B `cdnr`) to `<data dir>/returns/2026-27/IFF-2026-07.json`. Then answer "IFF filed" when you export that quarter's GSTR-1.
 
 ## Architecture
 
@@ -236,12 +258,14 @@ src/
 ├── demo.rs              in-memory sample business for --demo; fixture projects for tests
 ├── services/            use-cases: load → domain change → save
 │   ├── project_service.rs  ProjectService, ProjectDraft, MilestoneDraft
-│   ├── invoice_service.rs  InvoiceService: profile, preview, issue, pay, PDFs
+│   ├── invoice_service.rs  InvoiceService: profile, preview, issue, pay, credit, PDFs
+│   ├── preferences_service.rs  PreferencesService: the saved theme
 │   ├── invoice_builder.rs  milestone → invoice document + ledger entries (pure)
-│   ├── expense_service.rs  ExpenseService: add and delete expenses with their posting
+│   ├── credit_note_builder.rs  correction → credit note document + ledger entries (pure)
+│   ├── expense_service.rs  ExpenseService: add, edit and delete expenses with their posting
 │   ├── reports.rs       YearReport: a financial year in numbers (pure)
-│   ├── report_service.rs  ReportService: year reports, GSTR-1 export
-│   ├── gstr1.rs         quarterly GSTR-1: merge months, exports (6A), table 13
+│   ├── report_service.rs  ReportService: year reports, GSTR-1 and IFF exports
+│   ├── gstr1.rs         quarterly GSTR-1: merge months, exports (6A), export credit notes, table 13; monthly IFF
 │   ├── chart.rs         compter's ledger accounts
 │   └── error.rs         ServiceError
 ├── storage/             redb persistence
@@ -259,7 +283,9 @@ src/
 │   ├── project.rs       Project, ClientDetails/ClientRegion, ProjectStatus, mutations
 │   ├── milestone.rs     Milestone, MilestoneId, MilestoneStatus, transitions
 │   ├── billing.rs       Billing, TimeEntry, hourly amount calculation
-│   ├── invoice.rs       Invoice, InvoiceNumber, InvoiceKind, InvoiceStatus, payment rules
+│   ├── invoice.rs       Invoice, InvoiceNumber, InvoiceKind, InvoiceStatus, payment and credit rules
+│   ├── credit_note.rs   CreditNote: a correction to an issued invoice
+│   ├── appearance.rs    Appearance: the chosen colour theme
 │   ├── profile.rs       BusinessProfile (seller details, GSTIN, SAC, prefix, LUT)
 │   ├── expense.rs       Expense, ExpenseCategory, ExpenseId
 │   ├── states.rs        GST state code names
@@ -268,19 +294,20 @@ src/
 └── ui/
     ├── mod.rs           draw(): header / body / footer, help overlay
     ├── view.rs          View trait (render, keys, hints, on_activate), Action, Notice
-    ├── theme.rs         every colour and style
+    ├── theme.rs         every colour and style: dark, light and monochrome
+    ├── filter.rs        Filter: the `/` search shared by the list tabs
     ├── widgets.rs       panel, modal, money, duration, status_span
     ├── selection.rs     wrap-around Selection and j/k Nav
     ├── form/            reusable modal Form (Form::step), Confirm, input parsers
     ├── header.rs  footer.rs  popup.rs
     └── views/
         ├── projects/    ProjectsView: state and keys, rendering, forms, issue/pay
-        ├── invoices/    InvoicesView: list, open PDF, record payment
-        ├── settings/    SettingsView: business profile and logo
+        ├── invoices/    InvoicesView: list, search, open PDF, record payment, credit notes
+        ├── settings/    SettingsView: business profile, logo and theme
         ├── payment.rs   the payment form shared by Projects and Invoices
         ├── dashboard/   DashboardView: this year and unpaid invoices
-        ├── expenses/    ExpensesView: add, delete, by year
-        ├── reports/     ReportsView: income, 44ADA vs books, GST, clients, GSTR-1 export
+        ├── expenses/    ExpensesView: add, edit, delete, search, by year
+        ├── reports/     ReportsView: income, 44ADA vs books, GST, clients, GSTR-1 and IFF export
         ├── year.rs      YearPicker: [ and ] through financial years
         └── placeholder.rs  a tab that only shows a message
 ```
@@ -299,15 +326,17 @@ Everything lives in one [redb](https://www.redb.org) database file, `compter.red
 
 | Table | Key | Value |
 |-------|-----|-------|
-| `meta` | `"schema_version"` | `2` |
+| `meta` | `"schema_version"` | `3` |
 | `projects` | project UUID | full project with milestones and time entries |
-| `project_summaries` | project UUID | id, name, client, status, total, for list views |
+| `project_summaries` | project UUID | id, name, client, status, total, archived, for list views |
 | `accounts` | account id | accounting-core `Account` |
-| `transactions` | transaction id | accounting-core `Transaction` (`inv-…` / `pay-…` per invoice) |
-| `invoices` | invoice number | issued invoice with its printed document and its payments |
+| `transactions` | transaction id | accounting-core `Transaction` (`inv-…` / `pay-…` per invoice, `cn-…` per credit note) |
+| `invoices` | invoice number | issued invoice with its printed document, its payments and its credit notes |
 | `invoice_summaries` | invoice number | number, date, client, total, balance, status, for the list |
 | `invoice_counters` | financial year (`2026-27`) | last sequence used |
-| `settings` | `"business_profile"` | your business details |
+| `credit_notes` | credit note number | issued credit note with its printed document |
+| `credit_note_counters` | financial year (`2026-27`) | last credit note sequence used |
+| `settings` | `"business_profile"`, `"appearance"` | your business details; the theme |
 | `expenses` | expense UUID | an expense (its posting is transaction `exp-<id>`) |
 | `logos` | logo UUID | raw PNG or JPEG bytes; never removed, since invoices refer to them |
 
@@ -315,7 +344,7 @@ Everything lives in one [redb](https://www.redb.org) database file, `compter.red
 - **Low memory**: nothing is cached. Lists read only the small summary rows; a full project is read when you open it. The ledger store answers each query from the database.
 - **Validated on load**: values are stored as JSON bytes and decoded through the same checks as the domain constructors. A hand-edited bad record fails with its table and key instead of loading.
 - **Single process**: redb locks the file, so a second `compter` is refused with a clear error instead of corrupting data.
-- **Versioned, with upgrades**: the `meta` table records the schema version. Opening an older database runs the upgrade steps in `storage/migrations.rs` within one transaction. A database from a *newer* compter is refused rather than guessed at. Saved-format fixtures (`storage/tests/fixtures/`) are loaded on every `cargo test`, so a change that would stop existing records from loading fails the build first. Version 2 turned an invoice's single paid status into a list of payments; a version 1 database is upgraded on first open.
+- **Versioned, with upgrades**: the `meta` table records the schema version. Opening an older database runs the upgrade steps in `storage/migrations.rs` within one transaction. A database from a *newer* compter is refused rather than guessed at. Saved-format fixtures (`storage/tests/fixtures/`) are loaded on every `cargo test`, so a change that would stop existing records from loading fails the build first. Version 2 turned an invoice's single paid status into a list of payments; a version 1 database is upgraded on first open. Version 3 added credit notes and the CREDITED milestone status; it rewrites nothing, but a compter from before it refuses the file instead of reading a credited invoice as still owed in full.
 
 `Store::open(&DataDir)` opens the file, and `Store::in_memory()` gives the same database in memory for tests. From a store you get:
 - `store.repository()`: a `RedbRepository`, which implements `ProjectRepository`, `InvoiceRepository` and `SettingsRepository`
@@ -331,4 +360,4 @@ The app opens the file on start, before the terminal is taken over, so an error 
 4. ✅ **Wire storage into the TUI**: load and save, forms to create and edit projects and milestones, log hours
 5. ✅ **Invoicing & payments**: tax, export (LUT) and plain invoices, PDFs, ledger posting, payments with TDS, Invoices and Settings tabs
 6. ✅ **Tax and reports**: dashboard, expenses, year report (income, 44ADA vs books, GST by quarter, TDS and income by client), quarterly GSTR-1 JSON with exports
-7. **Polish**: archive finished projects (hidden from the list, kept for tax records), credit notes, editing expenses, IFF, search and filter, theming
+7. ✅ **Polish**: archive finished projects (hidden from the list, kept for tax records), credit notes, editing expenses, IFF, search and filter, theming

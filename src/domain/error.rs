@@ -34,16 +34,36 @@ pub enum DomainError {
     NoTimeEntries,
     #[error("this project has invoiced milestones; they are billing records and can't be deleted")]
     HasBilledMilestones,
+    #[error(
+        "only finished projects can be archived: invoice or delete the pending milestones first"
+    )]
+    ProjectNotFinished,
+    #[error("this project is archived; restore it (A) to add work")]
+    ProjectArchived,
     #[error("a client abroad can't have a GSTIN")]
     ForeignClientWithGstin,
     #[error("SAC code {0} is not in the GST rate list")]
     UnknownSacCode(String),
     #[error("invoice prefix must be 1 to 5 letters, digits or '-'")]
     InvalidInvoicePrefix,
+    #[error("invoice prefix {0} is the credit note series; choose another")]
+    ReservedInvoicePrefix(&'static str),
     #[error("amount can't be negative")]
     NegativeAmount,
-    #[error("this invoice is already paid")]
+    #[error("nothing is due on this invoice")]
     InvoiceAlreadyPaid,
+    #[error(
+        "credit note total is {got}, more than the {balance} still due; it can't refund what was paid"
+    )]
+    CreditExceedsBalance { balance: String, got: String },
+    #[error("credit note date is before the invoice date")]
+    CreditBeforeInvoice,
+    #[error("this credit note is for another invoice")]
+    CreditForAnotherInvoice,
+    #[error("only an invoiced milestone can be credited")]
+    NotInvoiced,
+    #[error("credit notes can take back at most what the milestone billed")]
+    CreditExceedsMilestone,
     #[error("received plus TDS is {got}, more than the {balance} still due")]
     PaymentExceedsBalance { balance: String, got: String },
     #[error("this invoice record is in the old (v1) format; the database needs its upgrade")]

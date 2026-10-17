@@ -22,6 +22,8 @@ fn dashboard_lists_what_clients_still_owe() {
         assert!(screen.contains(unpaid), "missing {unpaid}");
     }
     assert!(!screen.contains("NDC/26-27/002"), "paid invoice listed");
+    assert!(screen.contains("Invoiced (net)"), "{screen}");
+    assert!(screen.contains("Credit notes"), "{screen}");
 }
 
 #[test]
@@ -105,4 +107,53 @@ fn credit_without_gstin_keeps_the_form_open() {
         "{screen}"
     );
     assert!(screen.contains("Add expense"));
+}
+
+#[test]
+fn expenses_are_edited_in_a_prefilled_form_and_searched() {
+    let store = Store::in_memory().unwrap();
+    let mut app = reporting_app(&store);
+    app.handle_key(Key::Char('2'));
+    go_to_year(&mut app, 2026);
+    for what in ["Train to Mumbai\t2,500", "Figma\t1,000"] {
+        app.handle_key(Key::Char('a'));
+        type_keys(&mut app, &format!("2026-07-05\t\t{what}\n"));
+    }
+
+    app.handle_key(Key::Char('/'));
+    type_keys(&mut app, "train\n");
+    let found = screen(&app, W, H);
+    assert!(found.contains("Train to Mumbai"), "{found}");
+    assert!(!found.contains("Figma"), "{found}");
+
+    // The form holds the stored values; change the amount only
+    app.handle_key(Key::Char('e'));
+    let form = screen(&app, W, H);
+    assert!(form.contains("Edit expense"), "{form}");
+    assert!(form.contains("2026-07-05"), "{form}");
+    type_keys(&mut app, "\t\t\t");
+    app.handle_key(Key::Ctrl('u'));
+    type_keys(&mut app, "3000\n");
+
+    let listed = store.repository().list_expenses(fy_2026()).unwrap();
+    assert_eq!(listed.len(), 2);
+    let train = listed
+        .iter()
+        .find(|e| e.description() == "Train to Mumbai")
+        .unwrap();
+    assert_eq!(train.amount(), &bigdecimal::BigDecimal::from(3000));
+    assert!(screen(&app, W, H).contains("Saved Train to Mumbai"));
+
+    app.handle_key(Key::Esc);
+    assert!(screen(&app, W, H).contains("Figma"));
+}
+
+#[test]
+fn dashboard_tiles_wrap_on_a_narrow_screen() {
+    let store = demo::store().unwrap();
+    let app = reporting_app(&store);
+    let narrow = screen(&app, 80, 24);
+    for label in ["Invoiced (net)", "Credit notes", "Outstanding", "Profit"] {
+        assert!(narrow.contains(label), "missing {label}\n{narrow}");
+    }
 }

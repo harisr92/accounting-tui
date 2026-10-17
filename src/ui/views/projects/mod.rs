@@ -18,6 +18,7 @@ use crate::domain::{
 };
 use crate::services::{InvoicePreview, InvoiceService, Issued, ProjectService, ServiceError};
 use crate::storage::{DataDir, Repository};
+use crate::ui::filter::Filter;
 use crate::ui::form::{Confirm, Form};
 use crate::ui::selection::{Nav, Selection};
 use crate::ui::theme::Theme;
@@ -32,6 +33,10 @@ const PROJECT_HINTS: &[KeyHint] = &[
     KeyHint::new("n", "new"),
     KeyHint::new("e", "edit"),
     KeyHint::new("x", "delete"),
+    KeyHint::new("A", "archive/restore"),
+    KeyHint::new("H", "show archived"),
+    Filter::HINT,
+    Filter::CLEAR_HINT,
 ];
 
 const MILESTONE_HINTS: &[KeyHint] = &[
@@ -68,6 +73,7 @@ enum FormKind {
     Payment(InvoiceNumber),
     /// The exchange rate to invoice a milestone of a foreign-currency project at
     IssueRate(ProjectId, MilestoneId),
+    Search,
 }
 
 /// A change waiting for a yes
@@ -92,6 +98,11 @@ pub struct ProjectsView<R> {
     service: ProjectService<R>,
     invoices: InvoiceService<R>,
     summaries: Vec<ProjectSummary>,
+    /// Positions in `summaries` of the rows listed: not archived (unless shown) and matching the
+    /// search. `project_sel` moves over these.
+    visible: Vec<usize>,
+    show_archived: bool,
+    filter: Filter,
     selected: Option<Project>,
     project_sel: Selection,
     milestone_sel: Selection,
@@ -108,6 +119,9 @@ impl<R: Repository> ProjectsView<R> {
             service: ProjectService::new(repo.clone()),
             invoices: InvoiceService::new(repo, data_dir),
             summaries: Vec::new(),
+            visible: Vec::new(),
+            show_archived: false,
+            filter: Filter::default(),
             selected: None,
             project_sel: Selection::default(),
             milestone_sel: Selection::default(),
@@ -119,18 +133,24 @@ impl<R: Repository> ProjectsView<R> {
         Ok(view)
     }
 
-    /// Re-read the summaries; select `changed` if given, else reload the project under the cursor
+    /// Re-read the summaries; select `changed` if given, else reload the project under the cursor.
+    /// A changed project the search hides clears the search; one just archived drops out of view.
     fn refresh(&mut self, changed: Option<Project>) -> Result<(), ServiceError> {
         self.summaries = self.service.list()?;
+        self.update_visible();
         match changed {
-            Some(project) => {
-                if let Some(index) = self.summaries.iter().position(|s| s.id() == project.id()) {
+            Some(project) if !project.is_archived() || self.show_archived => {
+                if self.position_of(project.id()).is_none() {
+                    self.filter = Filter::default();
+                    self.update_visible();
+                }
+                if let Some(index) = self.position_of(project.id()) {
                     self.project_sel.select(index);
                 }
                 self.selected = Some(project);
             }
-            None => {
-                self.project_sel.clamp(self.summaries.len());
+            _ => {
+                self.project_sel.clamp(self.visible.len());
                 self.load_selected()?;
             }
         }
@@ -142,10 +162,109 @@ impl<R: Repository> ProjectsView<R> {
     /// Load the project under the cursor, dropping the previous one first
     fn load_selected(&mut self) -> Result<(), ServiceError> {
         self.selected = None;
-        if let Some(summary) = self.summaries.get(self.project_sel.index()) {
-            self.selected = Some(self.service.load(summary.id())?);
+        if let Some(id) = self
+            .listed(self.project_sel.index())
+            .map(ProjectSummary::id)
+        {
+            self.selected = Some(self.service.load(id)?);
         }
         Ok(())
+    }
+
+    /// The `index`th listed project
+    fn listed(&self, index: usize) -> Option<&ProjectSummary> {
+        self.visible.get(index).and_then(|&i| self.summaries.get(i))
+    }
+
+    /// Where project `id` is in the list, if it is listed
+    fn position_of(&self, id: ProjectId) -> Option<usize> {
+        self.visible
+            .iter()
+            .position(|&i| self.summaries.get(i).is_some_and(|s| s.id() == id))
+    }
+
+    fn update_visible(&mut self) {
+        let (show_archived, filter) = (self.show_archived, &self.filter);
+        self.visible = self
+            .summaries
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| show_archived || !s.is_archived())
+            .filter(|(_, s)| filter.matches(&[s.name(), s.client_name()]))
+            .map(|(index, _)| index)
+            .collect();
+    }
+
+    /// Re-list after the search or the archived toggle changed, keeping the selected project
+    /// when it is still listed
+    fn relist(&mut self) -> Result<(), ServiceError> {
+        let current = self.selected.as_ref().map(Project::id);
+        self.update_visible();
+        self.milestone_sel.reset();
+        match current.and_then(|id| self.position_of(id)) {
+            Some(index) => self.project_sel.select(index),
+            None => {
+                self.project_sel.reset();
+                self.open_logs.clear();
+                self.load_selected()?;
+            }
+        }
+        if self.selected.is_none() {
+            self.focus = Focus::Projects;
+        }
+        Ok(())
+    }
+
+    /// `A`: archive the selected finished project, or restore an archived one
+    fn toggle_archived(&mut self) -> Action {
+        let Some(project) = &self.selected else {
+            return Action::Notify(Notice::info("Select a project first"));
+        };
+        let archive = !project.is_archived();
+        let id = project.id();
+        let result = self.service.set_archived(id, archive).and_then(|p| {
+            if p.is_archived() && !self.show_archived {
+                // It drops out of the list: the project now under the cursor starts afresh
+                self.milestone_sel.reset();
+                self.open_logs.clear();
+            }
+            self.refresh(Some(p))
+        });
+        Action::Notify(match result {
+            Ok(()) if archive && !self.show_archived => {
+                Notice::success("Project archived: H shows archived projects")
+            }
+            Ok(()) if archive => Notice::success("Project archived"),
+            Ok(()) => Notice::success("Project restored to the list"),
+            Err(error) => Notice::error(error.to_string()),
+        })
+    }
+
+    /// `H`: show or hide archived projects
+    fn toggle_show_archived(&mut self) -> Action {
+        self.show_archived = !self.show_archived;
+        if let Err(error) = self.relist() {
+            return Action::Notify(Notice::error(error.to_string()));
+        }
+        let count = self.summaries.iter().filter(|s| s.is_archived()).count();
+        Action::Notify(Notice::info(if self.show_archived {
+            format!("Showing {count} archived project(s)")
+        } else {
+            "Archived projects hidden".to_owned()
+        }))
+    }
+
+    fn search(&mut self, form: &Form) -> Result<Notice, String> {
+        self.filter = Filter::from_form(form);
+        self.relist().map_err(|e| e.to_string())?;
+        Ok(if self.filter.is_empty() {
+            Notice::info("Search cleared")
+        } else {
+            Notice::info(format!(
+                "{} project(s) match; Esc clears the search",
+                self.visible.len()
+            ))
+        })
     }
 
     fn current_milestone(&self) -> Option<(ProjectId, usize, &Milestone)> {
@@ -295,6 +414,9 @@ impl<R: Repository> ProjectsView<R> {
         if milestone.status() != MilestoneStatus::Invoiced {
             let why = match milestone.status() {
                 MilestoneStatus::Paid => "This milestone is already paid",
+                MilestoneStatus::Credited => {
+                    "This milestone's invoice was cancelled by credit notes"
+                }
                 _ => "Invoice the milestone first (i)",
             };
             return Action::Notify(Notice::info(why));
@@ -334,6 +456,16 @@ impl<R: Repository> ProjectsView<R> {
                 Action::Handled
             }
             (_, Key::Char('n')) => self.open_form(FormKind::NewProject),
+            (Focus::Projects, Key::Char('/')) => self.open_form(FormKind::Search),
+            (Focus::Projects, Key::Esc) if !self.filter.is_empty() => {
+                self.filter = Filter::default();
+                match self.relist() {
+                    Ok(()) => Action::Notify(Notice::info("Search cleared")),
+                    Err(error) => Action::Notify(Notice::error(error.to_string())),
+                }
+            }
+            (Focus::Projects, Key::Char('A')) => self.toggle_archived(),
+            (Focus::Projects, Key::Char('H')) => self.toggle_show_archived(),
             (Focus::Projects, Key::Char('e')) => self.open_form(FormKind::EditProject),
             (Focus::Projects, Key::Char('x')) => match &self.selected {
                 Some(p) if p.ensure_deletable().is_err() => Action::Notify(Notice::error(
@@ -359,7 +491,7 @@ impl<R: Repository> ProjectsView<R> {
     fn navigate(&mut self, nav: Nav) -> Action {
         match self.focus {
             Focus::Projects => {
-                self.project_sel.move_by(nav, self.summaries.len());
+                self.project_sel.move_by(nav, self.visible.len());
                 self.milestone_sel.reset();
                 self.open_logs.clear();
                 if let Err(error) = self.load_selected() {
@@ -459,9 +591,8 @@ impl<R: Repository> View for ProjectsView<R> {
         let current = self.selected.as_ref().map(Project::id);
         let result = self.service.list().and_then(|summaries| {
             self.summaries = summaries;
-            if let Some(index) =
-                current.and_then(|id| self.summaries.iter().position(|s| s.id() == id))
-            {
+            self.update_visible();
+            if let Some(index) = current.and_then(|id| self.position_of(id)) {
                 self.project_sel.select(index);
             }
             self.refresh(None)
