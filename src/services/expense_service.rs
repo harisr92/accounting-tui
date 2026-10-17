@@ -1,10 +1,24 @@
-use accounting_core::{DefaultTransactionValidator, TransactionBuilder, TransactionValidator};
+use accounting_core::{
+    DefaultTransactionValidator, Transaction, TransactionBuilder, TransactionValidator,
+};
 use bigdecimal::{BigDecimal, Zero};
 use chrono::NaiveDate;
 
 use super::{ServiceError, chart};
 use crate::domain::{Expense, ExpenseCategory, ExpenseId, FiscalYear};
 use crate::storage::{ExpenseRecord, ExpenseRepository, SettingsRepository};
+
+/// Input for adding or editing an expense
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExpenseDraft {
+    pub date: NaiveDate,
+    pub category: ExpenseCategory,
+    pub description: String,
+    /// Total paid, GST included
+    pub amount: BigDecimal,
+    /// GST in `amount` claimed back as input credit
+    pub gst_credit: BigDecimal,
+}
 
 /// Business expenses for the regular-books view; each is posted to the ledger as it is saved
 pub struct ExpenseService<R> {
@@ -26,15 +40,45 @@ impl<R: ExpenseRepository + SettingsRepository> ExpenseService<R> {
     }
 
     /// Record an expense paid from the bank; `gst_credit` needs a GSTIN in the profile
-    pub fn add(
-        &mut self,
-        date: NaiveDate,
-        category: ExpenseCategory,
-        description: &str,
-        amount: BigDecimal,
-        gst_credit: BigDecimal,
-    ) -> Result<Expense, ServiceError> {
-        let expense = Expense::new(date, category, description, amount, gst_credit)?;
+    pub fn add(&mut self, draft: ExpenseDraft) -> Result<Expense, ServiceError> {
+        let expense = Expense::new(
+            draft.date,
+            draft.category,
+            draft.description,
+            draft.amount,
+            draft.gst_credit,
+        )?;
+        let transaction = self.posting(&expense)?;
+        self.repo.add_expense(&ExpenseRecord {
+            expense: &expense,
+            transaction: &transaction,
+            accounts: &chart::accounts(),
+        })?;
+        Ok(expense)
+    }
+
+    /// Correct an expense; its ledger posting is replaced in the same write
+    pub fn edit(&mut self, id: ExpenseId, draft: ExpenseDraft) -> Result<Expense, ServiceError> {
+        let mut expense = self.repo.load_expense(id)?;
+        expense.edit(
+            draft.date,
+            draft.category,
+            draft.description,
+            draft.amount,
+            draft.gst_credit,
+        )?;
+        let transaction = self.posting(&expense)?;
+        self.repo.update_expense(&ExpenseRecord {
+            expense: &expense,
+            transaction: &transaction,
+            accounts: &chart::accounts(),
+        })?;
+        Ok(expense)
+    }
+
+    /// The ledger transaction for an expense paid from the bank: its cost to the expense
+    /// account, any input credit to Input GST. Input credit needs a GSTIN in the profile.
+    fn posting(&self, expense: &Expense) -> Result<Transaction, ServiceError> {
         let registered = self
             .repo
             .load_profile()?
@@ -42,10 +86,10 @@ impl<R: ExpenseRepository + SettingsRepository> ExpenseService<R> {
         if !registered && !expense.gst_credit().is_zero() {
             return Err(ServiceError::CreditWithoutGstin);
         }
-
+        let category = expense.category();
         let mut builder = TransactionBuilder::new(
             transaction_id(expense.id()),
-            date,
+            expense.date(),
             format!("{}: {}", category.label(), expense.description()),
         )
         .debit(chart::expense_account(category), expense.cost(), None);
@@ -56,13 +100,7 @@ impl<R: ExpenseRepository + SettingsRepository> ExpenseService<R> {
             .credit(chart::BANK, expense.amount().clone(), None)
             .build()?;
         DefaultTransactionValidator.validate_transaction(&transaction)?;
-
-        self.repo.add_expense(&ExpenseRecord {
-            expense: &expense,
-            transaction: &transaction,
-            accounts: &chart::accounts(),
-        })?;
-        Ok(expense)
+        Ok(transaction)
     }
 
     /// Remove an expense and its ledger posting

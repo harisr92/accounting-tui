@@ -129,6 +129,23 @@ impl Expense {
         Ok(expense)
     }
 
+    /// Correct every detail of the expense, keeping its id; nothing changes if any is invalid
+    pub fn edit(
+        &mut self,
+        date: NaiveDate,
+        category: ExpenseCategory,
+        description: impl Into<String>,
+        amount: BigDecimal,
+        gst_credit: BigDecimal,
+    ) -> Result<(), DomainError> {
+        let edited = Self {
+            id: self.id,
+            ..Self::new(date, category, description, amount, gst_credit)?
+        };
+        *self = edited;
+        Ok(())
+    }
+
     pub fn id(&self) -> ExpenseId {
         self.id
     }

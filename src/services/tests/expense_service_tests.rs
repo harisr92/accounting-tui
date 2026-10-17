@@ -4,7 +4,7 @@ use pollster::block_on;
 
 use super::fixtures::{SELLER_GSTIN, date, profile_draft};
 use crate::domain::{ExpenseCategory, FiscalYear};
-use crate::services::{ExpenseService, InvoiceService, ServiceError, chart};
+use crate::services::{ExpenseDraft, ExpenseService, InvoiceService, ServiceError, chart};
 use crate::storage::Store;
 
 fn rupees(amount: i64) -> BigDecimal {
@@ -32,18 +32,22 @@ fn store(registered: bool) -> Store {
     store
 }
 
+fn draft(category: ExpenseCategory, what: &str, amount: i64, credit: i64) -> ExpenseDraft {
+    ExpenseDraft {
+        date: date(),
+        category,
+        description: what.to_owned(),
+        amount: rupees(amount),
+        gst_credit: rupees(credit),
+    }
+}
+
 #[test]
 fn expenses_post_cost_credit_and_bank() {
     let store = store(true);
     let mut service = ExpenseService::new(store.repository());
     let expense = service
-        .add(
-            date(),
-            ExpenseCategory::Software,
-            "Figma",
-            rupees(1180),
-            rupees(180),
-        )
+        .add(draft(ExpenseCategory::Software, "Figma", 1180, 180))
         .unwrap();
     assert_eq!(
         balance(&store, chart::expense_account(ExpenseCategory::Software)),
@@ -64,22 +68,47 @@ fn input_credit_needs_a_gstin() {
     let store = store(false);
     let mut service = ExpenseService::new(store.repository());
     assert!(matches!(
-        service.add(
-            date(),
-            ExpenseCategory::Travel,
-            "Train",
-            rupees(1180),
-            rupees(180)
-        ),
+        service.add(draft(ExpenseCategory::Travel, "Train", 1180, 180)),
         Err(ServiceError::CreditWithoutGstin)
     ));
     service
-        .add(
-            date(),
-            ExpenseCategory::Travel,
-            "Train",
-            rupees(1180),
-            rupees(0),
+        .add(draft(ExpenseCategory::Travel, "Train", 1180, 0))
+        .unwrap();
+}
+
+#[test]
+fn editing_an_expense_replaces_its_posting() {
+    let store = store(true);
+    let mut service = ExpenseService::new(store.repository());
+    let expense = service
+        .add(draft(ExpenseCategory::Software, "Figma", 1180, 180))
+        .unwrap();
+    let edited = service
+        .edit(
+            expense.id(),
+            draft(ExpenseCategory::Equipment, "Monitor", 23_600, 3_600),
         )
         .unwrap();
+    assert_eq!(edited.id(), expense.id());
+    assert_eq!(
+        balance(&store, chart::expense_account(ExpenseCategory::Software)),
+        rupees(0)
+    );
+    assert_eq!(
+        balance(&store, chart::expense_account(ExpenseCategory::Equipment)),
+        rupees(20_000)
+    );
+    assert_eq!(balance(&store, chart::INPUT_GST), rupees(3_600));
+    assert_eq!(balance(&store, chart::BANK), rupees(-23_600));
+    let year = FiscalYear::containing(date());
+    assert_eq!(service.list(year).unwrap(), [edited]);
+
+    // A rejected edit changes nothing
+    assert!(
+        service
+            .edit(expense.id(), draft(ExpenseCategory::Other, "Bad", 100, 100))
+            .is_err()
+    );
+    assert_eq!(service.list(year).unwrap()[0].description(), "Monitor");
+    assert_eq!(balance(&store, chart::BANK), rupees(-23_600));
 }

@@ -71,6 +71,11 @@ pub struct ExpenseRecord<'a> {
 pub trait ExpenseRepository {
     fn add_expense(&mut self, record: &ExpenseRecord<'_>) -> Result<(), StorageError>;
 
+    fn load_expense(&self, id: ExpenseId) -> Result<Expense, StorageError>;
+
+    /// Replace a stored expense and its ledger posting (same transaction id) with `record`
+    fn update_expense(&mut self, record: &ExpenseRecord<'_>) -> Result<(), StorageError>;
+
     /// Remove an expense and the ledger transaction `transaction_id` that posted it
     fn delete_expense(&mut self, id: ExpenseId, transaction_id: &str) -> Result<(), StorageError>;
 

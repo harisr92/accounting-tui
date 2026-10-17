@@ -229,6 +229,34 @@ impl ExpenseRepository for RedbRepository {
         Ok(())
     }
 
+    fn load_expense(&self, id: ExpenseId) -> Result<Expense, StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(EXPENSES)?;
+        let row = table
+            .get(id.as_uuid())?
+            .ok_or(StorageError::ExpenseNotFound(id))?;
+        decode(EXPENSES.name(), id, row.value())
+    }
+
+    fn update_expense(&mut self, record: &ExpenseRecord<'_>) -> Result<(), StorageError> {
+        let id = record.expense.id();
+        let bytes = encode(EXPENSES.name(), id, record.expense)?;
+        let txn = self.db.begin_write()?;
+        if txn
+            .open_table(EXPENSES)?
+            .insert(id.as_uuid(), bytes.as_slice())?
+            .is_none()
+        {
+            return Err(StorageError::ExpenseNotFound(id));
+        }
+        txn.open_table(TRANSACTIONS)?
+            .remove(record.transaction.id.as_str())?;
+        put_missing_accounts(&txn, record.accounts)?;
+        put_transaction(&txn, record.transaction)?;
+        txn.commit()?;
+        Ok(())
+    }
+
     fn delete_expense(&mut self, id: ExpenseId, transaction_id: &str) -> Result<(), StorageError> {
         let txn = self.db.begin_write()?;
         if txn.open_table(EXPENSES)?.remove(id.as_uuid())?.is_none() {
