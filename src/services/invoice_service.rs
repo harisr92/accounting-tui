@@ -9,16 +9,17 @@ use accounting_core::{
 use bigdecimal::{BigDecimal, Zero};
 use chrono::NaiveDate;
 
+use super::credit_note_builder::{self, BuiltCreditNote, CreditDraft};
 use super::invoice_builder::{self, BuiltInvoice, InvoicingError};
 use super::{ServiceError, chart};
 use crate::domain::{
-    BusinessProfile, Currency, ExchangeRate, FiscalYear, Invoice, InvoiceAmounts, InvoiceKind,
-    InvoiceNumber, InvoiceSummary, Logo, LogoId, MilestoneId, Payment, ProfileDraft, Project,
-    ProjectId,
+    BusinessProfile, CREDIT_NOTE_PREFIX, CreditNote, Currency, DomainError, ExchangeRate,
+    FiscalYear, Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber, InvoiceStatus, InvoiceSummary,
+    Logo, LogoId, MilestoneId, Payment, ProfileDraft, Project, ProjectId,
 };
 use crate::storage::{
-    DataDir, InvoiceRepository, IssueRecord, PaymentRecord, ProjectRepository, SettingsRepository,
-    write_file,
+    CreditRecord, DataDir, InvoiceRepository, IssueRecord, PaymentRecord, ProjectRepository,
+    SettingsRepository, write_file,
 };
 
 /// What issuing would produce, shown for confirmation before anything is saved
@@ -43,6 +44,27 @@ pub struct Issued {
     pub warnings: Vec<String>,
 }
 
+/// What a credit note would be, shown for confirmation before anything is saved
+#[derive(Debug, Clone)]
+pub struct CreditPreview {
+    pub number: InvoiceNumber,
+    pub invoice: InvoiceNumber,
+    pub currency: Currency,
+    /// In `currency`
+    pub amounts: InvoiceAmounts,
+    /// What the client still owes after the note
+    pub balance_after: BigDecimal,
+    pub warnings: Vec<String>,
+}
+
+/// The result of issuing a credit note: the saved note, and where its PDF went (or why it didn't)
+#[derive(Debug)]
+pub struct Credited {
+    pub note: CreditNote,
+    pub invoice: Invoice,
+    pub pdf: Result<Option<PathBuf>, String>,
+}
+
 /// Invoicing and payments. With a [`DataDir`], PDFs are written under it; without one (demo,
 /// tests) they are only rendered.
 pub struct InvoiceService<R> {
@@ -61,6 +83,10 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
 
     pub fn save_profile(&mut self, draft: ProfileDraft) -> Result<BusinessProfile, ServiceError> {
         let profile = BusinessProfile::try_from(draft)?;
+        // Invoices and credit notes must never share a number (or a PDF file)
+        if profile.invoice_prefix() == CREDIT_NOTE_PREFIX {
+            return Err(DomainError::ReservedInvoicePrefix(CREDIT_NOTE_PREFIX).into());
+        }
         self.repo.save_profile(&profile)?;
         Ok(profile)
     }
@@ -214,7 +240,7 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
     ) -> Result<Invoice, ServiceError> {
         let number = invoice.number().clone();
         let date = payment.date;
-        let project = if invoice.is_paid() {
+        let project = if invoice.is_settled() {
             let mut project = self.repo.load(invoice.project_id())?;
             let index = project
                 .milestone_index(invoice.milestone_id())
@@ -269,6 +295,111 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
             accounts: &chart::accounts(),
         })?;
         Ok(invoice)
+    }
+
+    /// Build the credit note `draft` would make against invoice `number`, without saving
+    pub fn preview_credit(
+        &self,
+        number: &InvoiceNumber,
+        draft: CreditDraft,
+    ) -> Result<CreditPreview, ServiceError> {
+        let (mut invoice, built, _) = self.build_credit(number, draft)?;
+        invoice.apply_credit(&built.note)?;
+        let note = &built.note;
+        Ok(CreditPreview {
+            number: note.number().clone(),
+            invoice: number.clone(),
+            currency: note.currency(),
+            amounts: note.amounts().clone(),
+            balance_after: invoice.balance(),
+            warnings: built.warnings,
+        })
+    }
+
+    /// Issue a credit note against invoice `number`, post it and write its PDF. A note that
+    /// leaves nothing due settles the invoice's milestone.
+    pub fn issue_credit(
+        &mut self,
+        number: &InvoiceNumber,
+        draft: CreditDraft,
+    ) -> Result<Credited, ServiceError> {
+        let (mut invoice, built, sequence) = self.build_credit(number, draft)?;
+        let BuiltCreditNote { note, entries, .. } = built;
+        // Render before saving: a document that can't be printed is never issued
+        let pdf = self.render_document(note.print(), note.terms(), note.logo(), note.currency())?;
+        invoice.apply_credit(&note)?;
+        let mut project = self.repo.load(invoice.project_id())?;
+        let index = project
+            .milestone_index(invoice.milestone_id())
+            .ok_or_else(|| ServiceError::MissingMilestone(number.to_string()))?;
+        project.credit_milestone(index, &note.amounts().taxable_value)?;
+        match invoice.status() {
+            InvoiceStatus::Credited => project.cancel_milestone(index)?,
+            InvoiceStatus::Paid => project.record_payment(index)?,
+            InvoiceStatus::Issued | InvoiceStatus::PartlyPaid => {}
+        }
+        let transaction = entries
+            .into_iter()
+            .fold(
+                TransactionBuilder::new(
+                    format!("cn-{}", note.number()),
+                    note.date(),
+                    format!("Credit note {} against {number}", note.number()),
+                )
+                .reference(note.number().as_str()),
+                TransactionBuilder::entry,
+            )
+            .build()?;
+        DefaultTransactionValidator.validate_transaction(&transaction)?;
+
+        self.repo.issue_credit_note(&CreditRecord {
+            sequence,
+            note: &note,
+            invoice: &invoice,
+            project: &project,
+            transaction: &transaction,
+            accounts: &chart::accounts(),
+        })?;
+        let pdf = self.write_document(note.fiscal_year(), note.number(), &pdf);
+        Ok(Credited { note, invoice, pdf })
+    }
+
+    pub fn load_credit_note(&self, number: &InvoiceNumber) -> Result<CreditNote, ServiceError> {
+        Ok(self.repo.load_credit_note(number)?)
+    }
+
+    /// Open a credit note's PDF in the system viewer, writing it first if it is missing
+    pub fn open_credit_pdf(&self, number: &InvoiceNumber) -> Result<PathBuf, ServiceError> {
+        let dir = self.data_dir.as_ref().ok_or(ServiceError::NoPdfFolder)?;
+        let note = self.repo.load_credit_note(number)?;
+        let path = dir.invoice_pdf_path(&note.fiscal_year().label(), &number.file_stem());
+        if !path.exists() {
+            let bytes =
+                self.render_document(note.print(), note.terms(), note.logo(), note.currency())?;
+            write_file(&path, &bytes)?;
+        }
+        open_in_viewer(&path).map_err(|source| ServiceError::OpenPdf {
+            path: path.clone(),
+            source,
+        })?;
+        Ok(path)
+    }
+
+    /// Load the invoice, take the year's next credit note number and build the note
+    fn build_credit(
+        &self,
+        number: &InvoiceNumber,
+        draft: CreditDraft,
+    ) -> Result<(Invoice, BuiltCreditNote, u32), ServiceError> {
+        let invoice = self.repo.load_invoice(number)?;
+        if invoice.is_settled() {
+            return Err(DomainError::InvoiceAlreadyPaid.into());
+        }
+        let year = FiscalYear::containing(draft.date);
+        let sequence = self.repo.next_credit_sequence(year)?;
+        let note_number = InvoiceNumber::new(CREDIT_NOTE_PREFIX, year, sequence);
+        let built = credit_note_builder::build(&invoice, note_number, draft)?;
+        Ok((invoice, built, sequence))
     }
 
     /// The invoice's PDF, rendered from its stored print
@@ -326,27 +457,52 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
 
     /// The PDF from what the invoice stored, with the logo it was issued with
     fn render(&self, invoice: &Invoice) -> Result<Vec<u8>, ServiceError> {
-        let logo = invoice
-            .logo()
+        self.render_document(
+            invoice.print(),
+            invoice.terms(),
+            invoice.logo(),
+            invoice.currency(),
+        )
+    }
+
+    /// An invoice or credit note's PDF from its stored print, terms and logo
+    fn render_document(
+        &self,
+        print: &InvoicePrint,
+        terms: &[String],
+        logo: Option<LogoId>,
+        currency: Currency,
+    ) -> Result<Vec<u8>, ServiceError> {
+        let logo = logo
             .map(|id| self.load_logo(id))
             .transpose()?
             .map(|logo| logo.bytes().to_vec());
         let options = PdfOptions {
-            currency_label: invoice.currency().pdf_label().to_owned(),
-            terms: invoice.terms().to_vec(),
+            currency_label: currency.pdf_label().to_owned(),
+            terms: terms.to_vec(),
             // accounting-core's default note claims e-invoicing, which compter doesn't do
             footer_note: String::new(),
             logo,
             ..PdfOptions::default()
         };
-        Ok(render_pdf(invoice.print(), &options)?)
+        Ok(render_pdf(print, &options)?)
     }
 
     fn write_pdf(&self, invoice: &Invoice, bytes: &[u8]) -> Result<Option<PathBuf>, String> {
+        self.write_document(invoice.fiscal_year(), invoice.number(), bytes)
+    }
+
+    /// Save a rendered document as `invoices/<year>/<number>.pdf`; nothing in demo mode
+    fn write_document(
+        &self,
+        year: FiscalYear,
+        number: &InvoiceNumber,
+        bytes: &[u8],
+    ) -> Result<Option<PathBuf>, String> {
         let Some(dir) = &self.data_dir else {
             return Ok(None);
         };
-        let path = pdf_path(dir, invoice);
+        let path = dir.invoice_pdf_path(&year.label(), &number.file_stem());
         write_file(&path, bytes)
             .map(|()| Some(path))
             .map_err(|e| e.to_string())
@@ -360,9 +516,9 @@ fn receivable_cleared(invoice: &Invoice) -> BigDecimal {
     let Some((latest, earlier)) = invoice.payments().split_last() else {
         return BigDecimal::zero();
     };
-    if invoice.is_paid() {
+    if invoice.is_settled() {
         let cleared_before: BigDecimal = earlier.iter().map(|p| invoice.to_inr(&p.settled())).sum();
-        invoice.inr_amounts().total - cleared_before
+        invoice.inr_amounts().total - cleared_before - invoice.credited_inr()
     } else {
         invoice.to_inr(&latest.settled())
     }

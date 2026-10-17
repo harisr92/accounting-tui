@@ -27,13 +27,15 @@ pub enum StorageError {
     ProjectNotFound(ProjectId),
     #[error("invoice {0} not found")]
     InvoiceNotFound(String),
+    #[error("credit note {0} not found")]
+    CreditNoteNotFound(String),
     #[error("expense {0} not found")]
     ExpenseNotFound(crate::domain::ExpenseId),
-    #[error("invoice {0} already exists")]
+    #[error("invoice or credit note {0} already exists")]
     DuplicateInvoice(String),
     #[error("ledger transaction {0} already exists")]
     DuplicateTransaction(String),
-    #[error("another invoice was numbered first; try again")]
+    #[error("another document was numbered first; try again")]
     StaleInvoiceNumber,
     #[error("could not write {path}")]
     WriteFile {

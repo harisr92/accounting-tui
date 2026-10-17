@@ -4,8 +4,8 @@
 use bigdecimal::BigDecimal;
 
 use crate::domain::{
-    Billing, BusinessProfile, ClientRegion, Currency, Expense, ExpenseCategory, Invoice,
-    InvoiceKind, InvoiceStatus, MilestoneStatus, Project, ProjectStatus,
+    Billing, BusinessProfile, ClientRegion, CreditNote, Currency, Expense, ExpenseCategory,
+    Invoice, InvoiceKind, InvoiceStatus, MilestoneStatus, Project, ProjectStatus,
 };
 use crate::storage::codec::decode;
 use crate::storage::migrations::invoice_v1_to_v2;
@@ -21,6 +21,9 @@ const EXPORT_INVOICE_V1: &str = include_str!("fixtures/invoice_export_v1.json");
 const PLAIN_INVOICE_V1: &str = include_str!("fixtures/invoice_plain_v1.json");
 const EUR_INVOICE_V2: &str = include_str!("fixtures/invoice_export_eur_v2.json");
 const EUR_PROJECT_V2: &str = include_str!("fixtures/project_eur_v2.json");
+const CREDITED_PROJECT_V3: &str = include_str!("fixtures/project_credited_v3.json");
+const CREDIT_NOTE_V3: &str = include_str!("fixtures/credit_note_v3.json");
+const CREDITED_INVOICE_V3: &str = include_str!("fixtures/invoice_credited_v3.json");
 
 #[test]
 fn hourly_project_v1_still_loads() {
@@ -149,4 +152,34 @@ fn euro_export_v2_still_loads() {
     let project: Project = decode("projects", "fixture", EUR_PROJECT_V2.as_bytes()).unwrap();
     assert_eq!(project.currency(), Currency::Eur);
     assert_eq!(project.status(), ProjectStatus::Paid);
+}
+
+#[test]
+fn credit_note_v3_still_loads() {
+    let note: CreditNote = decode("credit_notes", "fixture", CREDIT_NOTE_V3.as_bytes()).unwrap();
+    assert_eq!(note.number().as_str(), "CN/26-27/001");
+    assert_eq!(note.invoice().as_str(), "INV/26-27/001");
+    assert_eq!(note.kind(), InvoiceKind::Tax);
+    assert_eq!(note.amounts().igst, BigDecimal::from(1_800));
+    assert_eq!(note.reason(), "Discount agreed");
+    assert!(note.gst().is_some());
+}
+
+#[test]
+fn credited_invoice_v2_still_loads() {
+    let invoice: Invoice = decode("invoices", "fixture", CREDITED_INVOICE_V3.as_bytes()).unwrap();
+    assert_eq!(invoice.credits()[0].number.as_str(), "CN/26-27/001");
+    assert_eq!(invoice.credited(), BigDecimal::from(11_800));
+    assert_eq!(invoice.balance(), BigDecimal::from(47_200));
+    assert_eq!(invoice.status(), InvoiceStatus::Issued);
+}
+
+#[test]
+fn credited_project_v3_still_loads() {
+    let project: Project = decode("projects", "fixture", CREDITED_PROJECT_V3.as_bytes()).unwrap();
+    let milestone = &project.milestones()[0];
+    assert_eq!(milestone.status(), MilestoneStatus::Credited);
+    assert_eq!(milestone.credited(), &BigDecimal::from(50_000));
+    assert_eq!(project.paid_amount(), BigDecimal::from(0));
+    assert_eq!(project.outstanding_amount(), BigDecimal::from(0));
 }

@@ -7,16 +7,17 @@ use redb::{
 
 use super::codec::{decode, encode};
 use super::tables::{
-    ACCOUNTS, EXPENSES, INVOICE_COUNTERS, INVOICE_SUMMARIES, INVOICES, LOGOS, PROFILE_KEY,
-    PROJECT_SUMMARIES, PROJECTS, SETTINGS, TRANSACTIONS,
+    ACCOUNTS, APPEARANCE_KEY, CREDIT_NOTE_COUNTERS, CREDIT_NOTES, EXPENSES, INVOICE_COUNTERS,
+    INVOICE_SUMMARIES, INVOICES, LOGOS, PROFILE_KEY, PROJECT_SUMMARIES, PROJECTS, SETTINGS,
+    TRANSACTIONS,
 };
 use super::{
-    ExpenseRecord, ExpenseRepository, InvoiceRepository, IssueRecord, PaymentRecord,
+    CreditRecord, ExpenseRecord, ExpenseRepository, InvoiceRepository, IssueRecord, PaymentRecord,
     ProjectRepository, SettingsRepository, StorageError,
 };
 use crate::domain::{
-    BusinessProfile, Expense, ExpenseId, FiscalYear, Invoice, InvoiceNumber, InvoiceSummary, Logo,
-    LogoId, Project, ProjectId, ProjectSummary,
+    Appearance, BusinessProfile, CreditNote, Expense, ExpenseId, FiscalYear, Invoice,
+    InvoiceNumber, InvoiceSummary, Logo, LogoId, Project, ProjectId, ProjectSummary,
 };
 
 /// All of compter's records on redb. One type behind every repository trait, so a change that
@@ -151,7 +152,10 @@ impl InvoiceRepository for RedbRepository {
             }
             counters.insert(year.as_str(), record.sequence)?;
         }
-        if txn.open_table(INVOICES)?.get(number)?.is_some() {
+        // Invoices and credit notes share one numbering space: a number is never reused
+        if txn.open_table(INVOICES)?.get(number)?.is_some()
+            || txn.open_table(CREDIT_NOTES)?.get(number)?.is_some()
+        {
             return Err(StorageError::DuplicateInvoice(number.to_owned()));
         }
         put_invoice(&txn, record.invoice)?;
@@ -211,6 +215,64 @@ impl InvoiceRepository for RedbRepository {
         for row in table.iter()? {
             let (key, value) = row?;
             visit(decode(INVOICES.name(), key.value(), value.value())?);
+        }
+        Ok(())
+    }
+
+    fn next_credit_sequence(&self, year: FiscalYear) -> Result<u32, StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(CREDIT_NOTE_COUNTERS)?;
+        let last = table.get(year.label().as_str())?.map_or(0, |v| v.value());
+        Ok(last.saturating_add(1))
+    }
+
+    fn issue_credit_note(&mut self, record: &CreditRecord<'_>) -> Result<(), StorageError> {
+        let number = record.note.number().as_str();
+        let year = record.note.fiscal_year().label();
+        let invoice = record.invoice.number().as_str();
+        let txn = self.db.begin_write()?;
+        {
+            let mut counters = txn.open_table(CREDIT_NOTE_COUNTERS)?;
+            let last = counters.get(year.as_str())?.map_or(0, |v| v.value());
+            if record.sequence != last.saturating_add(1) {
+                return Err(StorageError::StaleInvoiceNumber);
+            }
+            counters.insert(year.as_str(), record.sequence)?;
+        }
+        if txn.open_table(INVOICES)?.get(invoice)?.is_none() {
+            return Err(StorageError::InvoiceNotFound(invoice.to_owned()));
+        }
+        {
+            let mut notes = txn.open_table(CREDIT_NOTES)?;
+            if notes.get(number)?.is_some() || txn.open_table(INVOICES)?.get(number)?.is_some() {
+                return Err(StorageError::DuplicateInvoice(number.to_owned()));
+            }
+            let bytes = encode(CREDIT_NOTES.name(), number, record.note)?;
+            notes.insert(number, bytes.as_slice())?;
+        }
+        put_invoice(&txn, record.invoice)?;
+        put_project(&txn, record.project)?;
+        put_missing_accounts(&txn, record.accounts)?;
+        put_transaction(&txn, record.transaction)?;
+        txn.commit()?;
+        Ok(())
+    }
+
+    fn load_credit_note(&self, number: &InvoiceNumber) -> Result<CreditNote, StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(CREDIT_NOTES)?;
+        let row = table
+            .get(number.as_str())?
+            .ok_or_else(|| StorageError::CreditNoteNotFound(number.to_string()))?;
+        decode(CREDIT_NOTES.name(), number, row.value())
+    }
+
+    fn scan_credit_notes(&self, visit: &mut dyn FnMut(CreditNote)) -> Result<(), StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(CREDIT_NOTES)?;
+        for row in table.iter()? {
+            let (key, value) = row?;
+            visit(decode(CREDIT_NOTES.name(), key.value(), value.value())?);
         }
         Ok(())
     }

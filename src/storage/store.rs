@@ -6,8 +6,9 @@ use redb::{Database, DatabaseError, ReadableTable};
 
 use super::migrations;
 use super::tables::{
-    ACCOUNTS, EXPENSES, INVOICE_COUNTERS, INVOICE_SUMMARIES, INVOICES, LOGOS, META,
-    PROJECT_SUMMARIES, PROJECTS, SCHEMA_KEY, SCHEMA_VERSION, SETTINGS, TRANSACTIONS,
+    ACCOUNTS, CREDIT_NOTE_COUNTERS, CREDIT_NOTES, EXPENSES, INVOICE_COUNTERS, INVOICE_SUMMARIES,
+    INVOICES, LOGOS, META, PROJECT_SUMMARIES, PROJECTS, SCHEMA_KEY, SCHEMA_VERSION, SETTINGS,
+    TRANSACTIONS,
 };
 use super::{DataDir, RedbLedgerStorage, RedbRepository, StorageError};
 
@@ -75,6 +76,8 @@ impl Store {
             txn.open_table(INVOICES)?;
             txn.open_table(INVOICE_SUMMARIES)?;
             txn.open_table(INVOICE_COUNTERS)?;
+            txn.open_table(CREDIT_NOTES)?;
+            txn.open_table(CREDIT_NOTE_COUNTERS)?;
             txn.open_table(SETTINGS)?;
             txn.open_table(EXPENSES)?;
             txn.open_table(LOGOS)?;

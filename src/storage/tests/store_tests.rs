@@ -92,3 +92,41 @@ fn a_v1_database_is_upgraded_on_open() {
     let summaries = repo.list_invoices().unwrap();
     assert!(summaries[0].is_paid());
 }
+
+#[test]
+fn a_v2_database_moves_to_v3_with_its_records_unchanged() {
+    use crate::domain::InvoiceNumber;
+    use crate::storage::InvoiceRepository;
+    use crate::storage::tables::INVOICES;
+
+    const PARTLY_PAID_V2: &str = include_str!("fixtures/invoice_partly_paid_v2.json");
+    let dir = tempfile::tempdir().unwrap();
+    let data_dir = DataDir::new(dir.path());
+    {
+        let store = Store::open(&data_dir).unwrap();
+        let txn = store.database().begin_write().unwrap();
+        txn.open_table(META).unwrap().insert(SCHEMA_KEY, 2).unwrap();
+        txn.open_table(INVOICES)
+            .unwrap()
+            .insert("NDC/26-27/004", PARTLY_PAID_V2.as_bytes())
+            .unwrap();
+        txn.commit().unwrap();
+    }
+
+    let store = Store::open(&data_dir).unwrap();
+    let txn = store.database().begin_read().unwrap();
+    let version = txn
+        .open_table(META)
+        .unwrap()
+        .get(SCHEMA_KEY)
+        .unwrap()
+        .unwrap()
+        .value();
+    assert_eq!(version, 3);
+    drop(txn);
+    let invoice = store
+        .repository()
+        .load_invoice(&InvoiceNumber::from_stored("NDC/26-27/004"))
+        .unwrap();
+    assert!(invoice.credits().is_empty());
+}

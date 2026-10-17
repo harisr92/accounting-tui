@@ -16,6 +16,8 @@ pub const IGST_OUTPUT: &str = "2320";
 pub const SERVICE_REVENUE: &str = "4100";
 /// Services to clients abroad, kept apart for export reporting
 pub const EXPORT_REVENUE: &str = "4110";
+/// Credit notes: debited with the value taken back from clients (a contra to revenue)
+pub const CREDIT_NOTES: &str = "4190";
 /// Gain (credit) or loss (debit) when a foreign-currency payment banks more or fewer rupees than
 /// the invoice was booked at
 pub const EXCHANGE_DIFFERENCE: &str = "4900";
@@ -43,6 +45,7 @@ const CHART: &[(&str, &str, AccountType)] = &[
     (IGST_OUTPUT, "IGST Output", AccountType::Liability),
     (SERVICE_REVENUE, "Service Revenue", AccountType::Income),
     (EXPORT_REVENUE, "Export Revenue", AccountType::Income),
+    (CREDIT_NOTES, "Credit Notes", AccountType::Income),
     (
         EXCHANGE_DIFFERENCE,
         "Exchange Gain/Loss",
@@ -67,6 +70,18 @@ pub fn invoice_accounts() -> InvoiceAccounts {
     InvoiceAccounts::new(
         RECEIVABLE,
         SERVICE_REVENUE,
+        CGST_OUTPUT,
+        SGST_OUTPUT,
+        IGST_OUTPUT,
+    )
+}
+
+/// Where a credit note on a GST tax invoice posts: the invoice's legs reversed, with the value
+/// taken back kept apart from revenue
+pub fn credit_note_accounts() -> InvoiceAccounts {
+    InvoiceAccounts::new(
+        RECEIVABLE,
+        CREDIT_NOTES,
         CGST_OUTPUT,
         SGST_OUTPUT,
         IGST_OUTPUT,
