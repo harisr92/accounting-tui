@@ -1,3 +1,4 @@
+mod appearance_tests;
 mod billing_tests;
 mod currency_tests;
 mod expense_tests;

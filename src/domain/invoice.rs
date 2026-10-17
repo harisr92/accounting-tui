@@ -6,7 +6,9 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 use super::error::require;
-use super::{Currency, DomainError, ExchangeRate, FiscalYear, LogoId, MilestoneId, ProjectId};
+use super::{
+    CreditNote, Currency, DomainError, ExchangeRate, FiscalYear, LogoId, MilestoneId, ProjectId,
+};
 
 /// `INV/26-27/004`: prefix, financial year and a sequence that restarts every year
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -88,7 +90,7 @@ impl InvoiceAmounts {
     }
 
     /// Every amount in rupees at `rate`
-    fn converted(&self, rate: &ExchangeRate) -> Self {
+    pub(super) fn converted(&self, rate: &ExchangeRate) -> Self {
         Self {
             taxable_value: rate.to_inr(&self.taxable_value),
             cgst: rate.to_inr(&self.cgst),
@@ -125,13 +127,25 @@ impl Payment {
     }
 }
 
-/// How far an invoice has been paid, derived from its payments
+/// A credit note's effect on the invoice it corrects
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Credit {
+    /// The credit note
+    pub number: InvoiceNumber,
+    pub date: NaiveDate,
+    /// Taken off what the client owes, tax included, in the invoice's currency
+    pub amount: BigDecimal,
+}
+
+/// How far an invoice has been settled, derived from its payments and credit notes
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InvoiceStatus {
     Issued,
     PartlyPaid,
     Paid,
+    /// Credited in full, with nothing paid: the invoice is cancelled
+    Credited,
 }
 
 impl InvoiceStatus {
@@ -140,7 +154,13 @@ impl InvoiceStatus {
             Self::Issued => "ISSUED",
             Self::PartlyPaid => "PART PAID",
             Self::Paid => "PAID",
+            Self::Credited => "CREDITED",
         }
+    }
+
+    /// Nothing is left to pay
+    pub const fn is_settled(self) -> bool {
+        matches!(self, Self::Paid | Self::Credited)
     }
 }
 
@@ -171,6 +191,9 @@ pub struct Invoice {
     gst: Option<GstInvoice>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     payments: Vec<Payment>,
+    /// Credit notes issued against it
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    credits: Vec<Credit>,
     /// The logo printed on it, as it was when issued; `None` for an invoice without one
     #[serde(default, skip_serializing_if = "Option::is_none")]
     logo: Option<LogoId>,
@@ -198,6 +221,8 @@ struct RawInvoice {
     #[serde(default)]
     payments: Vec<Payment>,
     #[serde(default)]
+    credits: Vec<Credit>,
+    #[serde(default)]
     logo: Option<LogoId>,
     /// The v1 format's single payment status; v2 records list `payments` instead
     #[serde(default)]
@@ -217,6 +242,15 @@ impl TryFrom<RawInvoice> for Invoice {
         for payment in &raw.payments {
             check_payment(raw.date, raw.currency, payment)?;
             settled += payment.settled();
+        }
+        for credit in &raw.credits {
+            if credit.date < raw.date {
+                return Err(DomainError::CreditBeforeInvoice);
+            }
+            if credit.amount <= BigDecimal::zero() {
+                return Err(DomainError::NonPositiveAmount);
+            }
+            settled += &credit.amount;
         }
         if settled > raw.amounts.total {
             return Err(DomainError::PaymentExceedsBalance {
@@ -239,6 +273,7 @@ impl TryFrom<RawInvoice> for Invoice {
             terms: raw.terms,
             gst: raw.gst,
             payments: raw.payments,
+            credits: raw.credits,
             logo: raw.logo,
         })
     }
@@ -283,6 +318,7 @@ impl Invoice {
             terms: parts.terms,
             gst: parts.gst,
             payments: Vec::new(),
+            credits: Vec::new(),
             logo: parts.logo,
         })
     }
@@ -374,23 +410,79 @@ impl Invoice {
         self.payments.iter().map(Payment::settled).sum()
     }
 
+    pub fn credits(&self) -> &[Credit] {
+        &self.credits
+    }
+
+    /// Taken off by credit notes, in the invoice's currency
+    pub fn credited(&self) -> BigDecimal {
+        self.credits.iter().map(|c| &c.amount).sum()
+    }
+
+    /// Taken off by credit notes, in rupees at the invoice's rate
+    pub fn credited_inr(&self) -> BigDecimal {
+        self.credits.iter().map(|c| self.to_inr(&c.amount)).sum()
+    }
+
+    /// The receivable still on the books for this invoice, in rupees at its rate
+    pub fn receivable_inr(&self) -> BigDecimal {
+        let paid: BigDecimal = self
+            .payments
+            .iter()
+            .map(|p| self.to_inr(&p.settled()))
+            .sum();
+        self.inr_amounts().total - paid - self.credited_inr()
+    }
+
     /// What the client still owes
     pub fn balance(&self) -> BigDecimal {
-        &self.amounts.total - self.settled()
+        &self.amounts.total - self.settled() - self.credited()
     }
 
     pub fn status(&self) -> InvoiceStatus {
-        if self.payments.is_empty() {
-            InvoiceStatus::Issued
-        } else if self.balance() > BigDecimal::zero() {
-            InvoiceStatus::PartlyPaid
-        } else {
-            InvoiceStatus::Paid
+        match (
+            self.balance() > BigDecimal::zero(),
+            self.payments.is_empty(),
+        ) {
+            (true, true) => InvoiceStatus::Issued,
+            (true, false) => InvoiceStatus::PartlyPaid,
+            (false, true) => InvoiceStatus::Credited,
+            (false, false) => InvoiceStatus::Paid,
         }
     }
 
     pub fn is_paid(&self) -> bool {
         self.status() == InvoiceStatus::Paid
+    }
+
+    /// Nothing is left to pay: paid, credited, or both
+    pub fn is_settled(&self) -> bool {
+        self.status().is_settled()
+    }
+
+    /// Take a credit note against this invoice off what the client owes. A note credits only
+    /// what is still due; money already received isn't refunded by one.
+    pub fn apply_credit(&mut self, note: &CreditNote) -> Result<(), DomainError> {
+        if note.invoice() != &self.number || note.currency() != self.currency {
+            return Err(DomainError::CreditForAnotherInvoice);
+        }
+        if note.date() < self.date {
+            return Err(DomainError::CreditBeforeInvoice);
+        }
+        let amount = note.amounts().total.clone();
+        let balance = self.balance();
+        if amount > balance {
+            return Err(DomainError::CreditExceedsBalance {
+                balance: balance.to_string(),
+                got: amount.to_string(),
+            });
+        }
+        self.credits.push(Credit {
+            number: note.number().clone(),
+            date: note.date(),
+            amount,
+        });
+        Ok(())
     }
 
     /// Record a payment of all or part of the balance of an invoice in rupees; `received`
@@ -426,7 +518,7 @@ impl Invoice {
     }
 
     fn add_payment(&mut self, payment: Payment) -> Result<Payment, DomainError> {
-        if self.is_paid() {
+        if self.is_settled() {
             return Err(DomainError::InvoiceAlreadyPaid);
         }
         check_payment(self.date, self.currency, &payment)?;
@@ -447,7 +539,7 @@ fn round(value: BigDecimal) -> BigDecimal {
 }
 
 /// Rupees carry no rate; any other currency needs one and can't be on a GST tax invoice
-fn check_currency(
+pub(super) fn check_currency(
     currency: Currency,
     rate: Option<&ExchangeRate>,
     kind: InvoiceKind,
@@ -556,6 +648,11 @@ impl InvoiceSummary {
 
     pub fn is_paid(&self) -> bool {
         self.status == InvoiceStatus::Paid
+    }
+
+    /// Nothing is left to pay: paid, credited, or both
+    pub fn is_settled(&self) -> bool {
+        self.status.is_settled()
     }
 }
 
