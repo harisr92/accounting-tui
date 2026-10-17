@@ -461,3 +461,69 @@ fn stored_projects_without_a_currency_are_rupees_and_are_checked() {
     tampered["client_region"] = serde_json::json!({"type": "india"});
     assert!(serde_json::from_value::<Project>(tampered).is_err());
 }
+
+#[test]
+fn only_finished_projects_are_archived_and_take_no_new_work() {
+    let mut p = fixed();
+    p.add_milestone("Design", date(), rupees(100)).unwrap();
+    assert!(matches!(p.archive(), Err(DomainError::ProjectNotFinished)));
+
+    p.invoice_milestone(0, "T-1").unwrap();
+    p.archive().unwrap();
+    assert!(p.is_archived());
+    assert!(ProjectSummary::from(&p).is_archived());
+    assert!(matches!(
+        p.add_milestone("More", date(), rupees(50)),
+        Err(DomainError::ProjectArchived)
+    ));
+    // Payments still arrive for archived work
+    p.record_payment(0).unwrap();
+
+    p.unarchive();
+    p.add_milestone("More", date(), rupees(50)).unwrap();
+}
+
+#[test]
+fn archived_flag_survives_a_round_trip() {
+    let mut p = fixed();
+    p.add_milestone("Design", date(), rupees(100)).unwrap();
+    p.invoice_milestone(0, "T-1").unwrap();
+    p.archive().unwrap();
+    let json = serde_json::to_string(&p).unwrap();
+    let back: Project = serde_json::from_str(&json).unwrap();
+    assert!(back.is_archived());
+}
+
+#[test]
+fn credits_come_off_what_is_paid_and_owed() {
+    let mut p = fixed();
+    p.add_milestone("Design", date(), rupees(100)).unwrap();
+    assert!(matches!(
+        p.credit_milestone(0, &BigDecimal::from(10)),
+        Err(DomainError::NotInvoiced)
+    ));
+    p.invoice_milestone(0, "T-1").unwrap();
+    // Only a milestone credited in full can be cancelled
+    p.credit_milestone(0, &BigDecimal::from(40)).unwrap();
+    assert!(p.cancel_milestone(0).is_err());
+    assert!(matches!(
+        p.credit_milestone(0, &BigDecimal::from(61)),
+        Err(DomainError::CreditExceedsMilestone)
+    ));
+    assert_eq!(p.outstanding_amount(), BigDecimal::from(60));
+
+    p.credit_milestone(0, &BigDecimal::from(60)).unwrap();
+    p.cancel_milestone(0).unwrap();
+    assert_eq!(p.milestones()[0].status(), MilestoneStatus::Credited);
+    assert_eq!(p.paid_amount(), BigDecimal::zero());
+    assert_eq!(p.outstanding_amount(), BigDecimal::zero());
+    assert_eq!(p.status(), ProjectStatus::Paid);
+
+    // A credited milestone round-trips, and a stored one that isn't fully credited is refused
+    let json = serde_json::to_string(&p).unwrap();
+    let back: Project = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.milestones()[0].credited(), &BigDecimal::from(100));
+    let tampered = json.replace("\"credited\":\"100\"", "\"credited\":\"99\"");
+    assert_ne!(tampered, json);
+    assert!(serde_json::from_str::<Project>(&tampered).is_err());
+}

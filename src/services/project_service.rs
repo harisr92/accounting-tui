@@ -64,6 +64,18 @@ impl<R: ProjectRepository> ProjectService<R> {
         Ok(self.repo.delete(id)?)
     }
 
+    /// Hide a finished project from the list (see [`Project::archive`]), or bring it back
+    pub fn set_archived(&mut self, id: ProjectId, archived: bool) -> Result<Project, ServiceError> {
+        self.update(id, |p| {
+            if archived {
+                p.archive()
+            } else {
+                p.unarchive();
+                Ok(())
+            }
+        })
+    }
+
     pub fn add_milestone(
         &mut self,
         id: ProjectId,

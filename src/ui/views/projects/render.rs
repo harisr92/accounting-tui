@@ -67,18 +67,34 @@ impl Column {
 
 impl<R> ProjectsView<R> {
     pub(super) fn render_list(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
-        let rows = self.summaries.iter().map(|p| {
-            Row::new(vec![
-                Line::raw(p.name()),
-                Line::from(status_span(p.status(), theme)),
-            ])
-        });
+        let rows = self
+            .visible
+            .iter()
+            .filter_map(|&i| self.summaries.get(i))
+            .map(|p| {
+                // Archived projects are only listed while `H` shows them; their names are dimmed
+                let name = if p.is_archived() {
+                    Line::styled(p.name(), theme.dim())
+                } else {
+                    Line::raw(p.name())
+                };
+                Row::new(vec![name, Line::from(status_span(p.status(), theme))])
+            });
+        let title = match (self.filter.is_empty(), self.show_archived) {
+            (true, false) => "Projects".to_owned(),
+            (true, true) => "Projects + archived".to_owned(),
+            (false, archived) => format!(
+                "Projects{} /{}",
+                if archived { " + archived" } else { "" },
+                self.filter.query()
+            ),
+        };
         let widths = [Constraint::Fill(1), Constraint::Length(STATUS_WIDTH)];
         let table = Table::new(rows, widths)
-            .block(panel("Projects", self.focus == Focus::Projects, theme))
+            .block(panel(&title, self.focus == Focus::Projects, theme))
             .row_highlight_style(theme.selected)
             .highlight_symbol("> ");
-        let mut state = self.project_sel.table_state(self.summaries.len());
+        let mut state = self.project_sel.table_state(self.visible.len());
         frame.render_stateful_widget(table, area, &mut state);
     }
 
@@ -86,6 +102,10 @@ impl<R> ProjectsView<R> {
         let Some(project) = &self.selected else {
             let message = if self.summaries.is_empty() {
                 "No projects yet. Press n to create one."
+            } else if !self.filter.is_empty() && self.visible.is_empty() {
+                "No projects match the search. Esc clears it."
+            } else if self.visible.is_empty() {
+                "Every project is archived. Press H to show them, or n to create one."
             } else {
                 "This project could not be loaded."
             };
@@ -210,14 +230,12 @@ fn time_log_rows<'a>(milestone: &'a Milestone, columns: &[Column], theme: &Theme
 }
 
 fn render_summary(frame: &mut Frame, area: Rect, project: &Project, theme: &Theme) {
-    let block = panel(project.name(), false, theme).title(
-        Line::from(vec![
-            Span::raw(" "),
-            status_span(project.status(), theme),
-            Span::raw(" "),
-        ])
-        .right_aligned(),
-    );
+    let mut status = vec![Span::raw(" "), status_span(project.status(), theme)];
+    if project.is_archived() {
+        status.push(Span::styled(" · ARCHIVED", theme.dim()));
+    }
+    status.push(Span::raw(" "));
+    let block = panel(project.name(), false, theme).title(Line::from(status).right_aligned());
     let inner = block.inner(area);
     frame.render_widget(block, area);
 

@@ -243,3 +243,93 @@ fn opening_a_log_at_the_bottom_scrolls_it_into_view() {
     assert!(screen.contains("> Beta"), "{screen}");
     assert!(screen.contains("└ "), "{screen}");
 }
+
+/// A store with "Website" (Acme, nothing billed) and "Audit" (Initech, its one milestone
+/// invoiced, so finished)
+fn store_with_finished_project() -> Store {
+    use crate::domain::{Billing, Project};
+    let store = Store::in_memory().unwrap();
+    let mut repo = store.repository();
+    let date = chrono::NaiveDate::from_ymd_opt(2026, 6, 30).unwrap();
+    let mut audit = Project::new("Audit", "Initech", None, Billing::Fixed).unwrap();
+    audit
+        .add_milestone("Report", date, Some(BigDecimal::from(900)))
+        .unwrap();
+    audit.invoice_milestone(0, "T-1").unwrap();
+    repo.save(&audit).unwrap();
+    let site = Project::new("Website", "Acme", None, Billing::Fixed).unwrap();
+    repo.save(&site).unwrap();
+    store
+}
+
+/// The project list's rows: the left third of the screen
+fn listed(app: &crate::app::App) -> String {
+    screen(app, W, H)
+        .lines()
+        .map(|line| line.chars().take(36).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn archived_projects_leave_the_list_until_shown() {
+    let store = store_with_finished_project();
+    let mut app = projects_app(&store);
+    // "Audit" sorts first and is selected
+    app.handle_key(Key::Char('A'));
+    let list = listed(&app);
+    assert!(!list.contains("Audit"), "{list}");
+    assert!(list.contains("Website"), "{list}");
+
+    app.handle_key(Key::Char('H'));
+    let screen = screen(&app, W, H);
+    assert!(screen.contains("Projects + archived"), "{screen}");
+    assert!(screen.contains("Audit"), "{screen}");
+
+    // The cursor stayed on Website; Audit is listed above it again. Restore it.
+    app.handle_key(Key::Char('k'));
+    app.handle_key(Key::Char('A'));
+    assert!(!store.repository().list().unwrap()[0].is_archived());
+}
+
+#[test]
+fn unfinished_projects_are_not_archived() {
+    let store = store_with_finished_project();
+    let mut app = projects_app(&store);
+    app.handle_key(Key::Char('j'));
+    app.handle_key(Key::Char('A'));
+    let screen = screen(&app, W, H);
+    assert!(screen.contains("only finished projects"), "{screen}");
+    assert!(
+        store
+            .repository()
+            .list()
+            .unwrap()
+            .iter()
+            .all(|s| !s.is_archived())
+    );
+}
+
+#[test]
+fn search_narrows_the_list_by_name_or_client() {
+    let store = store_with_finished_project();
+    let mut app = projects_app(&store);
+    app.handle_key(Key::Char('/'));
+    type_keys(&mut app, "acme\n");
+    let list = listed(&app);
+    assert!(list.contains("Website"), "{list}");
+    assert!(!list.contains("Audit"), "{list}");
+
+    app.handle_key(Key::Char('/'));
+    for _ in 0.."acme".len() {
+        app.handle_key(Key::Backspace);
+    }
+    type_keys(&mut app, "nothing\n");
+    let none = screen(&app, W, H);
+    assert!(none.contains("No projects match the search"), "{none}");
+
+    app.handle_key(Key::Esc);
+    assert!(screen(&app, W, H).contains("Search cleared"));
+    let list = listed(&app);
+    assert!(list.contains("Website") && list.contains("Audit"), "{list}");
+}
