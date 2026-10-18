@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../rust/api/error.dart';
+import '../ui/theme.dart';
 
 /// One field of a [FormDialog]. [key] is the name Rust uses in `ApiError.field`, so a refused
 /// value is shown under the field that holds it. With [options] the field is a dropdown of
@@ -23,9 +24,10 @@ class FieldSpec {
   final List<String>? options;
 }
 
-/// Every form in the app: text fields, Cancel and Save. Values are passed to [submit] as typed;
-/// Rust parses and validates them. On a refusal the dialog stays open with the error, like
-/// `Form::step` in the terminal app.
+/// Every form in the app, as a bottom sheet: its fields, then Cancel and the one filled action
+/// at the foot, within thumb's reach. Values are passed to [submit] as typed; Rust parses and
+/// validates them. On a refusal the sheet stays open with the error, like `Form::step` in the
+/// terminal app.
 class FormDialog<T> extends StatefulWidget {
   const FormDialog({
     super.key,
@@ -50,8 +52,12 @@ class FormDialog<T> extends StatefulWidget {
     required Future<T> Function(Map<String, String> values) submit,
     String submitLabel = 'Save',
   }) {
-    return showDialog<T>(
+    return showModalBottomSheet<T>(
       context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      // Over the navigation bar too: a form is the only thing to act on while open
+      useRootNavigator: true,
       builder: (_) => FormDialog<T>(
         title: title,
         fields: fields,
@@ -106,50 +112,74 @@ class _FormDialogState<T> extends State<FormDialog<T>> {
     final general = error != null && !fieldKeys.contains(error.field)
         ? error.message
         : null;
-    return AlertDialog(
-      title: Text(widget.title),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (general != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  general,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
+    final theme = Theme.of(context);
+    return Padding(
+      // Above the keyboard while typing
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 16),
+            child: Text(widget.title, style: theme.textTheme.titleLarge),
+          ),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: gutter),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (general != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Text(
+                        general,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  for (final field in widget.fields)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: _input(
+                        field,
+                        InputDecoration(
+                          labelText: field.label.isEmpty ? null : field.label,
+                          // Under the field, so it still shows once a value is in it
+                          helperText: field.hint,
+                          errorText: error?.field == field.key
+                              ? error!.message
+                              : null,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-            for (final field in widget.fields)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _input(
-                  field,
-                  InputDecoration(
-                    labelText: field.label,
-                    // Under the field, so it still shows once a value is prefilled or typed
-                    helperText: field.hint,
-                    helperMaxLines: 2,
-                    errorText: error?.field == field.key
-                        ? error!.message
-                        : null,
+            ),
+          ),
+          const Divider(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(gutter, 12, gutter, 12),
+            child: Row(
+              children: [
+                TextButton(
+                  onPressed: _saving ? null : () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _saving ? null : _save,
+                    child: Text(widget.submitLabel),
                   ),
                 ),
-              ),
-          ],
-        ),
+              ],
+            ),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          child: Text(widget.submitLabel),
-        ),
-      ],
     );
   }
 
