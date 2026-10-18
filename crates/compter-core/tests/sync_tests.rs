@@ -5,7 +5,7 @@ use std::fs;
 use chrono::{Duration, Utc};
 use compter_core::domain::{Billing, Project};
 use compter_core::storage::sync::{
-    Lease, Manifest, Resolution, SyncDir, SyncError, SyncSession, SyncSource,
+    self, Lease, Manifest, Resolution, SyncDir, SyncError, SyncSession, SyncSource, SyncState,
 };
 use compter_core::storage::{DataDir, ProjectRepository, StorageError, Store};
 use tempfile::TempDir;
@@ -39,6 +39,11 @@ impl Device {
         let (session, store) = self.begin(sync).unwrap();
         save(&store, name);
         session.finish(store).unwrap()
+    }
+
+    fn sync_state(&self) -> SyncState {
+        let store = Store::open(&self.data).unwrap();
+        sync::state(&self.data, &store).unwrap()
     }
 
     fn project_names(&self) -> Vec<String> {
@@ -215,6 +220,21 @@ fn an_unchanged_database_is_not_published_again() {
 }
 
 #[test]
+fn opening_compter_without_changing_anything_publishes_nothing() {
+    let (_dir, sync) = sync_dir();
+    let laptop = Device::new("laptop");
+    laptop.add_project(&sync, "Site");
+    let desktop = Device::new("desktop");
+
+    // redb rewrites its header on every open; only the records count as changes
+    let (session, store) = desktop.begin(&sync).unwrap();
+    assert_eq!(session.finish(store).unwrap(), None);
+    let (session, store) = desktop.begin(&sync).unwrap();
+    assert_eq!(session.finish(store).unwrap(), None);
+    assert_eq!(manifest(&sync).generation, 1);
+}
+
+#[test]
 fn conflict_copies_left_by_the_sync_client_are_reported() {
     let (_dir, sync) = sync_dir();
     let laptop = Device::new("laptop");
@@ -312,4 +332,179 @@ fn a_sync_folder_must_exist_and_stay_apart_from_the_data() {
         ));
     }
     assert!(SyncDir::saved(&device.data).unwrap().is_none());
+}
+
+/// What the user carries by hand: the snapshot and manifest, copied between folders
+fn carry(from: &SyncDir, to: &SyncDir) {
+    fs::create_dir_all(to.root()).unwrap();
+    fs::copy(from.snapshot_path(), to.snapshot_path()).unwrap();
+    fs::copy(from.manifest_path(), to.manifest_path()).unwrap();
+}
+
+/// A phone: its own data folder, with the database the app creates on first start
+fn phone() -> Device {
+    let phone = Device::new("phone");
+    Store::open(&phone.data).unwrap().close().unwrap();
+    phone
+}
+
+/// Open the phone's database, add a project, close it
+fn phone_adds(phone: &Device, name: &str) {
+    let store = Store::open(&phone.data).unwrap();
+    save(&store, name);
+    store.close().unwrap();
+}
+
+#[test]
+fn a_phone_takes_the_snapshot_and_hands_its_changes_back() {
+    let (_dir, folder) = sync_dir();
+    let (_inbox_dir, inbox) = sync_dir();
+    let (_outbox_dir, outbox) = sync_dir();
+    let laptop = Device::new("laptop");
+    let phone = phone();
+    laptop.add_project(&folder, "Site");
+
+    carry(&folder, &inbox);
+    // A new install's database is blank, so it is replaced although it never synced
+    assert_eq!(sync::receive(&phone.data, &inbox, true).unwrap(), Some(1));
+    assert_eq!(phone.project_names(), ["Site"]);
+    assert_eq!(sync::receive(&phone.data, &inbox, false).unwrap(), None);
+    assert_eq!(
+        phone.sync_state(),
+        SyncState {
+            generation: 1,
+            changed: false
+        }
+    );
+
+    phone_adds(&phone, "App");
+    assert!(phone.sync_state().changed);
+    assert_eq!(sync::send(&phone.data, &outbox, "phone").unwrap(), 2);
+    assert_eq!(manifest(&outbox).device_name, "phone");
+    carry(&outbox, &folder);
+
+    let (session, store) = laptop.begin(&folder).unwrap();
+    session.finish(store).unwrap();
+    assert_eq!(laptop.project_names(), ["App", "Site"]);
+}
+
+#[test]
+fn an_unchanged_phone_sends_its_generation_again() {
+    let (_dir, folder) = sync_dir();
+    let (_outbox_dir, outbox) = sync_dir();
+    let laptop = Device::new("laptop");
+    let phone = phone();
+    laptop.add_project(&folder, "Site");
+    sync::receive(&phone.data, &folder, true).unwrap();
+
+    assert_eq!(sync::send(&phone.data, &outbox, "phone").unwrap(), 1);
+}
+
+#[test]
+fn a_phone_with_its_own_records_is_never_overwritten_silently() {
+    let (_dir, folder) = sync_dir();
+    let laptop = Device::new("laptop");
+    let phone = phone();
+    phone_adds(&phone, "App");
+    laptop.add_project(&folder, "Site");
+
+    let refused = sync::receive(&phone.data, &folder, false);
+
+    assert!(matches!(refused, Err(SyncError::Conflict { .. })));
+    assert_eq!(phone.project_names(), ["App"]);
+}
+
+#[test]
+fn a_phone_settles_a_conflict_either_way() {
+    let (_dir, folder) = sync_dir();
+    let (_outbox_dir, outbox) = sync_dir();
+    let laptop = Device::new("laptop");
+    let phone = phone();
+    laptop.add_project(&folder, "Site");
+    sync::receive(&phone.data, &folder, true).unwrap();
+    phone_adds(&phone, "App");
+    laptop.add_project(&folder, "Audit");
+    assert!(sync::receive(&phone.data, &folder, false).is_err());
+
+    // Keeping the phone's: the next send goes out above the laptop's snapshot
+    sync::settle_received(&phone.data, &folder, "phone", Resolution::KeepLocal).unwrap();
+    assert_eq!(sync::send(&phone.data, &outbox, "phone").unwrap(), 3);
+
+    // Taking the laptop's instead: the phone's database is kept beside it
+    let other = phone_with_conflict(&folder, &laptop);
+    sync::settle_received(&other.data, &folder, "phone", Resolution::KeepRemote).unwrap();
+    assert_eq!(other.project_names(), ["Audit", "Site", "Spec"]);
+    let backups = fs::read_dir(other.data.root())
+        .unwrap()
+        .filter(|entry| {
+            let name = entry.as_ref().unwrap().file_name();
+            name.to_string_lossy().starts_with("compter.conflict-")
+        })
+        .count();
+    assert_eq!(backups, 1);
+}
+
+/// A second phone that took the laptop's snapshot, then changed while the laptop did too
+fn phone_with_conflict(folder: &SyncDir, laptop: &Device) -> Device {
+    let phone = phone();
+    sync::receive(&phone.data, folder, true).unwrap();
+    phone_adds(&phone, "Draft");
+    laptop.add_project(folder, "Spec");
+    assert!(sync::receive(&phone.data, folder, false).is_err());
+    phone
+}
+
+#[test]
+fn a_new_install_has_a_blank_database() {
+    let phone = phone();
+    let store = Store::open(&phone.data).unwrap();
+    assert!(store.is_blank().unwrap());
+    save(&store, "App");
+    assert!(!store.is_blank().unwrap());
+}
+
+#[test]
+fn a_hand_off_that_never_reached_the_folder_is_caught() {
+    let (_dir, folder) = sync_dir();
+    let (_outbox_dir, outbox) = sync_dir();
+    let laptop = Device::new("laptop");
+    let phone = phone();
+    laptop.add_project(&folder, "Site");
+    sync::receive(&phone.data, &folder, true).unwrap();
+    phone_adds(&phone, "App");
+    // Sent as generation 2, but saved as a copy: the folder still has generation 1
+    assert_eq!(sync::send(&phone.data, &outbox, "phone").unwrap(), 2);
+
+    let lost = sync::receive(&phone.data, &folder, false);
+    assert!(matches!(
+        lost,
+        Err(SyncError::Undelivered { sent: 2, found: 1 })
+    ));
+
+    // Meanwhile the laptop published its own generation 2: the same number, other records
+    laptop.add_project(&folder, "Audit");
+    let clash = sync::receive(&phone.data, &folder, false);
+    assert!(matches!(
+        clash,
+        Err(SyncError::Undelivered { sent: 2, found: 2 })
+    ));
+
+    // Keeping the phone's sends a generation above both
+    sync::settle_received(&phone.data, &folder, "phone", Resolution::KeepLocal).unwrap();
+    assert_eq!(sync::send(&phone.data, &outbox, "phone").unwrap(), 3);
+}
+
+#[test]
+fn the_snapshot_a_phone_sent_counts_as_synced_once_it_arrives() {
+    let (_dir, folder) = sync_dir();
+    let (_outbox_dir, outbox) = sync_dir();
+    let laptop = Device::new("laptop");
+    let phone = phone();
+    laptop.add_project(&folder, "Site");
+    sync::receive(&phone.data, &folder, true).unwrap();
+    phone_adds(&phone, "App");
+    sync::send(&phone.data, &outbox, "phone").unwrap();
+    carry(&outbox, &folder);
+
+    assert_eq!(sync::receive(&phone.data, &folder, false).unwrap(), None);
 }

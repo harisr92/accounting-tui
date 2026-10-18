@@ -50,6 +50,10 @@ pub enum SyncError {
         "the snapshot from {device} hasn't finished syncing; wait for the sync client, then try again"
     )]
     Incomplete { device: String },
+    #[error(
+        "the snapshot this device sent (generation {sent}) isn't the one in the sync folder, which has generation {found}; it may have been saved as a copy. Keep this device's data or take the folder's"
+    )]
+    Undelivered { sent: u64, found: u64 },
     #[error("there is no snapshot in {0} yet")]
     NoSnapshot(PathBuf),
     #[error("there is no database on this device to publish")]
@@ -219,9 +223,14 @@ struct LocalState {
     device_id: Uuid,
     #[serde(default)]
     base_generation: u64,
-    /// Hash of the local database right after that sync; a different hash means local changes
+    /// Hash of the local database file right after that sync. Kept for state written before
+    /// `base_content`; redb rewrites its header on every open, so it can't tell an open from an
+    /// edit.
     #[serde(default)]
     base_sha256: Option<String>,
+    /// [`Store::content_hash`] right after that sync; a different hash means local changes
+    #[serde(default)]
+    base_content: Option<String>,
 }
 
 /// How to settle a [`SyncError::Conflict`]
@@ -369,6 +378,105 @@ impl Drop for SyncSession {
     }
 }
 
+/// Where this device's database stands against the sync folder
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SyncState {
+    /// The snapshot generation it last synced from or to; 0 before any sync
+    pub generation: u64,
+    /// It changed since then
+    pub changed: bool,
+}
+
+/// Where this device's database, open as `store`, stands; the sync folder isn't touched
+pub fn state(data: &DataDir, store: &Store) -> Result<SyncState, SyncError> {
+    let state = load_state(data)?;
+    let changed = match &state.base_content {
+        Some(base) => store.content_hash()? != *base,
+        None => hash_file(&data.database_path())? != state.base_sha256,
+    };
+    Ok(SyncState {
+        generation: state.base_generation,
+        changed,
+    })
+}
+
+// Hand-off for a device that can't see the sync folder, like a phone. The user carries the
+// snapshot and manifest between the folder and the device; the generation checks are the same.
+// There is no lease, since nothing stays open across a hand-off. Close the store first.
+
+/// Take the snapshot in `from`, a copy of the sync folder's snapshot and manifest. A `blank`
+/// local database (no records yet, see [`Store::is_blank`]) is replaced even though it never
+/// synced. Returns the generation taken, or `None` when this device already has it.
+///
+/// A hand-off can go wrong where a sync client can't: the user may never save what
+/// [`send`] wrote, or a sync app may store it as a copy. So the folder's snapshot must be the
+/// very one this device last synced, or a newer one; an older or different one is refused as
+/// [`SyncError::Undelivered`], since taking it or sending over it would lose records.
+pub fn receive(data: &DataDir, from: &SyncDir, blank: bool) -> Result<Option<u64>, SyncError> {
+    let mut state = load_state(data)?;
+    let manifest = read_json::<Manifest>(&from.manifest_path())?
+        .ok_or_else(|| SyncError::NoSnapshot(from.root().to_path_buf()))?;
+    if state.base_sha256.as_deref() == Some(manifest.sha256.as_str()) {
+        return Ok(None);
+    }
+    if manifest.generation <= state.base_generation {
+        return Err(SyncError::Undelivered {
+            sent: state.base_generation,
+            found: manifest.generation,
+        });
+    }
+    if !blank && local_changed(data, &state)? {
+        return Err(SyncError::Conflict {
+            device: manifest.device_name,
+            published: manifest.written_at,
+        });
+    }
+    pull(data, from, &manifest, &mut state)?;
+    Ok(Some(manifest.generation))
+}
+
+/// Write this device's database to `to` as a snapshot and manifest, for the user to put in the
+/// sync folder. A database changed since it last synced gets the next generation; an unchanged
+/// one is written again under its own. Returns the generation written.
+pub fn send(data: &DataDir, to: &SyncDir, device_name: &str) -> Result<u64, SyncError> {
+    if !data.database_path().exists() {
+        return Err(SyncError::NoLocalDatabase);
+    }
+    let mut state = load_state(data)?;
+    let generation = if local_changed(data, &state)? {
+        state.base_generation + 1
+    } else {
+        state.base_generation
+    };
+    publish(data, to, &mut state, device_name, generation)?;
+    Ok(generation)
+}
+
+/// Settle a conflict or undelivered hand-off [`receive`] refused. [`Resolution::KeepRemote`]
+/// takes the snapshot in `from`, keeping the local database beside it as a backup;
+/// [`Resolution::KeepLocal`] keeps this device's, so the next [`send`] goes out as new, above
+/// the snapshot's generation.
+pub fn settle_received(
+    data: &DataDir,
+    from: &SyncDir,
+    device_name: &str,
+    resolution: Resolution,
+) -> Result<(), SyncError> {
+    let mut state = load_state(data)?;
+    match resolution {
+        Resolution::KeepRemote => settle(data, from, &mut state, device_name, resolution),
+        Resolution::KeepLocal => {
+            let manifest = read_json::<Manifest>(&from.manifest_path())?
+                .ok_or_else(|| SyncError::NoSnapshot(from.root().to_path_buf()))?;
+            state.base_generation = state.base_generation.max(manifest.generation);
+            // Counts as changed, so the next send takes a new generation
+            state.base_sha256 = None;
+            state.base_content = None;
+            save_state(data, &state)
+        }
+    }
+}
+
 /// `$COMPTER_DEVICE`, else the host name, else a generic label
 pub fn device_name_from_env() -> String {
     ["COMPTER_DEVICE", "HOSTNAME", "COMPUTERNAME", "HOST"]
@@ -387,6 +495,7 @@ fn load_state(data: &DataDir) -> Result<LocalState, SyncError> {
         base_generation: 0,
         // A database that predates syncing counts as changed, so it is never silently replaced
         base_sha256: None,
+        base_content: None,
     };
     save_state(data, &state)?;
     Ok(state)
@@ -447,10 +556,25 @@ fn release_lease(sync: &SyncDir, state: &LocalState) -> Result<(), SyncError> {
     }
 }
 
-/// Did the local database change since it was last synced?
+/// Did the local database's records change since it was last synced?
 fn local_changed(data: &DataDir, state: &LocalState) -> Result<bool, SyncError> {
-    let current = hash_file(&data.database_path())?;
-    Ok(current != state.base_sha256)
+    match &state.base_content {
+        Some(base) => Ok(content_hash(data)?.as_ref() != Some(base)),
+        // Synced before contents were hashed: compare the file, as then
+        None => Ok(hash_file(&data.database_path())? != state.base_sha256),
+    }
+}
+
+/// [`Store::content_hash`] of the local database, `None` when there is none. The store must be
+/// closed.
+fn content_hash(data: &DataDir) -> Result<Option<String>, SyncError> {
+    if !data.database_path().exists() {
+        return Ok(None);
+    }
+    let store = Store::open(data)?;
+    let hash = store.content_hash()?;
+    store.close()?;
+    Ok(Some(hash))
 }
 
 fn pull(
@@ -471,6 +595,7 @@ fn pull(
     write_file(&data.database_path(), &bytes)?;
     state.base_generation = manifest.generation;
     state.base_sha256 = Some(sha256);
+    state.base_content = content_hash(data)?;
     save_state(data, state)
 }
 
@@ -497,6 +622,7 @@ fn publish(
     write_json(&sync.manifest_path(), &manifest)?;
     state.base_generation = generation;
     state.base_sha256 = Some(sha256);
+    state.base_content = content_hash(data)?;
     save_state(data, state)
 }
 

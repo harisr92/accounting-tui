@@ -2,7 +2,11 @@ use std::fs;
 use std::sync::Arc;
 
 use redb::backends::InMemoryBackend;
-use redb::{Database, DatabaseError, ReadableTable};
+use redb::{
+    Database, DatabaseError, Key, ReadTransaction, ReadableDatabase, ReadableTable,
+    ReadableTableMetadata, TableDefinition, TableError, TableHandle, Value,
+};
+use sha2::{Digest, Sha256};
 
 use super::migrations;
 use super::tables::{
@@ -47,6 +51,43 @@ impl Store {
         RedbLedgerStorage::new(Arc::clone(&self.db))
     }
 
+    /// No records yet: no projects, invoices, credit notes, expenses, postings or settings. A
+    /// new install's database, which replacing loses nothing.
+    pub fn is_blank(&self) -> Result<bool, StorageError> {
+        let txn = self.db.begin_read()?;
+        Ok(txn.open_table(PROJECTS)?.is_empty()?
+            && txn.open_table(INVOICES)?.is_empty()?
+            && txn.open_table(CREDIT_NOTES)?.is_empty()?
+            && txn.open_table(EXPENSES)?.is_empty()?
+            && txn.open_table(TRANSACTIONS)?.is_empty()?
+            && txn.open_table(SETTINGS)?.is_empty()?)
+    }
+
+    /// A hash of every record, as hex. Unlike a hash of the file, it ignores redb's own
+    /// bookkeeping, which changes whenever the file is opened, so it changes only with the data.
+    pub fn content_hash(&self) -> Result<String, StorageError> {
+        let txn = self.db.begin_read()?;
+        let mut hasher = Sha256::new();
+        hash_table(&txn, META, &mut hasher)?;
+        hash_table(&txn, PROJECTS, &mut hasher)?;
+        hash_table(&txn, PROJECT_SUMMARIES, &mut hasher)?;
+        hash_table(&txn, ACCOUNTS, &mut hasher)?;
+        hash_table(&txn, TRANSACTIONS, &mut hasher)?;
+        hash_table(&txn, INVOICES, &mut hasher)?;
+        hash_table(&txn, INVOICE_SUMMARIES, &mut hasher)?;
+        hash_table(&txn, INVOICE_COUNTERS, &mut hasher)?;
+        hash_table(&txn, CREDIT_NOTES, &mut hasher)?;
+        hash_table(&txn, CREDIT_NOTE_COUNTERS, &mut hasher)?;
+        hash_table(&txn, SETTINGS, &mut hasher)?;
+        hash_table(&txn, EXPENSES, &mut hasher)?;
+        hash_table(&txn, LOGOS, &mut hasher)?;
+        Ok(hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect())
+    }
+
     /// Close the file, so it can be copied. Fails while a repository still shares it.
     pub fn close(self) -> Result<(), StorageError> {
         Arc::try_unwrap(self.db)
@@ -59,8 +100,12 @@ impl Store {
         &self.db
     }
 
-    /// Create missing tables, then record, upgrade or refuse the schema version
+    /// Create missing tables, then record, upgrade or refuse the schema version. A database that
+    /// is already current is only read, with no write transaction.
     fn init(db: Database) -> Result<Self, StorageError> {
+        if Self::is_current(&db)? {
+            return Ok(Self { db: Arc::new(db) });
+        }
         let txn = db.begin_write()?;
         {
             let mut meta = txn.open_table(META)?;
@@ -92,4 +137,56 @@ impl Store {
         txn.commit()?;
         Ok(Self { db: Arc::new(db) })
     }
+
+    /// At this schema version with every table in place
+    fn is_current(db: &Database) -> Result<bool, StorageError> {
+        let txn = db.begin_read()?;
+        let version = match txn.open_table(META) {
+            Ok(meta) => meta.get(SCHEMA_KEY)?.map(|v| v.value()),
+            Err(TableError::TableDoesNotExist(_)) => return Ok(false),
+            Err(error) => return Err(error.into()),
+        };
+        if version != Some(SCHEMA_VERSION) {
+            return Ok(false);
+        }
+        let tables = txn
+            .list_tables()?
+            .map(|table| table.name().to_owned())
+            .collect::<Vec<_>>();
+        let expected = [
+            PROJECTS.name(),
+            PROJECT_SUMMARIES.name(),
+            ACCOUNTS.name(),
+            TRANSACTIONS.name(),
+            INVOICES.name(),
+            INVOICE_SUMMARIES.name(),
+            INVOICE_COUNTERS.name(),
+            CREDIT_NOTES.name(),
+            CREDIT_NOTE_COUNTERS.name(),
+            SETTINGS.name(),
+            EXPENSES.name(),
+            LOGOS.name(),
+        ];
+        Ok(expected.iter().all(|name| tables.iter().any(|t| t == name)))
+    }
+}
+
+/// Feed a table's name and every key and value into `hasher`, each length-prefixed so that
+/// different records can't run together into the same bytes
+fn hash_table<K: Key + 'static, V: Value + 'static>(
+    txn: &ReadTransaction,
+    table: TableDefinition<K, V>,
+    hasher: &mut Sha256,
+) -> Result<(), StorageError> {
+    let mut feed = |bytes: &[u8]| {
+        hasher.update((bytes.len() as u64).to_le_bytes());
+        hasher.update(bytes);
+    };
+    feed(table.name().as_bytes());
+    for entry in txn.open_table(table)?.iter()? {
+        let (key, value) = entry?;
+        feed(K::as_bytes(&key.value()).as_ref());
+        feed(V::as_bytes(&value.value()).as_ref());
+    }
+    Ok(())
 }
