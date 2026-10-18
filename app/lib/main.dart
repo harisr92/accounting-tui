@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'src/compter.dart';
 import 'src/router.dart';
 import 'src/rust/frb_generated.dart';
+import 'src/ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,15 +36,10 @@ class _CompterMobileState extends State<CompterMobile> {
 
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF2E6B5E);
     return MaterialApp.router(
       title: 'compter',
-      theme: ThemeData(colorSchemeSeed: seed, useMaterial3: true),
-      darkTheme: ThemeData(
-        colorSchemeSeed: seed,
-        brightness: Brightness.dark,
-        useMaterial3: true,
-      ),
+      theme: buildTheme(Brightness.light),
+      darkTheme: buildTheme(Brightness.dark),
       routerConfig: _router,
     );
   }
