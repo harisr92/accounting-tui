@@ -1,0 +1,30 @@
+name: compter
+description: compter for iOS and Android, on the Rust core in ../crates.
+publish_to: none
+version: 0.2.3+1
+
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The Rust library, built by cargokit from ../crates/compter-mobile (see tool/bootstrap.sh)
+  compter_mobile:
+    path: rust_builder
+  # Exact: must match `flutter_rust_bridge` in crates/compter-mobile/Cargo.toml
+  flutter_rust_bridge: 2.13.0
+  flutter_riverpod: ^3.4.3
+  go_router: ^18.1.0
+  path_provider: ^2.1.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
