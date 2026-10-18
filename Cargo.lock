@@ -332,16 +332,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "compter-tui"
-version = "0.1.0"
+name = "compter-core"
+version = "0.2.3"
 dependencies = [
  "accounting-core",
  "async-trait",
  "bigdecimal",
  "chrono",
- "color-eyre",
  "pollster",
- "ratatui",
  "redb",
  "serde",
  "serde_json",
@@ -349,6 +347,20 @@ dependencies = [
  "tempfile",
  "thiserror",
  "uuid",
+]
+
+[[package]]
+name = "compter-tui"
+version = "0.2.3"
+dependencies = [
+ "accounting-core",
+ "bigdecimal",
+ "chrono",
+ "color-eyre",
+ "compter-core",
+ "ratatui",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]

@@ -250,11 +250,8 @@ Assumptions:
 ```
 
 ```
-src/
-├── main.rs              binary: args, panic hook, store, six tabs, event loop
-├── lib.rs               library root; everything below is the `compter_tui` crate
-├── app.rs               App state, global keys, tab switching (on_activate)
-├── event.rs             crossterm input, resize and tick threads
+crates/compter-core/src/  the `compter_core` crate: no UI, shared by every front end
+├── lib.rs               library root
 ├── demo.rs              in-memory sample business for --demo; fixture projects for tests
 ├── services/            use-cases: load → domain change → save
 │   ├── project_service.rs  ProjectService, ProjectDraft, MilestoneDraft
@@ -292,6 +289,15 @@ src/
 │   ├── states.rs        GST state code names
 │   ├── error.rs         DomainError
 │   └── fiscal_year.rs   Indian April–March year and its quarters
+└── (tests/ beside each module; database-file integration tests in crates/compter-core/tests/)
+
+crates/compter-tui/src/   the `compter_tui` crate: the terminal app
+├── main.rs              binary: args, panic hook, store, six tabs, event loop
+├── lib.rs               library root
+├── app.rs               App state, global keys, tab switching (on_activate)
+├── event.rs             crossterm input, resize and tick threads
+├── cli.rs               import-merges and sync commands
+├── viewer.rs            open a PDF in the desktop's default app
 └── ui/
     ├── mod.rs           draw(): header / body / footer, help overlay
     ├── view.rs          View trait (render, keys, hints, on_activate), Action, Notice
@@ -313,7 +319,7 @@ src/
         └── placeholder.rs  a tab that only shows a message
 ```
 
-Unit tests sit in a `tests/` folder beside the code they cover (`src/domain/tests/`, `src/storage/tests/`, `src/ui/tests/`, and `src/tests/` for `app.rs`), one `<file>_tests.rs` per source file. Integration tests that reopen a real database file are in the top-level `tests/` directory.
+Unit tests sit in a `tests/` folder beside the code they cover (`domain/tests/`, `storage/tests/`, `services/tests/` in compter-core; `ui/tests/` and `tests/` for `app.rs` in compter-tui), one `<file>_tests.rs` per source file. Integration tests that reopen a real database file are in `crates/compter-core/tests/`.
 
 Each tab implements `View`. A new screen is a new `View` registered in `main.rs`; the core loop doesn't change. See `CLAUDE.md` for the SOLID, DRY and memory rules the code follows.
 

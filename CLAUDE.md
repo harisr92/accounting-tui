@@ -12,18 +12,23 @@ Engineering rules for `compter-tui`. Follow them for every change. See `README.m
 
 ## Module boundaries
 
-The crate is a library (`src/lib.rs`, `compter_tui`) plus a thin binary (`src/main.rs`). Public domain APIs live in the library, so items the UI doesn't use yet aren't dead code, and integration tests can go under `tests/`.
+A Cargo workspace of two crates. `crates/compter-core` (`compter_core`) is the product with no UI, so every front end (the terminal app now, a mobile app later) shares it. `crates/compter-tui` (`compter_tui`) is the terminal app: a library plus a thin binary (`src/main.rs`). Public APIs live in the libraries, so items a UI doesn't use yet aren't dead code.
 
 ```
-domain/    pure types and rules: no I/O, no UI, no crossterm/ratatui imports
-storage/   redb database behind the repository traits and the ledger store
-services/  use-cases (ProjectService; invoicing, payments, tax later); generic over repository traits
-app.rs     application state and global key handling
-event.rs   input, resize and tick threads
-ui/        rendering and key handling; changes data only by calling services
+compter-core/src/
+  domain/    pure types and rules: no I/O, no UI
+  storage/   redb database behind the repository traits and the ledger store
+  services/  use-cases (ProjectService, InvoiceService, ...); generic over repository traits
+  demo.rs    in-memory sample business for --demo and test fixtures
+compter-tui/src/
+  app.rs     application state and global key handling
+  event.rs   input, resize and tick threads
+  cli.rs     non-interactive commands (import-merges reads git here)
+  viewer.rs  opens a written PDF in the desktop's default app
+  ui/        rendering and key handling; changes data only by calling services
 ```
 
-Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain`. `domain` depends on nothing in this crate.
+Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain`. `domain` depends on nothing in this workspace. `compter-core` never depends on ratatui, crossterm, color-eyre, or anything that assumes a desktop: no spawning processes, and env vars are read only by the `from_env` helpers (`DataDir::from_env`, `SyncDir::from_env`, `sync::device_name_from_env`), which only a desktop binary calls; other front ends inject the values (`DataDir::new`). Services return file paths; showing a file is the front end's job (`viewer::open`).
 
 ## Domain invariants
 
@@ -55,7 +60,7 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - redb's per-operation errors convert into `StorageError` via `?`. Map `StorageError` to accounting-core errors with `LedgerError::from`.
 - accounting-core's store traits are async; we implement them with sync redb calls and drive them with `pollster::block_on`. Don't add an async runtime.
 - Settings that belong to one device (the sync folder) live in `device.json` in the data dir, not in redb: sync runs before the store opens, and the database travels between devices. Read and write them only through `storage::sync` (`SyncDir::saved` / `save`), via `PreferencesService`. `$COMPTER_SYNC_DIR` overrides the saved folder; it is read only in `main.rs` and injected.
-- Tests use `Store::in_memory()`. Tests that reopen the file use `tempfile` and go in the top-level `tests/`.
+- Tests use `Store::in_memory()`. Tests that reopen the file use `tempfile` and go in `crates/compter-core/tests/`.
 
 ## Invoicing
 
@@ -136,10 +141,10 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 Every module keeps its unit tests in a `tests/` folder next to its source files, one `<file>_tests.rs` per source file. Never write inline `#[cfg(test)] mod tests { … }` blocks.
 
 ```
-src/domain/billing.rs     → src/domain/tests/billing_tests.rs
-src/ui/selection.rs       → src/ui/tests/selection_tests.rs
-src/ui/mod.rs (draw)      → src/ui/tests/draw_tests.rs
-src/app.rs (crate root)   → src/tests/app_tests.rs
+compter-core/src/domain/billing.rs  → compter-core/src/domain/tests/billing_tests.rs
+compter-tui/src/ui/selection.rs     → compter-tui/src/ui/tests/selection_tests.rs
+compter-tui/src/ui/mod.rs (draw)    → compter-tui/src/ui/tests/draw_tests.rs
+compter-tui/src/app.rs (crate root) → compter-tui/src/tests/app_tests.rs
 ```
 
 - The parent file ends with `#[cfg(test)] mod tests;`: `domain/mod.rs`, `ui/mod.rs`, and `lib.rs` for crate-root files like `app.rs`. A new module (`storage/`, `services/`) gets its own `tests/` folder the same way.
@@ -147,7 +152,7 @@ src/app.rs (crate root)   → src/tests/app_tests.rs
 - Import explicitly (`use crate::domain::{Billing, Project};`), never `use super::*`.
 - Test through the public API. Reach into a private module (e.g. `crate::domain::billing::amount_for`) only for pure helpers.
 - `unwrap`/`expect` are fine in tests. Name tests after the behaviour (`transitions_cannot_be_skipped_or_repeated`), not the function.
-- Cross-module integration tests (e.g. FileStorage on a temp dir, step 3) go in the top-level `tests/` directory and use the `compter_tui` library crate.
+- Cross-module integration tests (e.g. a database file on a temp dir) go in `crates/compter-core/tests/` and use the `compter_core` library crate.
 
 ## Before you call a change done
 
@@ -157,6 +162,6 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-UI changes also need a manual `cargo run` check: tabs, focus, help popup, resizing, and a clean exit with `q`. Add or extend the `TestBackend` render test in `src/ui/tests/draw_tests.rs` for new chrome.
+UI changes also need a manual `cargo run` check: tabs, focus, help popup, resizing, and a clean exit with `q`. Add or extend the `TestBackend` render test in `crates/compter-tui/src/ui/tests/draw_tests.rs` for new chrome.
 
 Shell commands are proxied through RTK (`rtk ...`) automatically. See `~/.claude/RTK.md`.
