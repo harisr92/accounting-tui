@@ -1,0 +1,11 @@
+//! What the Flutter app can call. Values cross the bridge as plain structs of strings: money is
+//! formatted and input is parsed here, by `compter_core`, so Dart never does either.
+
+// Public so flutter_rust_bridge writes one Dart file per module (`api/app.dart`, ...)
+pub mod app;
+pub mod error;
+pub mod rows;
+
+pub use app::CompterApp;
+pub use error::ApiError;
+pub use rows::{MilestoneInput, MilestoneRow, ProjectDetail, ProjectInput, ProjectRow};

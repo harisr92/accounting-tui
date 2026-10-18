@@ -1,0 +1,24 @@
+[package]
+name = "compter-mobile"
+version = "0.2.3"
+edition.workspace = true
+description = "compter's API for the Flutter app, bridged with flutter_rust_bridge"
+
+[lib]
+# staticlib for iOS, cdylib for Android, lib for the tests
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[dependencies]
+bigdecimal.workspace = true
+chrono.workspace = true
+compter-core.workspace = true
+# Exact: the Dart package `flutter_rust_bridge` in app/pubspec.yaml must be the same version
+flutter_rust_bridge = "=2.13.0"
+thiserror.workspace = true
+
+[lints.rust]
+# flutter_rust_bridge's generated code checks for this cfg
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
+[dev-dependencies]
+tempfile.workspace = true
