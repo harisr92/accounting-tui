@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// A smoke test on a simulator or emulator, with the Rust library cargokit built for it:
+/// A smoke test on a simulator or emulator, with the Rust library the build hook made for it:
 /// `flutter test integration_test`. Runs on the demo business, in memory, so nothing on the
 /// device is touched. The screens are tested in detail on the host, in `test/`.
 void main() {

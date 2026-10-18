@@ -10,9 +10,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # The Rust library, built by cargokit from ../crates/compter-mobile (see tool/bootstrap.sh)
-  compter_mobile:
-    path: rust_builder
   # Exact: must match `flutter_rust_bridge` in crates/compter-mobile/Cargo.toml
   flutter_rust_bridge: 2.13.0
   flutter_riverpod: ^3.4.3
@@ -21,6 +18,9 @@ dependencies:
   share_plus: ^13.3.1
   open_filex: ^5.0.0
   file_picker: ^13.1.0
+  # hook/build.dart builds ../crates/compter-mobile with these; Flutter bundles the library
+  hooks: ^2.2.0
+  native_toolchain_rust: ^1.0.7
 
 dev_dependencies:
   flutter_test:

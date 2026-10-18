@@ -10,15 +10,15 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// The host build of compter-mobile (`cargo build -p compter-mobile`), from the workspace's
-/// target folder
+/// The host build of compter-mobile, which the build hook (hook/build.dart) makes and
+/// `flutter test` stages under build/native_assets before the tests run
 ExternalLibrary hostLibrary() {
-  final file = Platform.isMacOS
-      ? 'libcompter_mobile.dylib'
+  final (os, file) = Platform.isMacOS
+      ? ('macos', 'libcompter_mobile.dylib')
       : Platform.isWindows
-      ? 'compter_mobile.dll'
-      : 'libcompter_mobile.so';
-  return ExternalLibrary.open('../target/debug/$file');
+      ? ('windows', 'compter_mobile.dll')
+      : ('linux', 'libcompter_mobile.so');
+  return ExternalLibrary.open('build/native_assets/$os/$file');
 }
 
 Future<void> initRust() => RustLib.init(externalLibrary: hostLibrary());
