@@ -24,6 +24,26 @@ void main() {
     expect(find.textContaining('₹'), findsWidgets);
   });
 
+  testWidgets('on iOS a swipe from the left edge goes back to the list', (
+    tester,
+  ) async {
+    await launchDemo(tester);
+    await tester.tap(find.text('Data Pipeline'));
+    await settle(tester);
+    expect(find.text('Milestones'), findsOneWidget);
+
+    final size = tester.getSize(find.byType(Scaffold).last);
+    await tester.timedDragFrom(
+      Offset(5, size.height / 2),
+      Offset(size.width * 0.8, 0),
+      const Duration(milliseconds: 300),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Milestones'), findsNothing);
+    expect(find.byTooltip('New project'), findsOneWidget);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
   testWidgets('a refused rate stays in the form under its field', (
     tester,
   ) async {
