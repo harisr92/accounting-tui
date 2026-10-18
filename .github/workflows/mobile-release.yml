@@ -3,6 +3,8 @@ name: Mobile release
 # A tag like mobile-v0.3.0 uploads that version to TestFlight and Google Play's internal track.
 # The version must match app/pubspec.yaml; the build number is this workflow's run number, so
 # every upload is higher than the last. One-time setup and the secrets: app/README.md.
+# The Rust library is built by app/hook/build.dart, with the Rust pinned in
+# crates/compter-mobile/rust-toolchain.toml.
 on:
   push:
     tags:
@@ -43,12 +45,6 @@ jobs:
       COMPTER_BUILD_NUMBER: ${{ needs.version.outputs.number }}
     steps:
       - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android
-
-      - uses: Swatinem/rust-cache@v2
 
       - uses: actions/setup-java@v4
         with:
@@ -97,12 +93,6 @@ jobs:
       COMPTER_BUILD_NUMBER: ${{ needs.version.outputs.number }}
     steps:
       - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-ios
-
-      - uses: Swatinem/rust-cache@v2
 
       - uses: subosito/flutter-action@v2
         with:
