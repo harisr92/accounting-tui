@@ -115,7 +115,11 @@ class SyncSection extends ConsumerWidget {
       ],
     );
     if (method == null) return;
-    await ref.read(syncControllerProvider.notifier).useMethod(method);
+    try {
+      await ref.read(syncControllerProvider.notifier).useMethod(method);
+    } on Exception catch (error) {
+      if (context.mounted) notify(context, '$error', error: true);
+    }
   }
 
   Future<void> _receive(BuildContext context, WidgetRef ref) async {
