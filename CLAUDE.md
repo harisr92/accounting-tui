@@ -64,6 +64,8 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - A logical write that touches several tables (a project + its summary) happens in **one** write transaction. Return before `commit()` to abort.
 - redb's per-operation errors convert into `StorageError` via `?`. Map `StorageError` to accounting-core errors with `LedgerError::from`.
 - accounting-core's store traits are async; we implement them with sync redb calls and drive them with `pollster::block_on`. Don't add an async runtime.
+- Sync decides "changed since the last sync" from `Store::content_hash` (every record), never the file's bytes: redb rewrites its header on every open. The manifest's SHA-256 stays a file hash, to spot a half-synced snapshot.
+- Phones hand the database over by hand (`sync::receive`, `send`, `settle_received`, with the store closed), with no lease. `receive` takes only a snapshot newer than, or the very one, it last synced; anything else is `SyncError::Undelivered`, since a hand-off may never arrive or arrive as a copy.
 - Settings that belong to one device (the sync folder) live in `device.json` in the data dir, not in redb: sync runs before the store opens, and the database travels between devices. Read and write them only through `storage::sync` (`SyncDir::saved` / `save`), via `PreferencesService`. `$COMPTER_SYNC_DIR` overrides the saved folder; it is read only in `main.rs` and injected.
 - Tests use `Store::in_memory()`. Tests that reopen the file use `tempfile` and go in `crates/compter-core/tests/`.
 

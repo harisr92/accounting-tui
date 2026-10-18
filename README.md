@@ -373,7 +373,7 @@ export COMPTER_SYNC_DIR="$HOME/Library/CloudStorage/GoogleDrive-you@example.com/
 
 Each device keeps its own database in its data folder. compter hands it over through the synced folder:
 
-- **On exit**, if the database changed, compter copies it to `compter.redb` in the synced folder, then writes `manifest.json`, which numbers the snapshot and records its SHA-256.
+- **On exit**, if the records changed, compter copies the database to `compter.redb` in the synced folder, then writes `manifest.json`, which numbers the snapshot and records its SHA-256. Opening compter without changing anything publishes nothing.
 - **On start**, if the manifest is newer than what this device last synced, compter pulls in the snapshot. It does this only when the local copy is unchanged since then, and only once the snapshot's hash matches the manifest, so a half-synced file is never used.
 - **While open**, `lease.json` names the device using compter and is refreshed every minute. Another device refuses to start while it's fresh, and takes it over after 5 minutes (a crash). Name devices with `COMPTER_DEVICE`; the host name is the default.
 
@@ -383,6 +383,15 @@ Each device keeps its own database in its data folder. compter hands it over thr
 - `compter sync --keep-local` publishes this device's data as the newest snapshot.
 
 Conflict copies made by the sync client (`compter (1).redb` and the like) are never read; compter shows a warning in the footer when it finds them. Invoice PDFs and returns stay in each device's data folder.
+
+### Phones
+
+The phone app can't see the synced folder, so you carry its two files across by hand, in **Settings → Sync with your computer**. Quit compter on the computer first, and let the sync client finish.
+
+- **Get from computer** picks `compter.redb` and `manifest.json` from the synced folder (Files on iPhone, the file picker on Android, both showing iCloud Drive and Google Drive). A new install simply takes them. If the phone changed since its last hand-off, it asks which side to keep, as `compter sync` does.
+- **Send to computer** writes the phone's snapshot and manifest and opens the share sheet: save both into the synced folder, **replacing** the ones there. On iPhone, Files asks to replace them. The Google Drive app on Android uploads new files instead (`compter (1).redb`); then replace the originals with them from the computer.
+
+A hand-off that never reached the folder is caught: the next **Get from computer** finds a snapshot other than the one the phone sent, and asks which side to keep instead of taking or overwriting either. The computer, for its part, warns about the copies.
 
 ## Roadmap
 

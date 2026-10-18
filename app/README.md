@@ -12,6 +12,8 @@ lib/src/screens/           one per tab (projects, invoices, expenses, reports, s
                            project and an invoice
 lib/src/forms/             FormDialog (every form) and the forms and flows built on it
 lib/src/notice.dart        snack bars, yes/no questions, opening and sharing files
+lib/src/handoff.dart       picking and staging the snapshot and manifest carried to and from the
+                           computer's sync folder (see "Phones" in the main README)
 lib/src/year_picker.dart   the financial year a tab shows, stepped like [ and ] in the terminal
 lib/src/rust/              generated bindings: never edit, re-run codegen
 rust_builder/              cargokit plugin that builds the Rust crate in Xcode and Gradle
