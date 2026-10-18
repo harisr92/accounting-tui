@@ -1,8 +1,25 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// The upload key that signs release builds for Google Play: android/key.properties locally
+// (never committed), or COMPTER_UPLOAD_* variables in CI. See app/README.md.
+val uploadKey = Properties().apply {
+    val file = rootProject.file("key.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    } else {
+        System.getenv("COMPTER_UPLOAD_STORE_FILE")?.let { put("storeFile", it) }
+        System.getenv("COMPTER_UPLOAD_STORE_PASSWORD")?.let { put("storePassword", it) }
+        System.getenv("COMPTER_UPLOAD_KEY_ALIAS")?.let { put("keyAlias", it) }
+        System.getenv("COMPTER_UPLOAD_KEY_PASSWORD")?.let { put("keyPassword", it) }
+    }
+}
+val hasUploadKey = uploadKey.getProperty("storeFile") != null
 
 android {
     namespace = "dev.compter.compter"
@@ -15,10 +32,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "dev.compter.compter"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
@@ -29,11 +43,22 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasUploadKey) {
+            create("upload") {
+                storeFile = file(uploadKey.getProperty("storeFile"))
+                storePassword = uploadKey.getProperty("storePassword")
+                keyAlias = uploadKey.getProperty("keyAlias")
+                keyPassword = uploadKey.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Without an upload key, the debug key: `flutter run --release` still works, and
+            // the release workflow refuses to publish such a build
+            signingConfig = signingConfigs.getByName(if (hasUploadKey) "upload" else "debug")
         }
     }
 }
