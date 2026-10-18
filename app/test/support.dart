@@ -33,9 +33,18 @@ Future<void> launchDemo(
     final scratch = await Directory.systemTemp.createTemp('compter_test');
     return CompterApp.demo(scratchDir: scratch.path);
   });
+  await launchWith(tester, compter!, overrides: overrides);
+}
+
+/// The app on [compter], an opened database
+Future<void> launchWith(
+  WidgetTester tester,
+  CompterApp compter, {
+  List<Override> overrides = const [],
+}) async {
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [compterProvider.overrideWithValue(compter!), ...overrides],
+      overrides: [compterProvider.overrideWithValue(compter), ...overrides],
       child: const CompterMobile(),
     ),
   );
@@ -50,7 +59,12 @@ Future<void> settle(WidgetTester tester) async {
       () => Future<void>.delayed(const Duration(milliseconds: 10)),
     );
     await tester.pump();
-    if (find.byType(CircularProgressIndicator).evaluate().isEmpty) break;
+    // Off screen too: a list builds a little past its edge, and a spinner there still spins
+    final spinners = find.byType(
+      CircularProgressIndicator,
+      skipOffstage: false,
+    );
+    if (spinners.evaluate().isEmpty) break;
   }
   await tester.pumpAndSettle();
 }
@@ -65,7 +79,11 @@ Future<void> pumpUntil(
   final end = DateTime.now().add(timeout);
   while (finder.evaluate().isEmpty) {
     if (DateTime.now().isAfter(end)) {
-      fail('Timed out waiting for $finder');
+      final notices = find
+          .descendant(of: find.byType(SnackBar), matching: find.byType(Text))
+          .evaluate()
+          .map((e) => (e.widget as Text).data);
+      fail('Timed out waiting for $finder; notices: $notices');
     }
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 20)),
