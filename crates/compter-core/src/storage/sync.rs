@@ -393,9 +393,12 @@ pub struct SyncState {
 /// Where this device's database, open as `store`, stands; the sync folder isn't touched
 pub fn state(data: &DataDir, store: &Store) -> Result<SyncState, SyncError> {
     let state = load_state(data)?;
+    // Never synced, or synced before contents were hashed: changed, as far as anyone can
+    // tell. The file can't be compared while `store` holds it: Windows locks it, and redb
+    // rewrites its header on every open anyway.
     let changed = match &state.base_content {
         Some(base) => store.content_hash()? != *base,
-        None => hash_file(&data.database_path())? != state.base_sha256,
+        None => true,
     };
     Ok(SyncState {
         generation: state.base_generation,

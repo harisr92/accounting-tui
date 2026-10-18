@@ -41,6 +41,8 @@ class ProjectsScreen extends ConsumerWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        // Every tab stays mounted in one route, so their buttons would share the default hero tag
+        heroTag: null,
         tooltip: 'New project',
         icon: const Icon(Icons.add),
         label: const Text('New project'),

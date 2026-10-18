@@ -59,6 +59,7 @@ android {
             // Without an upload key, the debug key: `flutter run --release` still works, and
             // the release workflow refuses to publish such a build
             signingConfig = signingConfigs.getByName(if (hasUploadKey) "upload" else "debug")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }

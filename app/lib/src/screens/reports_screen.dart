@@ -36,6 +36,8 @@ class ReportsScreen extends ConsumerWidget {
           : Builder(
               // Its own context, so the iPad share popover points at it
               builder: (button) => FloatingActionButton.extended(
+                // Every tab stays mounted in one route, so their buttons would share the default hero tag
+                heroTag: null,
                 icon: const Icon(Icons.upload_file),
                 label: const Text('Export return'),
                 onPressed: () => _export(button, ref, year, report.value!),

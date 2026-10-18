@@ -54,6 +54,8 @@ class ExpensesScreen extends ConsumerWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        // Every tab stays mounted in one route, so their buttons would share the default hero tag
+        heroTag: null,
         tooltip: 'Add expense',
         icon: const Icon(Icons.add),
         label: const Text('Add expense'),
