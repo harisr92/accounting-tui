@@ -63,10 +63,18 @@ class SyncStatusRow {
   /// Something changed here since the last hand-off: worth sending
   final bool changed;
 
-  const SyncStatusRow({required this.summary, required this.changed});
+  /// The SHA-256 of the snapshot last synced; a manifest recording the same hash needs no
+  /// download
+  final String? sha256;
+
+  const SyncStatusRow({
+    required this.summary,
+    required this.changed,
+    this.sha256,
+  });
 
   @override
-  int get hashCode => summary.hashCode ^ changed.hashCode;
+  int get hashCode => summary.hashCode ^ changed.hashCode ^ sha256.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -74,5 +82,6 @@ class SyncStatusRow {
       other is SyncStatusRow &&
           runtimeType == other.runtimeType &&
           summary == other.summary &&
-          changed == other.changed;
+          changed == other.changed &&
+          sha256 == other.sha256;
 }

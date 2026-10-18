@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'screens/expenses_screen.dart';
@@ -8,6 +9,7 @@ import 'screens/project_screen.dart';
 import 'screens/projects_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
+import 'sync/sync_controller.dart';
 
 /// Where invoice [number] opens. Numbers hold slashes (`INV/26-27/004`), so they are encoded.
 String invoicePath(String number) => '/invoices/${Uri.encodeComponent(number)}';
@@ -88,13 +90,32 @@ GoRouter buildRouter() {
   );
 }
 
-class _Tabs extends StatelessWidget {
+/// The tab bar. It also starts automatic sync once the app is up, and badges Settings when
+/// sync needs the user (sign in, choose a folder, settle a conflict).
+class _Tabs extends ConsumerStatefulWidget {
   const _Tabs(this.shell);
 
   final StatefulNavigationShell shell;
 
   @override
+  ConsumerState<_Tabs> createState() => _TabsState();
+}
+
+class _TabsState extends ConsumerState<_Tabs> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => ref.read(syncControllerProvider.notifier).start(),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final shell = widget.shell;
+    final attention = ref.watch(
+      syncControllerProvider.select((report) => report.needsAttention),
+    );
     return Scaffold(
       body: shell,
       bottomNavigationBar: NavigationBar(
@@ -102,30 +123,36 @@ class _Tabs extends StatelessWidget {
         // A second tap on the current tab goes back to its list
         onDestinationSelected: (i) =>
             shell.goBranch(i, initialLocation: i == shell.currentIndex),
-        destinations: const [
-          NavigationDestination(
+        destinations: [
+          const NavigationDestination(
             icon: Icon(Icons.work_outline),
             selectedIcon: Icon(Icons.work),
             label: 'Projects',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.receipt_long_outlined),
             selectedIcon: Icon(Icons.receipt_long),
             label: 'Invoices',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.account_balance_wallet_outlined),
             selectedIcon: Icon(Icons.account_balance_wallet),
             label: 'Expenses',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.insights_outlined),
             selectedIcon: Icon(Icons.insights),
             label: 'Reports',
           ),
           NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
+            icon: Badge(
+              isLabelVisible: attention,
+              child: const Icon(Icons.settings_outlined),
+            ),
+            selectedIcon: Badge(
+              isLabelVisible: attention,
+              child: const Icon(Icons.settings),
+            ),
             label: 'Settings',
           ),
         ],

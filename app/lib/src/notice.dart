@@ -87,3 +87,31 @@ Future<void> shareFiles(
     ),
   );
 }
+
+/// `true` to keep this phone's data, `false` to take the computer's, `null` to decide later
+Future<bool?> askWhichToKeep(BuildContext context, String message) {
+  return showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Which data to keep?'),
+      content: Text(
+        '$message\n\nInvoice numbers can’t be merged, so one side wins. '
+        "Taking the computer's keeps this phone's database as a backup.",
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Later'),
+        ),
+        FilledButton.tonal(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text("Take computer's"),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text("Keep this phone's"),
+        ),
+      ],
+    ),
+  );
+}

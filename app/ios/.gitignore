@@ -32,3 +32,6 @@ Runner/GeneratedPluginRegistrant.*
 !default.mode2v3
 !default.pbxuser
 !default.perspectivev3
+
+# Google Drive sync: your own OAuth client (see Flutter/Google.xcconfig.example)
+Flutter/Google.xcconfig

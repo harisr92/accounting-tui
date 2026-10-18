@@ -80,6 +80,14 @@ abstract class CompterApp implements RustOpaqueInterface {
     String? rate,
   });
 
+  /// Who has compter open, from the `lease.json` found in the sync folder: `compter is open
+  /// on laptop (last seen 14:05)`, or `None` when it is this phone's lease or a stale one
+  Future<String?> leaseHolder({required String leaseJson});
+
+  /// This phone's lease, as the JSON compter on the computer reads from `lease.json`: write
+  /// it to the sync folder while the app is in use, and refresh it every minute
+  Future<String> leaseJson({required String deviceName});
+
   /// Log time worked on a pending milestone of an hourly project
   Future<ProjectDetail> logTime({
     required String projectId,

@@ -5,59 +5,117 @@ import '../compter.dart';
 import '../handoff.dart';
 import '../notice.dart';
 import '../rust/api/error.dart';
+import '../sync/sync_controller.dart';
+import '../sync/sync_settings.dart';
+import '../ui/action_sheet.dart';
 import '../ui/section.dart';
+import 'drive_rows.dart';
 
-/// Hands the data between this phone and compter on a computer. The phone can't see the
-/// computer's sync folder (Google Drive, iCloud Drive), so the user carries its two files
-/// across with the Files app; Rust checks generations so no invoice is ever lost.
+/// Syncing with compter on a computer, through its sync folder: automatically in Google
+/// Drive (see `SyncController`), or by hand, carrying its two files across with the Files app.
+/// Either way Rust checks each snapshot's generation, so no invoice is ever lost.
 class SyncSection extends ConsumerWidget {
   const SyncSection({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(syncStatusProvider);
+    final settings = ref.watch(syncSettingsProvider).value;
     final available = status.value?.available ?? false;
+    final drive = settings?.method == SyncMethod.googleDrive;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SectionHeader('Sync with your computer'),
-        ListTile(
-          leading: const Icon(Icons.sync),
-          title: status.when(
-            loading: () => const Align(
+        if (status.isLoading && !status.hasValue)
+          const ListTile(
+            leading: Icon(Icons.sync),
+            title: Align(
               alignment: Alignment.centerLeft,
               child: SizedBox.square(
                 dimension: 16,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
-            error: (error, _) => Text('$error'),
-            data: (status) => Text(status.summary),
+          )
+        else if (!available)
+          ListTile(
+            leading: const Icon(Icons.sync_disabled),
+            title: Text(status.value?.summary ?? ''),
+          )
+        else ...[
+          ListTile(
+            leading: const Icon(Icons.sync_alt),
+            title: const Text('Sync method'),
+            subtitle: Text(
+              drive ? 'Google Drive, automatic' : 'By hand, with the files',
+            ),
+            onTap: () => _chooseMethod(context, ref),
           ),
+          if (drive) ...[
+            DriveRows(folderPath: settings?.folderPath),
+            const SectionNote(
+              'Point compter on your computer at the same folder in its '
+              'Google Drive. While this phone is open, compter there waits.',
+            ),
+          ] else ...[
+            ..._manualRows(context, ref, status.value?.summary),
+            const SectionNote(
+              'compter on your computer publishes $snapshotFile and '
+              '$manifestFile to its sync folder on Google Drive or iCloud '
+              'Drive.',
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  List<Widget> _manualRows(
+    BuildContext context,
+    WidgetRef ref,
+    String? summary,
+  ) => [
+    ListTile(
+      leading: const Icon(Icons.info_outline),
+      title: Text(summary ?? '…'),
+    ),
+    ListTile(
+      leading: const Icon(Icons.download),
+      title: const Text('Get from computer'),
+      subtitle: const Text('Pick both files from the sync folder'),
+      onTap: () => _receive(context, ref),
+    ),
+    Builder(
+      // Its own context, so the iPad share popover points at the row
+      builder: (row) => ListTile(
+        leading: const Icon(Icons.upload),
+        title: const Text('Send to computer'),
+        subtitle: const Text('Save both files into the sync folder'),
+        onTap: () => _send(row, ref),
+      ),
+    ),
+  ];
+
+  Future<void> _chooseMethod(BuildContext context, WidgetRef ref) async {
+    final method = await showActionSheet<SyncMethod>(
+      context,
+      title: 'Sync method',
+      actions: const [
+        (
+          icon: Icons.cloud_sync_outlined,
+          label: 'Google Drive, automatic',
+          value: SyncMethod.googleDrive,
         ),
-        ListTile(
-          enabled: available,
-          leading: const Icon(Icons.download),
-          title: const Text('Get from computer'),
-          subtitle: const Text('Pick both files from the sync folder'),
-          onTap: () => _receive(context, ref),
-        ),
-        Builder(
-          // Its own context, so the iPad share popover points at the row
-          builder: (row) => ListTile(
-            enabled: available,
-            leading: const Icon(Icons.upload),
-            title: const Text('Send to computer'),
-            subtitle: const Text('Save both files into the sync folder'),
-            onTap: () => _send(row, ref),
-          ),
-        ),
-        const SectionNote(
-          'compter on your computer publishes $snapshotFile and '
-          '$manifestFile to its sync folder on Google Drive or iCloud Drive.',
+        (
+          icon: Icons.folder_copy_outlined,
+          label: 'By hand, with the files',
+          value: SyncMethod.manual,
         ),
       ],
     );
+    if (method == null) return;
+    await ref.read(syncControllerProvider.notifier).useMethod(method);
   }
 
   Future<void> _receive(BuildContext context, WidgetRef ref) async {
@@ -81,7 +139,7 @@ class SyncSection extends ConsumerWidget {
         notify(context, received.message);
         return;
       }
-      final keepPhone = await _askWhichToKeep(context, received.message);
+      final keepPhone = await askWhichToKeep(context, received.message);
       if (keepPhone == null) return;
       final settled = await app.settleSnapshot(
         folder: inbox,
@@ -128,33 +186,5 @@ class SyncSection extends ConsumerWidget {
       reloadEverything(ref);
       if (context.mounted) notify(context, error.message, error: true);
     }
-  }
-
-  /// `true` to keep this phone's data, `false` to take the computer's, `null` to decide later
-  Future<bool?> _askWhichToKeep(BuildContext context, String message) {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Which data to keep?'),
-        content: Text(
-          '$message\n\nInvoice numbers can’t be merged, so one side wins. '
-          "Taking the computer's keeps this phone's database as a backup.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Later'),
-          ),
-          FilledButton.tonal(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Take computer's"),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Keep this phone's"),
-          ),
-        ],
-      ),
-    );
   }
 }

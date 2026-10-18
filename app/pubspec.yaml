@@ -21,6 +21,10 @@ dependencies:
   # hook/build.dart builds ../crates/compter-mobile with these; Flutter bundles the library
   hooks: ^2.2.0
   native_toolchain_rust: ^1.0.7
+  google_sign_in: ^7.2.0
+  googleapis: ^17.0.0
+  extension_google_sign_in_as_googleapis_auth: ^3.0.0
+  shared_preferences: ^2.5.6
 
 dev_dependencies:
   flutter_test:
@@ -28,6 +32,7 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  shared_preferences_platform_interface: ^2.4.2
 
 flutter:
   uses-material-design: true

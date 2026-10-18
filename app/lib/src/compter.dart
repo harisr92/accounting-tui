@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderOrFamily;
 import 'package:path_provider/path_provider.dart';
 
 import 'rust/api/app.dart';
@@ -117,14 +118,20 @@ final syncStatusProvider = FutureProvider<SyncAvailability>((ref) async {
 });
 
 /// Drop every loaded record: the database itself was replaced, so all of them may have changed
-void reloadEverything(WidgetRef ref) {
-  ref
-    ..invalidate(projectsProvider)
-    ..invalidate(projectProvider)
-    ..invalidate(invoicesProvider)
-    ..invalidate(invoiceProvider)
-    ..invalidate(expensesProvider)
-    ..invalidate(reportProvider)
-    ..invalidate(profileProvider)
-    ..invalidate(syncStatusProvider);
+void reloadEverything(WidgetRef ref) => reloadEverythingWith(ref.invalidate);
+
+/// [reloadEverything] for code holding a `Ref`, such as the sync engine
+void reloadEverythingWith(void Function(ProviderOrFamily provider) invalidate) {
+  for (final provider in <ProviderOrFamily>[
+    projectsProvider,
+    projectProvider,
+    invoicesProvider,
+    invoiceProvider,
+    expensesProvider,
+    reportProvider,
+    profileProvider,
+    syncStatusProvider,
+  ]) {
+    invalidate(provider);
+  }
 }
