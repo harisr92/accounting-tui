@@ -22,9 +22,12 @@ ExternalLibrary hostLibrary() {
 
 Future<void> initRust() => RustLib.init(externalLibrary: hostLibrary());
 
-/// The app on the demo business, in memory
+/// The app on the demo business, in memory, writing its PDFs to a scratch folder
 Future<void> launchDemo(WidgetTester tester) async {
-  final compter = await tester.runAsync(CompterApp.demo);
+  final compter = await tester.runAsync(() async {
+    final scratch = await Directory.systemTemp.createTemp('compter_test');
+    return CompterApp.demo(scratchDir: scratch.path);
+  });
   await tester.pumpWidget(
     ProviderScope(
       overrides: [compterProvider.overrideWithValue(compter!)],
@@ -45,4 +48,24 @@ Future<void> settle(WidgetTester tester) async {
     if (find.byType(CircularProgressIndicator).evaluate().isEmpty) break;
   }
   await tester.pumpAndSettle();
+}
+
+/// Pump until [finder] finds something: for Rust work that shows no spinner, like saving after
+/// a dialog closes. Fails after [timeout].
+Future<void> pumpUntil(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 10),
+}) async {
+  final end = DateTime.now().add(timeout);
+  while (finder.evaluate().isEmpty) {
+    if (DateTime.now().isAfter(end)) {
+      fail('Timed out waiting for $finder');
+    }
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+  }
+  await settle(tester);
 }
