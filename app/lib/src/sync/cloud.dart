@@ -56,3 +56,12 @@ class CloudSignedOut implements Exception {
   @override
   String toString() => 'Signed out of Google; sign in again to sync';
 }
+
+/// This build has no OAuth client for Google sign-in (iOS: ios/Flutter/Google.xcconfig).
+/// See app/README.md, "Google Drive sync".
+class CloudNotConfigured implements Exception {
+  const CloudNotConfigured();
+
+  @override
+  String toString() => "Google sign-in isn't set up in this build";
+}

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
+import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 
@@ -19,6 +20,10 @@ const _serverClientId = String.fromEnvironment(
 /// uploaded, which the narrower `drive.file` scope can't see
 const _scopes = [drive.DriveApi.driveScope];
 
+/// Answers whether Info.plist has a `GIDClientID` (ios/Runner/AppDelegate.swift). Without one
+/// GoogleSignIn raises a native exception Dart can't catch, so iOS asks before initializing.
+const _iosConfig = MethodChannel('compter/google_sign_in');
+
 const _folderMime = 'application/vnd.google-apps.folder';
 const _syncFolderName = 'compter-sync';
 
@@ -28,10 +33,15 @@ class GoogleDriveAccount implements CloudAccount {
   drive.DriveApi? _api;
   Future<void>? _initialized;
 
-  Future<void> _initialize() =>
-      _initialized ??= GoogleSignIn.instance.initialize(
-        serverClientId: _serverClientId.isEmpty ? null : _serverClientId,
-      );
+  Future<void> _initialize() => _initialized ??= () async {
+    if (Platform.isIOS &&
+        await _iosConfig.invokeMethod<bool>('isConfigured') != true) {
+      throw const CloudNotConfigured();
+    }
+    await GoogleSignIn.instance.initialize(
+      serverClientId: _serverClientId.isEmpty ? null : _serverClientId,
+    );
+  }();
 
   @override
   Future<String?> restore() async {

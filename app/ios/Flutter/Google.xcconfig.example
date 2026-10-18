@@ -1,5 +1,5 @@
 // Copy to Google.xcconfig (gitignored) and fill in the iOS OAuth client of your Google Cloud
 // project, for Google Drive sync. See app/README.md, "Google Drive sync". Without it the app
-// builds and runs; only Drive sign-in is unavailable.
+// builds and runs, but tapping "Sign in to Google" only reports that sign-in isn't set up.
 GOOGLE_IOS_CLIENT_ID = 1234567890-abcdefghijklmnopqrstuvwxyz012345.apps.googleusercontent.com
 GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.1234567890-abcdefghijklmnopqrstuvwxyz012345
