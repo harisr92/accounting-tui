@@ -56,5 +56,7 @@ if ! grep -q '^mod frb_generated;' "$CRATE_DIR/src/lib.rs"; then
   printf '\n/// Written by `flutter_rust_bridge_codegen generate`; never edit it\nmod frb_generated;\n' \
     >>"$CRATE_DIR/src/lib.rs"
 fi
+# The generator formats in rustfmt's older style; the workspace checks the 2024 one
+cargo fmt --manifest-path "$CRATE_DIR/Cargo.toml"
 
 echo "Ready: flutter run (add --dart-define=COMPTER_DEMO=true for the sample business)"

@@ -7,9 +7,10 @@ the Rust core in `../crates/compter-core`, reached through `../crates/compter-mo
 ```
 lib/main.dart              opens the database, starts the app
 lib/src/compter.dart       the opened CompterApp and the Riverpod providers over it
-lib/src/router.dart        go_router: / (projects) and /projects/:id
-lib/src/screens/           project list, project with its milestones
-lib/src/forms/             FormDialog (every form) and the project/milestone forms
+lib/src/router.dart        go_router: Projects, Invoices and Settings tabs, each with its own stack
+lib/src/screens/           projects, a project, invoices, an invoice, settings
+lib/src/forms/             FormDialog (every form) and the forms and flows built on it
+lib/src/notice.dart        snack bars, yes/no questions, opening and sharing PDFs
 lib/src/rust/              generated bindings: never edit, re-run codegen
 rust_builder/              cargokit plugin that builds the Rust crate in Xcode and Gradle
 test/                      widget tests on the host, loading ../target/debug's library
@@ -44,7 +45,8 @@ cargo test -p compter-mobile                   # the Rust API, from the repo roo
 ```
 
 After changing anything under `crates/compter-mobile/src/api`, run
-`flutter_rust_bridge_codegen generate` here.
+`flutter_rust_bridge_codegen generate && cargo fmt --all` here. The generator formats its Rust
+in rustfmt's older style, which `cargo fmt --check` refuses.
 
 ## Upgrading flutter_rust_bridge
 
