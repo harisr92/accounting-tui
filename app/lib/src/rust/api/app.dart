@@ -5,15 +5,19 @@
 
 import '../frb_generated.dart';
 import 'error.dart';
+import 'expenses.dart';
 import 'invoicing.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'profile.dart';
 import 'rows.dart';
 
-// These functions are ignored because they are not marked as `pub`: `credit_draft`, `date`, `exchange_rate`, `milestone_id`, `over`, `project_id`, `today`
+// These functions are ignored because they are not marked as `pub`: `credit_draft`, `date`, `exchange_rate`, `expense_draft`, `expense_id`, `milestone_id`, `over`, `project_id`, `today`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>>
 abstract class CompterApp implements RustOpaqueInterface {
+  /// Record an expense paid from the bank
+  Future<ExpenseRow> addExpense({required ExpenseInput input});
+
   Future<ProjectDetail> addMilestone({
     required String projectId,
     required MilestoneInput input,
@@ -24,10 +28,22 @@ abstract class CompterApp implements RustOpaqueInterface {
   /// Where credit note `number`'s PDF is, writing it first if it is missing
   Future<String> creditNotePdf({required String number});
 
+  /// Remove an expense and its ledger posting
+  Future<void> deleteExpense({required String id});
+
   /// The sample business of `compter --demo`, in memory; nothing is saved. Its PDFs are
   /// written to `scratch_dir`, a cache folder.
   static Future<CompterApp> demo({required String scratchDir}) =>
       RustLib.instance.api.crateApiAppCompterAppDemo(scratchDir: scratchDir);
+
+  /// Correct an expense; its ledger posting is replaced with it
+  Future<ExpenseRow> editExpense({
+    required String id,
+    required ExpenseInput input,
+  });
+
+  /// The expenses of the financial year starting in April of `year`, by date
+  Future<ExpenseList> expenses({required int year});
 
   Future<InvoiceDetail> invoice({required String number});
 

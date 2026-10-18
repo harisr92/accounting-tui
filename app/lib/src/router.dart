@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'screens/expenses_screen.dart';
 import 'screens/invoice_screen.dart';
 import 'screens/invoices_screen.dart';
 import 'screens/project_screen.dart';
@@ -52,6 +53,14 @@ GoRouter buildRouter() => GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
+              path: '/expenses',
+              builder: (context, state) => const ExpensesScreen(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
               path: '/settings',
               builder: (context, state) => const SettingsScreen(),
             ),
@@ -86,6 +95,11 @@ class _Tabs extends StatelessWidget {
             icon: Icon(Icons.receipt_long_outlined),
             selectedIcon: Icon(Icons.receipt_long),
             label: 'Invoices',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            selectedIcon: Icon(Icons.account_balance_wallet),
+            label: 'Expenses',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),

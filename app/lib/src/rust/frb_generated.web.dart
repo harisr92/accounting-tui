@@ -8,6 +8,7 @@
 
 import 'api/app.dart';
 import 'api/error.dart';
+import 'api/expenses.dart';
 import 'api/invoicing.dart';
 import 'api/profile.dart';
 import 'api/rows.dart';
@@ -65,6 +66,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CreditInput dco_decode_box_autoadd_credit_input(dynamic raw);
 
   @protected
+  ExpenseInput dco_decode_box_autoadd_expense_input(dynamic raw);
+
+  @protected
   MilestoneInput dco_decode_box_autoadd_milestone_input(dynamic raw);
 
   @protected
@@ -92,7 +96,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CreditedRow dco_decode_credited_row(dynamic raw);
 
   @protected
+  ExpenseInput dco_decode_expense_input(dynamic raw);
+
+  @protected
+  ExpenseList dco_decode_expense_list(dynamic raw);
+
+  @protected
+  ExpenseRow dco_decode_expense_row(dynamic raw);
+
+  @protected
   HistoryRow dco_decode_history_row(dynamic raw);
+
+  @protected
+  int dco_decode_i_32(dynamic raw);
 
   @protected
   InvoiceDetail dco_decode_invoice_detail(dynamic raw);
@@ -111,6 +127,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<ExpenseRow> dco_decode_list_expense_row(dynamic raw);
 
   @protected
   List<HistoryRow> dco_decode_list_history_row(dynamic raw);
@@ -164,6 +183,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_u_8(dynamic raw);
 
   @protected
+  void dco_decode_unit(dynamic raw);
+
+  @protected
   BigInt dco_decode_usize(dynamic raw);
 
   @protected
@@ -203,6 +225,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CreditInput sse_decode_box_autoadd_credit_input(SseDeserializer deserializer);
 
   @protected
+  ExpenseInput sse_decode_box_autoadd_expense_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   MilestoneInput sse_decode_box_autoadd_milestone_input(
     SseDeserializer deserializer,
   );
@@ -238,7 +265,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CreditedRow sse_decode_credited_row(SseDeserializer deserializer);
 
   @protected
+  ExpenseInput sse_decode_expense_input(SseDeserializer deserializer);
+
+  @protected
+  ExpenseList sse_decode_expense_list(SseDeserializer deserializer);
+
+  @protected
+  ExpenseRow sse_decode_expense_row(SseDeserializer deserializer);
+
+  @protected
   HistoryRow sse_decode_history_row(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
   InvoiceDetail sse_decode_invoice_detail(SseDeserializer deserializer);
@@ -259,6 +298,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<ExpenseRow> sse_decode_list_expense_row(SseDeserializer deserializer);
 
   @protected
   List<HistoryRow> sse_decode_list_history_row(SseDeserializer deserializer);
@@ -316,10 +358,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_u_8(SseDeserializer deserializer);
 
   @protected
-  BigInt sse_decode_usize(SseDeserializer deserializer);
+  void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
+  BigInt sse_decode_usize(SseDeserializer deserializer);
 
   @protected
   void
@@ -361,6 +403,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_credit_input(
     CreditInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_expense_input(
+    ExpenseInput self,
     SseSerializer serializer,
   );
 
@@ -413,7 +461,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_credited_row(CreditedRow self, SseSerializer serializer);
 
   @protected
+  void sse_encode_expense_input(ExpenseInput self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_expense_list(ExpenseList self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_expense_row(ExpenseRow self, SseSerializer serializer);
+
+  @protected
   void sse_encode_history_row(HistoryRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_invoice_detail(InvoiceDetail self, SseSerializer serializer);
@@ -435,6 +495,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_expense_row(
+    List<ExpenseRow> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_history_row(
@@ -509,10 +575,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_u_8(int self, SseSerializer serializer);
 
   @protected
-  void sse_encode_usize(BigInt self, SseSerializer serializer);
+  void sse_encode_unit(void self, SseSerializer serializer);
 
   @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
+  void sse_encode_usize(BigInt self, SseSerializer serializer);
 }
 
 // Section: wire_class

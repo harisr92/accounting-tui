@@ -2,9 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'rust/api/app.dart';
+import 'rust/api/expenses.dart';
 import 'rust/api/invoicing.dart';
 import 'rust/api/profile.dart';
 import 'rust/api/rows.dart';
+import 'year_picker.dart';
 
 /// `flutter run --dart-define=COMPTER_DEMO=true` opens the sample business in memory, like
 /// `compter --demo`; nothing is saved.
@@ -77,3 +79,13 @@ class InvoiceNotifier extends AsyncNotifier<InvoiceDetail> {
   /// Show the invoice a payment or credit note returned instead of loading it again
   void show(InvoiceDetail saved) => state = AsyncData(saved);
 }
+
+/// The year the Expenses tab shows
+final expenseYearProvider = NotifierProvider<YearNotifier, int>(
+  YearNotifier.new,
+);
+
+/// The expenses of a financial year, by its starting year. Invalidate it after a change.
+final expensesProvider = FutureProvider.family<ExpenseList, int>(
+  (ref, year) => ref.watch(compterProvider).expenses(year: year),
+);
