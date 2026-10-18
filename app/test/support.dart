@@ -6,6 +6,7 @@ import 'package:compter/src/rust/api/app.dart';
 import 'package:compter/src/rust/frb_generated.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -22,15 +23,19 @@ ExternalLibrary hostLibrary() {
 
 Future<void> initRust() => RustLib.init(externalLibrary: hostLibrary());
 
-/// The app on the demo business, in memory, writing its PDFs to a scratch folder
-Future<void> launchDemo(WidgetTester tester) async {
+/// The app on the demo business, in memory, writing its PDFs to a scratch folder.
+/// [overrides] replace providers, e.g. to pin a tab's year.
+Future<void> launchDemo(
+  WidgetTester tester, {
+  List<Override> overrides = const [],
+}) async {
   final compter = await tester.runAsync(() async {
     final scratch = await Directory.systemTemp.createTemp('compter_test');
     return CompterApp.demo(scratchDir: scratch.path);
   });
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [compterProvider.overrideWithValue(compter!)],
+      overrides: [compterProvider.overrideWithValue(compter!), ...overrides],
       child: const CompterMobile(),
     ),
   );
