@@ -2,7 +2,7 @@ use bigdecimal::{BigDecimal, Zero};
 use chrono::NaiveDate;
 
 use crate::domain::billing::amount_for;
-use crate::domain::{Billing, DomainError, TimeEntry};
+use crate::domain::{Billing, DomainError, TimeEntry, format_duration};
 
 #[test]
 fn hourly_amounts_round_to_paise() {
@@ -48,4 +48,11 @@ fn time_entry_is_at_most_one_day() {
     ));
     let stored = r#"{"date":"2026-10-01","minutes":5400,"note":""}"#;
     assert!(serde_json::from_str::<TimeEntry>(stored).is_err());
+}
+
+#[test]
+fn durations_show_hours_and_padded_minutes() {
+    assert_eq!(format_duration(0), "0h 00m");
+    assert_eq!(format_duration(390), "6h 30m");
+    assert_eq!(format_duration(65), "1h 05m");
 }

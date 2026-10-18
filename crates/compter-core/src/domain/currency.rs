@@ -83,6 +83,16 @@ impl Currency {
         format!("{sign}{}.{cents:02}", group_thousands(&whole))
     }
 
+    /// Amount with this currency's symbol and grouping: `₹1,50,000.00`, `-$150,000.00`
+    pub fn display(self, amount: &BigDecimal) -> String {
+        let formatted = self.format(amount);
+        let symbol = self.symbol();
+        match formatted.strip_prefix('-') {
+            Some(magnitude) => format!("-{symbol}{magnitude}"),
+            None => format!("{symbol}{formatted}"),
+        }
+    }
+
     /// The amount spelled out the way an invoice prints it
     pub fn in_words(self, amount: &BigDecimal) -> String {
         let (major, minor) = match self {

@@ -77,3 +77,11 @@ fn rates_are_positive_and_kept_to_four_places() {
     let read: ExchangeRate = serde_json::from_str("90.5").unwrap();
     assert_eq!(read.value(), &amount("90.5"));
 }
+
+#[test]
+fn display_puts_the_symbol_after_a_minus_sign() {
+    let amount = BigDecimal::from_str("150000.5").unwrap();
+    assert_eq!(Currency::Inr.display(&amount), "₹1,50,000.50");
+    assert_eq!(Currency::Usd.display(&amount), "$150,000.50");
+    assert_eq!(Currency::Eur.display(&-amount), "-€150,000.50");
+}

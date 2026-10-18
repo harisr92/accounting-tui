@@ -67,6 +67,11 @@ pub fn amount_for(rate: &BigDecimal, minutes: u32) -> BigDecimal {
         .with_scale_round(2, RoundingMode::HalfUp)
 }
 
+/// Logged time as `6h 30m`
+pub fn format_duration(minutes: u32) -> String {
+    format!("{}h {:02}m", minutes / 60, minutes % 60)
+}
+
 /// Time worked on an hourly milestone
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "RawTimeEntry")]

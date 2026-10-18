@@ -1,4 +1,5 @@
 use std::fmt;
+use std::str::FromStr;
 
 use accounting_core::{Gstin, StateCode};
 use bigdecimal::{BigDecimal, RoundingMode, Zero};
@@ -118,6 +119,15 @@ impl ProjectId {
 impl fmt::Display for ProjectId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+/// The [`Display`](fmt::Display) form back, for front ends that hand ids around as text
+impl FromStr for ProjectId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::parse_str(s).map(Self)
     }
 }
 

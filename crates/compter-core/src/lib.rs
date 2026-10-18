@@ -3,5 +3,9 @@
 
 pub mod demo;
 pub mod domain;
+pub mod input;
 pub mod services;
 pub mod storage;
+
+#[cfg(test)]
+mod tests;

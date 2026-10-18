@@ -15,7 +15,7 @@ mod project;
 mod states;
 
 pub use appearance::Appearance;
-pub use billing::{Billing, MAX_ENTRY_MINUTES, TimeEntry};
+pub use billing::{Billing, MAX_ENTRY_MINUTES, TimeEntry, format_duration};
 pub use credit_note::{CREDIT_NOTE_PREFIX, CreditNote, CreditNoteParts};
 pub use currency::{Currency, ExchangeRate};
 pub use error::DomainError;

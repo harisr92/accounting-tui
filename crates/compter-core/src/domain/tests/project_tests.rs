@@ -3,7 +3,7 @@ use chrono::NaiveDate;
 
 use crate::domain::{
     Billing, ClientDetails, ClientRegion, Currency, DomainError, MilestoneStatus, Project,
-    ProjectStatus, ProjectSummary, TimeEntry,
+    ProjectId, ProjectStatus, ProjectSummary, TimeEntry,
 };
 
 const GSTIN: &str = "29AAPFU0939F1ZR";
@@ -526,4 +526,11 @@ fn credits_come_off_what_is_paid_and_owed() {
     let tampered = json.replace("\"credited\":\"100\"", "\"credited\":\"99\"");
     assert_ne!(tampered, json);
     assert!(serde_json::from_str::<Project>(&tampered).is_err());
+}
+
+#[test]
+fn project_ids_round_trip_through_text() {
+    let id = fixed().id();
+    assert_eq!(id.to_string().parse::<ProjectId>().unwrap(), id);
+    assert!("not-an-id".parse::<ProjectId>().is_err());
 }
