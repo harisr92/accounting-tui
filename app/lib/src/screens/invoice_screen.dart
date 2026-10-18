@@ -6,8 +6,11 @@ import '../forms/invoice_forms.dart';
 import '../notice.dart';
 import '../rust/api/error.dart';
 import '../rust/api/invoicing.dart';
-import '../stat_tile.dart';
-import '../status.dart';
+import '../ui/figures.dart';
+import '../ui/record_tile.dart';
+import '../ui/section.dart';
+import '../ui/status_chip.dart';
+import '../ui/theme.dart';
 
 /// One invoice: its amounts, payments and credit notes. Its PDF can be opened or shared, and
 /// while something is due a payment or credit note can be added.
@@ -19,6 +22,8 @@ class InvoiceScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final invoice = ref.watch(invoiceProvider(number));
+    final detail = invoice.value;
+    final due = detail != null && !detail.settled;
     return Scaffold(
       appBar: AppBar(title: Text(number)),
       body: invoice.when(
@@ -26,13 +31,47 @@ class InvoiceScreen extends ConsumerWidget {
         error: (error, _) => Center(child: Text('$error')),
         data: (detail) => _InvoiceBody(
           detail,
-          pdf: (button, share) => _pdf(button, ref, share: share),
-          creditNotePdf: (button, note) =>
-              _pdf(button, ref, creditNote: note, share: true),
-          pay: () => _pay(context, ref, detail),
-          credit: () => _credit(context, ref, detail),
+          creditNotePdf: (row, note) =>
+              _pdf(row, ref, creditNote: note, share: true),
         ),
       ),
+      // Every action within thumb's reach: the documents on the bar, the payment as the one
+      // filled button
+      bottomNavigationBar: detail == null
+          ? null
+          : BottomAppBar(
+              child: Row(
+                children: [
+                  Builder(
+                    // Its own context, so the iPad share popover points at it
+                    builder: (button) => IconButton(
+                      tooltip: 'Share PDF',
+                      icon: const Icon(Icons.ios_share),
+                      onPressed: () => _pdf(button, ref, share: true),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Open PDF',
+                    icon: const Icon(Icons.picture_as_pdf_outlined),
+                    onPressed: () => _pdf(context, ref, share: false),
+                  ),
+                  if (due)
+                    IconButton(
+                      tooltip: 'Credit note',
+                      icon: const Icon(Icons.remove_circle_outline),
+                      onPressed: () => _credit(context, ref, detail),
+                    ),
+                ],
+              ),
+            ),
+      floatingActionButton: due
+          ? FloatingActionButton.extended(
+              icon: const Icon(Icons.payments_outlined),
+              label: const Text('Record payment'),
+              onPressed: () => _pay(context, ref, detail),
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endContained,
     );
   }
 
@@ -108,112 +147,56 @@ class InvoiceScreen extends ConsumerWidget {
 }
 
 class _InvoiceBody extends StatelessWidget {
-  const _InvoiceBody(
-    this.invoice, {
-    required this.pdf,
-    required this.creditNotePdf,
-    required this.pay,
-    required this.credit,
-  });
+  const _InvoiceBody(this.invoice, {required this.creditNotePdf});
 
   final InvoiceDetail invoice;
 
-  /// Called with the tapped button's context
-  final void Function(BuildContext button, bool share) pdf;
+  /// Called with the tapped row's context
   final void Function(BuildContext row, String note) creditNotePdf;
-  final VoidCallback pay;
-  final VoidCallback credit;
 
   @override
   Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final totalInr = invoice.totalInr;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      padding: const EdgeInsets.only(bottom: gutter),
       children: [
-        Row(
-          children: [
-            Expanded(child: Text(invoice.clientName, style: text.titleMedium)),
-            StatusChip(invoice.status),
-          ],
-        ),
-        Text(
-          [
-            invoice.milestoneName,
-            invoice.date,
-            invoice.kind,
-            ?invoice.exchangeRate,
-          ].join(' · '),
-          style: text.bodyMedium,
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            StatTile('Total', invoice.total),
-            if (invoice.totalInr != null) StatTile('In INR', invoice.totalInr!),
-            StatTile('Due', invoice.balance),
-          ],
+        ListTile(
+          title: Text(invoice.clientName, style: theme.textTheme.titleMedium),
+          subtitle: Text(
+            [
+              invoice.milestoneName,
+              invoice.date,
+              invoice.kind,
+              ?invoice.exchangeRate,
+            ].join(' · '),
+          ),
+          trailing: StatusChip(invoice.status),
         ),
         const SizedBox(height: 8),
-        Text(invoice.breakdown, style: text.bodySmall),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            Builder(
-              // Its own context, so the iPad share popover points at this button
-              builder: (context) => OutlinedButton.icon(
-                icon: const Icon(Icons.ios_share),
-                label: const Text('Share PDF'),
-                onPressed: () => pdf(context, true),
-              ),
-            ),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              label: const Text('Open PDF'),
-              onPressed: () => pdf(context, false),
-            ),
-            if (!invoice.settled) ...[
-              FilledButton.icon(
-                icon: const Icon(Icons.payments_outlined),
-                label: const Text('Record payment'),
-                onPressed: pay,
-              ),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.remove_circle_outline),
-                label: const Text('Credit note'),
-                onPressed: credit,
-              ),
-            ],
-          ],
-        ),
-        const SizedBox(height: 24),
-        Text('Payments and credit notes', style: text.titleMedium),
-        if (invoice.history.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Text('Nothing received yet'),
-          ),
+        FigureGrid([
+          ('Total', invoice.total),
+          ('Due', invoice.balance),
+          if (totalInr != null) ('In INR', totalInr),
+        ]),
+        SectionNote(invoice.breakdown),
+        const SectionHeader('Payments and credit notes'),
+        if (invoice.history.isEmpty) const SectionNote('Nothing received yet'),
         for (final row in invoice.history)
           Builder(
             // Its own context, so the iPad share popover points at the row
-            builder: (context) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text('${row.document} · ${row.date}'),
-              subtitle: row.creditNote
-                  ? const Text('Tap to share its PDF')
-                  : Text(
-                      [
-                        if (row.received != null) 'Received ${row.received}',
-                        if (row.tdsOrBanked != null)
-                          invoice.foreign
-                              ? 'Banked ${row.tdsOrBanked}'
-                              : 'TDS ${row.tdsOrBanked}',
-                      ].join(' · '),
-                    ),
-              trailing: Text(row.settled, style: text.titleSmall),
+            builder: (context) => RecordTile(
+              title: row.document,
+              supporting: row.creditNote
+                  ? '${row.date} · tap to share its PDF'
+                  : [
+                      row.date,
+                      if (row.tdsOrBanked != null)
+                        invoice.foreign
+                            ? 'banked ${row.tdsOrBanked}'
+                            : 'TDS ${row.tdsOrBanked}',
+                    ].join(' · '),
+              amount: row.settled,
               onTap: row.creditNote
                   ? () => creditNotePdf(context, row.document)
                   : null,

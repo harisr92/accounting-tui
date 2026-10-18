@@ -5,6 +5,7 @@ import '../compter.dart';
 import '../handoff.dart';
 import '../notice.dart';
 import '../rust/api/error.dart';
+import '../ui/section.dart';
 
 /// Hands the data between this phone and compter on a computer. The phone can't see the
 /// computer's sync folder (Google Drive, iCloud Drive), so the user carries its two files
@@ -15,46 +16,45 @@ class SyncSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(syncStatusProvider);
-    final text = Theme.of(context).textTheme;
     final available = status.value?.available ?? false;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Sync with your computer', style: text.titleMedium),
-        const SizedBox(height: 8),
-        status.when(
-          loading: () => const SizedBox.square(
-            dimension: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          error: (error, _) => Text('$error'),
-          data: (status) => Text(status.summary),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Uses the two files in the sync folder compter on your computer '
-          'publishes to: $snapshotFile and $manifestFile.',
-          style: text.bodySmall,
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            OutlinedButton.icon(
-              icon: const Icon(Icons.download),
-              label: const Text('Get from computer'),
-              onPressed: available ? () => _receive(context, ref) : null,
-            ),
-            Builder(
-              // Its own context, so the iPad share popover points at the button
-              builder: (context) => OutlinedButton.icon(
-                icon: const Icon(Icons.upload),
-                label: const Text('Send to computer'),
-                onPressed: available ? () => _send(context, ref) : null,
+        const SectionHeader('Sync with your computer'),
+        ListTile(
+          leading: const Icon(Icons.sync),
+          title: status.when(
+            loading: () => const Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox.square(
+                dimension: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
-          ],
+            error: (error, _) => Text('$error'),
+            data: (status) => Text(status.summary),
+          ),
+        ),
+        ListTile(
+          enabled: available,
+          leading: const Icon(Icons.download),
+          title: const Text('Get from computer'),
+          subtitle: const Text('Pick both files from the sync folder'),
+          onTap: () => _receive(context, ref),
+        ),
+        Builder(
+          // Its own context, so the iPad share popover points at the row
+          builder: (row) => ListTile(
+            enabled: available,
+            leading: const Icon(Icons.upload),
+            title: const Text('Send to computer'),
+            subtitle: const Text('Save both files into the sync folder'),
+            onTap: () => _send(row, ref),
+          ),
+        ),
+        const SectionNote(
+          'compter on your computer publishes $snapshotFile and '
+          '$manifestFile to its sync folder on Google Drive or iCloud Drive.',
         ),
       ],
     );
@@ -145,7 +145,7 @@ class SyncSection extends ConsumerWidget {
             onPressed: () => Navigator.pop(context),
             child: const Text('Later'),
           ),
-          TextButton(
+          FilledButton.tonal(
             onPressed: () => Navigator.pop(context, false),
             child: const Text("Take computer's"),
           ),

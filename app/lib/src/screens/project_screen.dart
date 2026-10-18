@@ -8,8 +8,12 @@ import '../forms/project_forms.dart';
 import '../notice.dart';
 import '../router.dart';
 import '../rust/api/rows.dart';
-import '../stat_tile.dart';
-import '../status.dart';
+import '../ui/action_sheet.dart';
+import '../ui/figures.dart';
+import '../ui/record_tile.dart';
+import '../ui/section.dart';
+import '../ui/status_chip.dart';
+import '../ui/theme.dart';
 
 /// One project: its totals and milestones. Tapping a milestone offers what can be done with it.
 class ProjectScreen extends ConsumerWidget {
@@ -34,7 +38,7 @@ class ProjectScreen extends ConsumerWidget {
           ? null
           : FloatingActionButton.extended(
               icon: const Icon(Icons.add),
-              label: const Text('Milestone'),
+              label: const Text('Add milestone'),
               onPressed: () async {
                 final updated = await addMilestoneForm(
                   context,
@@ -61,38 +65,30 @@ class ProjectScreen extends ConsumerWidget {
   ) async {
     final pending = milestone.status == 'PENDING';
     final invoice = milestone.invoiceNumber;
-    final action = await showModalBottomSheet<_Action>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: Text(milestone.name),
-              subtitle: Text(milestone.amount),
-            ),
-            if (pending)
-              ListTile(
-                leading: const Icon(Icons.receipt_long),
-                title: const Text('Issue invoice'),
-                onTap: () => Navigator.pop(context, _Action.issue),
-              ),
-            if (pending && project.hourly)
-              ListTile(
-                leading: const Icon(Icons.timer_outlined),
-                title: const Text('Log time'),
-                onTap: () => Navigator.pop(context, _Action.logTime),
-              ),
-            if (invoice != null)
-              ListTile(
-                leading: const Icon(Icons.open_in_new),
-                title: Text('Open $invoice'),
-                onTap: () => Navigator.pop(context, _Action.openInvoice),
-              ),
-          ],
-        ),
-      ),
+    final action = await showActionSheet<_Action>(
+      context,
+      title: milestone.name,
+      subtitle: milestone.amount,
+      actions: [
+        if (pending)
+          (
+            icon: Icons.receipt_long,
+            label: 'Issue invoice',
+            value: _Action.issue,
+          ),
+        if (pending && project.hourly)
+          (
+            icon: Icons.timer_outlined,
+            label: 'Log time',
+            value: _Action.logTime,
+          ),
+        if (invoice != null)
+          (
+            icon: Icons.open_in_new,
+            label: 'Open $invoice',
+            value: _Action.openInvoice,
+          ),
+      ],
     );
     if (action == null || !context.mounted) return;
     final app = ref.read(compterProvider);
@@ -131,65 +127,46 @@ class _ProjectBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
     final credited = project.credited;
-    final gstin = project.clientGstin;
-    final location = project.clientLocation;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+      padding: const EdgeInsets.only(bottom: 96),
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                gstin == null
-                    ? project.clientName
-                    : '${project.clientName} · $gstin',
-                style: text.titleMedium,
-              ),
-            ),
-            StatusChip(project.status),
-          ],
-        ),
-        Text(
-          [project.billing, ?location, project.currency].join(' · '),
-          style: text.bodyMedium,
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            StatTile('Total', project.total),
-            StatTile('Paid', project.paid),
-            if (credited != null) StatTile('Credited', credited),
-            StatTile('Outstanding', project.outstanding),
-          ],
-        ),
-        const SizedBox(height: 24),
-        Text('Milestones', style: text.titleMedium),
-        if (project.milestones.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Text('No milestones yet'),
+        ListTile(
+          title: Text(project.clientName, style: theme.textTheme.titleMedium),
+          subtitle: Text(
+            [
+              ?project.clientGstin,
+              project.billing,
+              ?project.clientLocation,
+              project.currency,
+            ].join(' · '),
           ),
+          trailing: StatusChip(project.status),
+        ),
+        const SizedBox(height: 8),
+        FigureGrid([
+          ('Total', project.total),
+          ('Paid', project.paid),
+          if (credited != null) ('Credited', credited),
+          ('Outstanding', project.outstanding),
+        ]),
+        const SectionHeader('Milestones'),
+        if (project.milestones.isEmpty)
+          const SectionNote('No milestones yet. Add one to invoice it.'),
         for (final m in project.milestones)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(m.name),
-            subtitle: Text(
-              ['Due ${m.dueDate}', ?m.logged, ?m.invoiceNumber].join(' · '),
-            ),
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(m.amount, style: text.titleSmall),
-                Text(m.status, style: text.labelSmall),
-              ],
-            ),
+          RecordTile(
+            title: m.name,
+            supporting: [
+              'Due ${m.dueDate}',
+              ?m.logged,
+              ?m.invoiceNumber,
+            ].join(' · '),
+            amount: m.amount,
+            status: m.status,
             onTap: () => onMilestone(m),
           ),
+        const SizedBox(height: gutter),
       ],
     );
   }

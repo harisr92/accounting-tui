@@ -4,7 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../compter.dart';
 import '../forms/project_forms.dart';
-import '../status.dart';
+import '../ui/empty_state.dart';
+import '../ui/record_tile.dart';
 
 /// Every project that isn't archived, like the terminal's Projects tab
 class ProjectsScreen extends ConsumerWidget {
@@ -18,27 +19,31 @@ class ProjectsScreen extends ConsumerWidget {
       body: projects.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('$error')),
-        data: (rows) => rows.isEmpty
-            ? const Center(child: Text('No projects yet: tap + to add one'))
-            : RefreshIndicator(
-                onRefresh: () => ref.refresh(projectsProvider.future),
-                child: ListView.separated(
-                  itemCount: rows.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, i) {
-                    final row = rows[i];
-                    return ListTile(
-                      title: Text(row.name),
-                      subtitle: Text(row.clientName),
-                      trailing: StatusChip(row.status),
-                      onTap: () => context.go('/projects/${row.id}'),
-                    );
-                  },
+        data: (rows) => RefreshIndicator(
+          onRefresh: () => ref.refresh(projectsProvider.future),
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: 96),
+            children: [
+              if (rows.isEmpty)
+                const EmptyState(
+                  icon: Icons.work_outline,
+                  message: 'No projects yet. Add one to start billing.',
                 ),
-              ),
+              for (final row in rows)
+                RecordTile(
+                  title: row.name,
+                  supporting: row.clientName,
+                  status: row.status,
+                  onTap: () => context.go('/projects/${row.id}'),
+                ),
+            ],
+          ),
+        ),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         tooltip: 'New project',
+        icon: const Icon(Icons.add),
+        label: const Text('New project'),
         onPressed: () async {
           final created = await newProjectForm(
             context,
@@ -48,7 +53,6 @@ class ProjectsScreen extends ConsumerWidget {
           ref.invalidate(projectsProvider);
           context.go('/projects/${created.id}');
         },
-        child: const Icon(Icons.add),
       ),
     );
   }

@@ -4,7 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../compter.dart';
 import '../router.dart';
-import '../status.dart';
+import '../ui/empty_state.dart';
+import '../ui/figures.dart';
+import '../ui/record_tile.dart';
+import '../ui/section.dart';
 
 /// Every issued invoice, newest first, with what is still due across them, like the
 /// terminal's Invoices tab
@@ -21,36 +24,29 @@ class InvoicesScreen extends ConsumerWidget {
         error: (error, _) => Center(child: Text('$error')),
         data: (list) => RefreshIndicator(
           onRefresh: () => ref.refresh(invoicesProvider.future),
-          child: ListView.separated(
-            itemCount: list.invoices.length + 1,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, i) {
-              if (i == 0) {
-                return ListTile(
-                  title: Text(
-                    list.invoices.isEmpty
-                        ? 'No invoices yet. Open a project and tap a pending '
-                              'milestone to issue one.'
-                        : 'Outstanding ${list.outstanding}',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                );
-              }
-              final row = list.invoices[i - 1];
-              return ListTile(
-                title: Text('${row.number} · ${row.clientName}'),
-                subtitle: Text(
-                  [
-                    row.milestoneName,
-                    row.date,
-                    row.total,
-                    if (row.due != null) '${row.due} due',
-                  ].join(' · '),
+          child: ListView(
+            padding: const EdgeInsets.only(top: 8, bottom: 16),
+            children: [
+              if (list.invoices.isEmpty)
+                const EmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  message:
+                      'No invoices yet. Open a project and tap a pending '
+                      'milestone to issue one.',
+                )
+              else ...[
+                FigureGrid([('Outstanding', list.outstanding)]),
+                const SectionHeader('Newest first'),
+              ],
+              for (final row in list.invoices)
+                RecordTile(
+                  title: row.clientName,
+                  supporting: [row.number, row.milestoneName].join(' · '),
+                  amount: row.due ?? row.total,
+                  status: row.status,
+                  onTap: () => context.go(invoicePath(row.number)),
                 ),
-                trailing: StatusChip(row.status),
-                onTap: () => context.go(invoicePath(row.number)),
-              );
-            },
+            ],
           ),
         ),
       ),

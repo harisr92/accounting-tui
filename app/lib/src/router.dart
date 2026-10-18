@@ -13,72 +13,80 @@ import 'screens/settings_screen.dart';
 String invoicePath(String number) => '/invoices/${Uri.encodeComponent(number)}';
 
 /// A new router at `/projects`: one per app, so a rebuilt app (or the next test) starts on the
-/// list. Each tab keeps its own stack, like the terminal app's tabs keep their selection.
-GoRouter buildRouter() => GoRouter(
-  initialLocation: '/projects',
-  routes: [
-    GoRoute(path: '/', redirect: (_, _) => '/projects'),
-    StatefulShellRoute.indexedStack(
-      builder: (context, state, shell) => _Tabs(shell),
-      branches: [
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/projects',
-              builder: (context, state) => const ProjectsScreen(),
-              routes: [
-                GoRoute(
-                  path: ':id',
-                  builder: (context, state) =>
-                      ProjectScreen(id: state.pathParameters['id']!),
-                ),
-              ],
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/invoices',
-              builder: (context, state) => const InvoicesScreen(),
-              routes: [
-                GoRoute(
-                  path: ':number',
-                  builder: (context, state) =>
-                      InvoiceScreen(number: state.pathParameters['number']!),
-                ),
-              ],
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/expenses',
-              builder: (context, state) => const ExpensesScreen(),
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/reports',
-              builder: (context, state) => const ReportsScreen(),
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: '/settings',
-              builder: (context, state) => const SettingsScreen(),
-            ),
-          ],
-        ),
-      ],
-    ),
-  ],
-);
+/// list. Each tab keeps its own stack, like the terminal app's tabs keep their selection. A
+/// project or invoice opens full screen over the tabs (Material's detail pattern), so its own
+/// bottom actions never sit on top of the navigation bar.
+GoRouter buildRouter() {
+  final root = GlobalKey<NavigatorState>();
+  return GoRouter(
+    navigatorKey: root,
+    initialLocation: '/projects',
+    routes: [
+      GoRoute(path: '/', redirect: (_, _) => '/projects'),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, shell) => _Tabs(shell),
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/projects',
+                builder: (context, state) => const ProjectsScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':id',
+                    parentNavigatorKey: root,
+                    builder: (context, state) =>
+                        ProjectScreen(id: state.pathParameters['id']!),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/invoices',
+                builder: (context, state) => const InvoicesScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':number',
+                    parentNavigatorKey: root,
+                    builder: (context, state) =>
+                        InvoiceScreen(number: state.pathParameters['number']!),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/expenses',
+                builder: (context, state) => const ExpensesScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/reports',
+                builder: (context, state) => const ReportsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/settings',
+                builder: (context, state) => const SettingsScreen(),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ],
+  );
+}
 
 class _Tabs extends StatelessWidget {
   const _Tabs(this.shell);

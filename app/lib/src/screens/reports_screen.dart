@@ -5,7 +5,11 @@ import '../compter.dart';
 import '../forms/return_forms.dart';
 import '../notice.dart';
 import '../rust/api/reports.dart';
-import '../stat_tile.dart';
+import '../ui/action_sheet.dart';
+import '../ui/figures.dart';
+import '../ui/record_tile.dart';
+import '../ui/section.dart';
+import '../ui/theme.dart';
 import '../year_picker.dart';
 
 /// A financial year for income tax and GST, and the GSTR-1 and IFF exports, like the
@@ -24,25 +28,47 @@ class ReportsScreen extends ConsumerWidget {
         error: (error, _) => Center(child: Text('$error')),
         data: (report) => RefreshIndicator(
           onRefresh: () => ref.refresh(reportProvider(year).future),
-          child: _ReportBody(
-            report,
-            gstr1: (button) => _export(button, ref, year, report, iff: false),
-            iff: (button) => _export(button, ref, year, report, iff: true),
-          ),
+          child: _ReportBody(report),
         ),
       ),
+      floatingActionButton: report.value == null
+          ? null
+          : Builder(
+              // Its own context, so the iPad share popover points at it
+              builder: (button) => FloatingActionButton.extended(
+                icon: const Icon(Icons.upload_file),
+                label: const Text('Export return'),
+                onPressed: () => _export(button, ref, year, report.value!),
+              ),
+            ),
     );
   }
 
-  /// Write the return and hand its JSON to the share sheet, for upload to the GST portal.
-  /// [context] is the button's, so the iPad share popover points at it.
+  /// Which return, then its form; the written JSON goes to the share sheet, for the GST portal
   Future<void> _export(
     BuildContext context,
     WidgetRef ref,
     int year,
-    ReportRow report, {
-    required bool iff,
-  }) async {
+    ReportRow report,
+  ) async {
+    final iff = await showActionSheet<bool>(
+      context,
+      title: 'Export return',
+      subtitle: report.year,
+      actions: const [
+        (
+          icon: Icons.calendar_view_month,
+          label: 'GSTR-1 for a quarter',
+          value: false,
+        ),
+        (
+          icon: Icons.calendar_today,
+          label: 'IFF for a month (B2B)',
+          value: true,
+        ),
+      ],
+    );
+    if (iff == null || !context.mounted) return;
     final app = ref.read(compterProvider);
     final exported = iff
         ? await exportIff(context, app, year, report)
@@ -54,93 +80,53 @@ class ReportsScreen extends ConsumerWidget {
 }
 
 class _ReportBody extends StatelessWidget {
-  const _ReportBody(this.report, {required this.gstr1, required this.iff});
+  const _ReportBody(this.report);
 
   final ReportRow report;
 
-  /// Called with the tapped button's context
-  final void Function(BuildContext button) gstr1;
-  final void Function(BuildContext button) iff;
-
   @override
   Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
     final noteColor = switch (report.incomeTaxTone) {
       Tone.error => scheme.error,
       Tone.warning => scheme.tertiary,
-      Tone.neutral => scheme.onSurfaceVariant,
+      Tone.neutral => null,
     };
-    Widget heading(String title) => Padding(
-      padding: const EdgeInsets.only(top: 24, bottom: 8),
-      child: Text(title, style: text.titleMedium),
-    );
-    Widget tiles(List<FigureRow> figures) => Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [for (final f in figures) StatTile(f.label, f.value)],
-    );
+    List<(String, String)> figures(List<FigureRow> rows) => [
+      for (final f in rows) (f.label, f.value),
+    ];
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+      padding: const EdgeInsets.only(bottom: 96),
       children: [
         FiscalYearPicker(reportYearProvider, label: report.year),
-        tiles(report.income),
-        heading('Income tax'),
-        tiles(report.incomeTax),
-        const SizedBox(height: 8),
-        Text(
-          report.incomeTaxNote,
-          style: text.bodySmall?.copyWith(color: noteColor),
-        ),
-        heading('GST'),
+        const SectionHeader('Income'),
+        FigureGrid(figures(report.income)),
+        const SectionHeader('Income tax'),
+        FigureGrid(figures(report.incomeTax)),
+        SectionNote(report.incomeTaxNote, color: noteColor),
+        const SectionHeader('GST by quarter'),
         for (final q in report.gst)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(q.quarter),
-            subtitle: Text(
-              'CGST ${q.cgst} · SGST ${q.sgst} · IGST ${q.igst} · '
-              'Input credit ${q.inputCredit}',
-            ),
-            trailing: Text(q.net, style: text.titleSmall),
+          RecordTile(
+            title: q.quarter,
+            supporting:
+                'CGST ${q.cgst} · SGST ${q.sgst}\n'
+                'IGST ${q.igst} · Input credit ${q.inputCredit}',
+            amount: q.net,
           ),
-        Text(
+        const SectionNote(
           'Net is output tax less input credit; negative is credit carried '
           'forward.',
-          style: text.bodySmall,
         ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            Builder(
-              // Their own contexts, so the iPad share popover points at the button
-              builder: (context) => FilledButton.icon(
-                icon: const Icon(Icons.upload_file),
-                label: const Text('Export GSTR-1'),
-                onPressed: () => gstr1(context),
-              ),
-            ),
-            Builder(
-              builder: (context) => OutlinedButton.icon(
-                icon: const Icon(Icons.upload_file),
-                label: const Text('Export IFF'),
-                onPressed: () => iff(context),
-              ),
-            ),
-          ],
-        ),
-        heading('Clients · match TDS with Form 26AS'),
+        const SectionHeader('Clients · match TDS with Form 26AS'),
         if (report.clients.isEmpty)
-          const Text('No invoices or payments this year.'),
+          const SectionNote('No invoices or payments this year.'),
         for (final c in report.clients)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(c.client),
-            subtitle: Text(
-              'Invoiced ${c.invoiced} · Received ${c.received} · TDS ${c.tds}',
-            ),
+          RecordTile(
+            title: c.client,
+            supporting: 'Received ${c.received} · TDS ${c.tds}',
+            amount: c.invoiced,
           ),
+        const SizedBox(height: gutter),
       ],
     );
   }

@@ -6,6 +6,11 @@ import '../forms/expense_form.dart';
 import '../notice.dart';
 import '../rust/api/error.dart';
 import '../rust/api/expenses.dart';
+import '../ui/action_sheet.dart';
+import '../ui/empty_state.dart';
+import '../ui/figures.dart';
+import '../ui/record_tile.dart';
+import '../ui/section.dart';
 import '../year_picker.dart';
 
 /// A financial year's business expenses, like the terminal's Expenses tab. Tapping one offers
@@ -26,45 +31,38 @@ class ExpensesScreen extends ConsumerWidget {
           padding: const EdgeInsets.only(bottom: 96),
           children: [
             FiscalYearPicker(expenseYearProvider, label: list.year),
-            ListTile(
-              title: Text(
-                list.expenses.isEmpty
-                    ? 'No expenses this year'
-                    : '${list.cost} after GST credit',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            for (final expense in list.expenses) ...[
-              const Divider(height: 1),
-              ListTile(
-                title: Text(expense.description),
-                subtitle: Text(
-                  [
-                    expense.date,
-                    expense.category,
-                    if (expense.gstCredit != null)
-                      'GST credit ${expense.gstCredit}',
-                  ].join(' · '),
-                ),
-                trailing: Text(
-                  expense.amount,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
+            if (list.expenses.isEmpty)
+              const EmptyState(
+                icon: Icons.account_balance_wallet_outlined,
+                message: 'No expenses this year',
+              )
+            else ...[
+              FigureGrid([('After GST credit', list.cost)]),
+              const SectionHeader('By date'),
+            ],
+            for (final expense in list.expenses)
+              RecordTile(
+                title: expense.description,
+                supporting: [expense.date, expense.category].join(' · '),
+                amount: expense.amount,
+                detail: expense.gstCredit == null
+                    ? null
+                    : 'GST ${expense.gstCredit}',
                 onTap: () => _actions(context, ref, expense),
               ),
-            ],
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         tooltip: 'Add expense',
+        icon: const Icon(Icons.add),
+        label: const Text('Add expense'),
         onPressed: () async {
           final added = await expenseForm(context, ref.read(compterProvider));
           if (added == null || !context.mounted) return;
           _changed(ref);
           notify(context, 'Added ${added.description} for ${added.amount}');
         },
-        child: const Icon(Icons.add),
       ),
     );
   }
@@ -77,30 +75,14 @@ class ExpensesScreen extends ConsumerWidget {
     WidgetRef ref,
     ExpenseRow expense,
   ) async {
-    final edit = await showModalBottomSheet<bool>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: Text(expense.description),
-              subtitle: Text(expense.amount),
-            ),
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('Edit'),
-              onTap: () => Navigator.pop(context, true),
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text('Delete'),
-              onTap: () => Navigator.pop(context, false),
-            ),
-          ],
-        ),
-      ),
+    final edit = await showActionSheet<bool>(
+      context,
+      title: expense.description,
+      subtitle: expense.amount,
+      actions: const [
+        (icon: Icons.edit_outlined, label: 'Edit', value: true),
+        (icon: Icons.delete_outline, label: 'Delete', value: false),
+      ],
     );
     if (edit == null || !context.mounted) return;
     final app = ref.read(compterProvider);
