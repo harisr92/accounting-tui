@@ -7,7 +7,7 @@ the Rust core in `../crates/compter-core`, reached through `../crates/compter-mo
 ```
 lib/main.dart              opens the database, starts the app
 lib/src/compter.dart       the opened CompterApp and the Riverpod providers over it
-lib/src/router.dart        go_router: Projects, Invoices and Settings tabs, each with its own stack
+lib/src/router.dart        go_router: the tabs, each with its own stack
 lib/src/screens/           one per tab (projects, invoices, expenses, reports, settings), plus a
                            project and an invoice
 lib/src/forms/             FormDialog (every form) and the forms and flows built on it
@@ -16,10 +16,10 @@ lib/src/handoff.dart       picking and staging the snapshot and manifest carried
                            computer's sync folder (see "Phones" in the main README)
 lib/src/year_picker.dart   the financial year a tab shows, stepped like [ and ] in the terminal
 lib/src/rust/              generated bindings: never edit, re-run codegen
-rust_builder/              cargokit plugin that builds the Rust crate in Xcode and Gradle
+hook/build.dart            builds ../crates/compter-mobile whenever Flutter builds (see below)
 ios/fastlane, android/fastlane   store uploads, run by the release workflow (see Releasing)
-test/                      widget tests on the host, loading ../target/debug's library
-integration_test/          smoke test on a simulator or emulator, on the demo business
+test/                      widget tests on the host, against the library the hook built for it
+integration_test/          tests on a simulator or emulator: smoke test, hand-off round trip
 ```
 
 Money and dates cross the bridge as text: Rust formats amounts (`₹1,50,000.00`) and parses
@@ -30,13 +30,16 @@ what was typed, so Dart never does either. A refused input comes back as `ApiErr
 
 1. **Xcode** from the App Store, then
    `sudo xcode-select -s /Applications/Xcode.app && xcodebuild -runFirstLaunch`,
-   and an iOS simulator runtime (Xcode → Settings → Components). `brew install cocoapods`.
+   and an iOS simulator runtime (Xcode → Settings → Components). No CocoaPods: every iOS
+   plugin is a Swift package.
 2. **Android Studio** (`brew install --cask android-studio`), then in its SDK Manager: an
-   Android SDK, **NDK (Side by side)** and an emulator image. Accept the licences with
-   `flutter doctor --android-licenses`.
-3. **Flutter** (`brew install --cask flutter`); `flutter doctor` should be clean for iOS and
+   Android SDK and an emulator image (Gradle fetches the NDK itself). Accept the licences
+   with `flutter doctor --android-licenses`.
+3. **rustup**. The first build installs the Rust version and targets pinned in
+   `../crates/compter-mobile/rust-toolchain.toml`.
+4. **Flutter** (`brew install --cask flutter`); `flutter doctor` should be clean for iOS and
    Android.
-4. `tool/bootstrap.sh`: creates `ios/` and `android/`, adds `rust_builder/`, installs
+5. `tool/bootstrap.sh`: creates `ios/` and `android/` if missing, installs
    `flutter_rust_bridge_codegen` 2.13.0 and generates the bindings.
 
 ## Run and test
@@ -44,8 +47,8 @@ what was typed, so Dart never does either. A refused input comes back as `ApiErr
 ```bash
 flutter run                                    # your data, in the app's support folder
 flutter run --dart-define=COMPTER_DEMO=true    # the sample business, in memory
-cargo build -p compter-mobile && flutter test  # screens on this machine, against the real Rust core
-flutter test integration_test                  # smoke test on the running simulator or emulator
+flutter test                                   # screens on this machine, against the real Rust core
+flutter test integration_test                  # on the running simulator or emulator
 cargo test -p compter-mobile                   # the Rust API, from the repo root
 ```
 
@@ -53,13 +56,18 @@ After changing anything under `crates/compter-mobile/src/api`, run
 `flutter_rust_bridge_codegen generate && cargo fmt --all` here. The generator formats its Rust
 in rustfmt's older style, which `cargo fmt --check` refuses.
 
-## Upgrading flutter_rust_bridge
+## How the Rust library is built
 
-`rust_builder/cargokit` is patched: it looks for `lib<package>.a`, but cargo names the library
-of `compter-mobile` `libcompter_mobile.a` (`CrateInfo.libraryName` turns the hyphen into an
-underscore). Without the patch iOS builds fail with "Unable to find bundle for dynamic
-library". To take a new template, delete `rust_builder/` and run `tool/bootstrap.sh`, which
-re-applies the patch and stops if it no longer matches.
+`hook/build.dart` is a Dart build hook: whenever Flutter builds (`flutter run`, `flutter test`,
+`flutter build`), it runs `native_toolchain_rust`, which builds `../crates/compter-mobile` in
+release mode for the target being built, with the Rust pinned in that crate's
+`rust-toolchain.toml`. Flutter bundles the library as `compter_mobile.framework` on iOS and
+`libcompter_mobile.so` on Android, the names flutter_rust_bridge's generated loader opens. No
+CocoaPods or Swift Package Manager plugin is involved. The build goes to
+`.dart_tool/hooks_runner`, apart from the workspace's `target/`.
+
+To move to a newer Rust, change `channel` in `rust-toolchain.toml`; it must be an exact
+version, and `targets` must list every platform built for, the host included.
 
 ## Releasing
 
