@@ -15,23 +15,31 @@ Future<T?> showActionSheet<T>(
     context: context,
     // Over the navigation bar too
     useRootNavigator: true,
+    // As tall as its actions need, scrolling only on a screen too short for them all
+    isScrollControlled: true,
+    useSafeArea: true,
     builder: (context) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            title: Text(title, style: Theme.of(context).textTheme.titleMedium),
-            subtitle: subtitle == null ? null : Text(subtitle),
-          ),
-          const Divider(),
-          for (final action in actions)
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             ListTile(
-              leading: Icon(action.icon),
-              title: Text(action.label),
-              onTap: () => Navigator.pop(context, action.value),
+              title: Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              subtitle: subtitle == null ? null : Text(subtitle),
             ),
-          const SizedBox(height: 8),
-        ],
+            const Divider(),
+            for (final action in actions)
+              ListTile(
+                leading: Icon(action.icon),
+                title: Text(action.label),
+                onTap: () => Navigator.pop(context, action.value),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     ),
   );

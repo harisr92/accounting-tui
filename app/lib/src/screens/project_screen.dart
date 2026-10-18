@@ -7,6 +7,7 @@ import '../forms/invoice_forms.dart';
 import '../forms/project_forms.dart';
 import '../notice.dart';
 import '../router.dart';
+import '../rust/api/error.dart';
 import '../rust/api/rows.dart';
 import '../ui/action_sheet.dart';
 import '../ui/figures.dart';
@@ -15,7 +16,8 @@ import '../ui/section.dart';
 import '../ui/status_chip.dart';
 import '../ui/theme.dart';
 
-/// One project: its totals and milestones. Tapping a milestone offers what can be done with it.
+/// One project: its totals and milestones. The app bar edits or deletes the project; tapping a
+/// milestone offers what can be done with it.
 class ProjectScreen extends ConsumerWidget {
   const ProjectScreen({super.key, required this.id});
 
@@ -25,7 +27,31 @@ class ProjectScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final project = ref.watch(projectProvider(id));
     return Scaffold(
-      appBar: AppBar(title: Text(project.value?.name ?? 'Project')),
+      appBar: AppBar(
+        title: Text(project.value?.name ?? 'Project'),
+        actions: [
+          if (project.value case final detail?) ...[
+            IconButton(
+              tooltip: 'Edit project',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () async {
+                final updated = await projectForm(
+                  context,
+                  ref.read(compterProvider),
+                  existing: detail,
+                );
+                if (updated != null) _show(ref, updated);
+              },
+            ),
+            if (detail.deletable)
+              IconButton(
+                tooltip: 'Delete project',
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () => _delete(context, ref, detail),
+              ),
+          ],
+        ],
+      ),
       body: project.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('$error')),
@@ -40,7 +66,7 @@ class ProjectScreen extends ConsumerWidget {
               icon: const Icon(Icons.add),
               label: const Text('Add milestone'),
               onPressed: () async {
-                final updated = await addMilestoneForm(
+                final updated = await milestoneForm(
                   context,
                   ref.read(compterProvider),
                   project.value!,
@@ -55,6 +81,32 @@ class ProjectScreen extends ConsumerWidget {
   void _show(WidgetRef ref, ProjectDetail saved) {
     ref.read(projectProvider(id).notifier).show(saved);
     ref.invalidate(projectsProvider);
+  }
+
+  Future<void> _delete(
+    BuildContext context,
+    WidgetRef ref,
+    ProjectDetail project,
+  ) async {
+    final yes = await confirm(
+      context,
+      title: 'Delete ${project.name}?',
+      lines: [
+        'Its milestones and logged time go too. Nothing in it was invoiced.',
+      ],
+      yes: 'Delete',
+    );
+    if (!yes || !context.mounted) return;
+    try {
+      await ref.read(compterProvider).deleteProject(id: project.id);
+      if (!context.mounted) return;
+      // Leave first: this screen would reload the project it just deleted
+      context.go('/projects');
+      ref.invalidate(projectsProvider);
+      notify(context, 'Deleted ${project.name}');
+    } on ApiError catch (error) {
+      if (context.mounted) notify(context, error.message, error: true);
+    }
   }
 
   Future<void> _milestoneActions(
@@ -82,6 +134,12 @@ class ProjectScreen extends ConsumerWidget {
             label: 'Log time',
             value: _Action.logTime,
           ),
+        if (milestone.lastTime != null)
+          (icon: Icons.undo, label: 'Undo last time', value: _Action.undoTime),
+        if (pending)
+          (icon: Icons.edit_outlined, label: 'Edit', value: _Action.edit),
+        if (pending)
+          (icon: Icons.delete_outline, label: 'Remove', value: _Action.remove),
         if (invoice != null)
           (
             icon: Icons.open_in_new,
@@ -111,13 +169,66 @@ class ProjectScreen extends ConsumerWidget {
       case _Action.logTime:
         final updated = await logTime(context, app, project, milestone);
         if (updated != null) _show(ref, updated);
+      case _Action.undoTime:
+        final yes = await confirm(
+          context,
+          title: 'Undo time on ${milestone.name}?',
+          lines: ['Removes ${milestone.lastTime}.'],
+          yes: 'Undo',
+        );
+        if (!yes || !context.mounted) return;
+        await _change(
+          context,
+          ref,
+          () => app.undoTime(projectId: project.id, milestoneId: milestone.id),
+        );
+      case _Action.edit:
+        final updated = await milestoneForm(
+          context,
+          app,
+          project,
+          existing: milestone,
+        );
+        if (updated != null) _show(ref, updated);
+      case _Action.remove:
+        final yes = await confirm(
+          context,
+          title: 'Remove ${milestone.name}?',
+          lines: [
+            '${milestone.amount}, due ${milestone.dueDate}. It was never invoiced.',
+          ],
+          yes: 'Remove',
+        );
+        if (!yes || !context.mounted) return;
+        await _change(
+          context,
+          ref,
+          () => app.removeMilestone(
+            projectId: project.id,
+            milestoneId: milestone.id,
+          ),
+        );
       case _Action.openInvoice:
         context.go(invoicePath(invoice!));
     }
   }
+
+  /// Run a change outside a form, showing what it saved or its refusal in the footer
+  Future<void> _change(
+    BuildContext context,
+    WidgetRef ref,
+    Future<ProjectDetail> Function() change,
+  ) async {
+    try {
+      final saved = await change();
+      _show(ref, saved);
+    } on ApiError catch (error) {
+      if (context.mounted) notify(context, error.message, error: true);
+    }
+  }
 }
 
-enum _Action { issue, logTime, openInvoice }
+enum _Action { issue, logTime, undoTime, edit, remove, openInvoice }
 
 class _ProjectBody extends StatelessWidget {
   const _ProjectBody(this.project, {required this.onMilestone});

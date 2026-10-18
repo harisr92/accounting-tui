@@ -18,13 +18,7 @@ Future<ExpenseRow?> expenseForm(
     context,
     title: existing == null ? 'Add expense' : 'Edit expense',
     fields: [
-      FieldSpec(
-        'date',
-        'Date',
-        hint: 'YYYY-MM-DD, blank for today',
-        keyboardType: TextInputType.datetime,
-        initial: values?.date ?? '',
-      ),
+      FieldSpec('date', 'Date', date: true, initial: values?.date ?? ''),
       FieldSpec(
         'category',
         'Category',

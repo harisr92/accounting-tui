@@ -7,9 +7,9 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `new`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`
 
-/// A new milestone as typed
+/// A milestone as typed
 class MilestoneInput {
   final String name;
 
@@ -54,6 +54,13 @@ class MilestoneRow {
   final String? logged;
   final String? invoiceNumber;
 
+  /// The time entry undoing would remove, as `2026-10-18 · 1h 30m · note`; `None` when
+  /// there is none or the milestone is no longer pending
+  final String? lastTime;
+
+  /// The form, filled with this milestone, to edit it
+  final MilestoneInput edit;
+
   const MilestoneRow({
     required this.id,
     required this.name,
@@ -62,6 +69,8 @@ class MilestoneRow {
     required this.status,
     this.logged,
     this.invoiceNumber,
+    this.lastTime,
+    required this.edit,
   });
 
   @override
@@ -72,7 +81,9 @@ class MilestoneRow {
       dueDate.hashCode ^
       status.hashCode ^
       logged.hashCode ^
-      invoiceNumber.hashCode;
+      invoiceNumber.hashCode ^
+      lastTime.hashCode ^
+      edit.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -85,7 +96,9 @@ class MilestoneRow {
           dueDate == other.dueDate &&
           status == other.status &&
           logged == other.logged &&
-          invoiceNumber == other.invoiceNumber;
+          invoiceNumber == other.invoiceNumber &&
+          lastTime == other.lastTime &&
+          edit == other.edit;
 }
 
 /// An opened project with its milestones; amounts are formatted in the project's currency
@@ -116,6 +129,12 @@ class ProjectDetail {
   final String outstanding;
   final List<MilestoneRow> milestones;
 
+  /// Nothing in it was invoiced, so it may be deleted
+  final bool deletable;
+
+  /// The form, filled with this project, to edit it
+  final ProjectInput edit;
+
   const ProjectDetail({
     required this.id,
     required this.name,
@@ -132,6 +151,8 @@ class ProjectDetail {
     this.credited,
     required this.outstanding,
     required this.milestones,
+    required this.deletable,
+    required this.edit,
   });
 
   @override
@@ -150,7 +171,9 @@ class ProjectDetail {
       paid.hashCode ^
       credited.hashCode ^
       outstanding.hashCode ^
-      milestones.hashCode;
+      milestones.hashCode ^
+      deletable.hashCode ^
+      edit.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -171,10 +194,12 @@ class ProjectDetail {
           paid == other.paid &&
           credited == other.credited &&
           outstanding == other.outstanding &&
-          milestones == other.milestones;
+          milestones == other.milestones &&
+          deletable == other.deletable &&
+          edit == other.edit;
 }
 
-/// A new project as typed. A client with a country is abroad (billed in any currency, invoiced
+/// A project as typed. A client with a country is abroad (billed in any currency, invoiced
 /// as an export); one without is in India, billed in rupees.
 class ProjectInput {
   final String name;
@@ -189,7 +214,7 @@ class ProjectInput {
   /// Blank for a client in India
   final String? clientCountry;
 
-  /// Address lines; blank lines are dropped
+  /// One entry per line; blank lines are dropped
   final List<String> clientAddress;
 
   /// `INR`, `USD`, `GBP` or `EUR`; blank means INR

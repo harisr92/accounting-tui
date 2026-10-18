@@ -4,18 +4,29 @@ import 'package:go_router/go_router.dart';
 
 import '../compter.dart';
 import '../forms/project_forms.dart';
+import '../rust/api/rows.dart';
 import '../ui/empty_state.dart';
 import '../ui/record_tile.dart';
+import '../ui/search.dart';
 
 /// Every project that isn't archived, like the terminal's Projects tab
-class ProjectsScreen extends ConsumerWidget {
+class ProjectsScreen extends ConsumerStatefulWidget {
   const ProjectsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProjectsScreen> createState() => _ProjectsScreenState();
+}
+
+class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
+    with Searching {
+  @override
+  Widget build(BuildContext context) {
     final projects = ref.watch(projectsProvider);
     return Scaffold(
-      appBar: AppBar(title: Text(demoMode ? 'Projects (demo)' : 'Projects')),
+      appBar: searchAppBar(
+        title: demoMode ? 'Projects (demo)' : 'Projects',
+        hint: 'Name or client',
+      ),
       body: projects.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('$error')),
@@ -29,13 +40,7 @@ class ProjectsScreen extends ConsumerWidget {
                   icon: Icons.work_outline,
                   message: 'No projects yet. Add one to start billing.',
                 ),
-              for (final row in rows)
-                RecordTile(
-                  title: row.name,
-                  supporting: row.clientName,
-                  status: row.status,
-                  onTap: () => context.go('/projects/${row.id}'),
-                ),
+              ..._matching(query, rows),
             ],
           ),
         ),
@@ -47,15 +52,27 @@ class ProjectsScreen extends ConsumerWidget {
         icon: const Icon(Icons.add),
         label: const Text('New project'),
         onPressed: () async {
-          final created = await newProjectForm(
-            context,
-            ref.read(compterProvider),
-          );
+          final created = await projectForm(context, ref.read(compterProvider));
           if (created == null || !context.mounted) return;
           ref.invalidate(projectsProvider);
           context.go('/projects/${created.id}');
         },
       ),
     );
+  }
+
+  /// A tile for each project that matches the search
+  List<Widget> _matching(SearchQuery query, List<ProjectRow> rows) {
+    final matches = query.apply(rows, (row) => [row.name, row.clientName]);
+    if (rows.isNotEmpty && matches.isEmpty) return [noMatches(query)];
+    return [
+      for (final row in matches)
+        RecordTile(
+          title: row.name,
+          supporting: row.clientName,
+          status: row.status,
+          onTap: () => context.go('/projects/${row.id}'),
+        ),
+    ];
   }
 }

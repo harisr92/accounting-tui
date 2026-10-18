@@ -14,6 +14,12 @@ import 'sync/sync_controller.dart';
 /// Where invoice [number] opens. Numbers hold slashes (`INV/26-27/004`), so they are encoded.
 String invoicePath(String number) => '/invoices/${Uri.encodeComponent(number)}';
 
+/// A screen pushed over the tabs. Built as a [MaterialPage] here rather than left to
+/// go_router, which can take the app for a plain WidgetsApp and show it with no transition,
+/// and so no swipe from the left edge to go back on iOS.
+Page<void> _detail(GoRouterState state, Widget screen) =>
+    MaterialPage<void>(key: state.pageKey, child: screen);
+
 /// A new router at `/projects`: one per app, so a rebuilt app (or the next test) starts on the
 /// list. Each tab keeps its own stack, like the terminal app's tabs keep their selection. A
 /// project or invoice opens full screen over the tabs (Material's detail pattern), so its own
@@ -37,8 +43,10 @@ GoRouter buildRouter() {
                   GoRoute(
                     path: ':id',
                     parentNavigatorKey: root,
-                    builder: (context, state) =>
-                        ProjectScreen(id: state.pathParameters['id']!),
+                    pageBuilder: (context, state) => _detail(
+                      state,
+                      ProjectScreen(id: state.pathParameters['id']!),
+                    ),
                   ),
                 ],
               ),
@@ -53,8 +61,10 @@ GoRouter buildRouter() {
                   GoRoute(
                     path: ':number',
                     parentNavigatorKey: root,
-                    builder: (context, state) =>
-                        InvoiceScreen(number: state.pathParameters['number']!),
+                    pageBuilder: (context, state) => _detail(
+                      state,
+                      InvoiceScreen(number: state.pathParameters['number']!),
+                    ),
                   ),
                 ],
               ),

@@ -41,7 +41,7 @@ impl From<&BusinessProfile> for ProfileRow {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfileInput {
     pub name: String,
-    /// Up to three lines; blank lines are dropped
+    /// One entry per line; blank lines are dropped
     pub address: Vec<String>,
     /// Blank when not registered under GST: invoices then carry no GST
     pub gstin: String,

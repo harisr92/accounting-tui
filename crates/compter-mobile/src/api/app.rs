@@ -6,7 +6,7 @@ use flutter_rust_bridge::frb;
 use compter_core::demo;
 use compter_core::domain::{
     Billing, ClientDetails, ClientRegion, Currency, ExchangeRate, ExpenseId, InvoiceNumber,
-    MilestoneId, ProfileDraft, ProjectId, TimeEntry,
+    MilestoneId, ProfileDraft, Project, ProjectId, TimeEntry,
 };
 use compter_core::input;
 use compter_core::services::{
@@ -120,43 +120,26 @@ impl CompterApp {
     }
 
     pub fn create_project(&mut self, input: ProjectInput) -> Result<ProjectDetail, ApiError> {
-        let billing = match input.hourly_rate.as_deref().and_then(input::optional) {
-            Some(rate) => {
-                let rate = input::money(&rate).map_err(|e| ApiError::invalid("hourly_rate", e))?;
-                Billing::hourly(rate)
-                    .map_err(|e| ApiError::invalid("hourly_rate", e.to_string()))?
-            }
-            None => Billing::Fixed,
-        };
-        let optional = |text: &Option<String>| text.as_deref().and_then(input::optional);
-        let region = match optional(&input.client_country) {
-            Some(country) => ClientRegion::Abroad { country },
-            None => ClientRegion::India {
-                state: optional(&input.client_state)
-                    .map(|code| StateCode::parse(&code))
-                    .transpose()
-                    .map_err(|e| ApiError::invalid("client_state", e.to_string()))?,
-            },
-        };
-        let currency = match optional(&input.currency) {
-            Some(code) => currency(&code)
-                .ok_or_else(|| ApiError::invalid("currency", "choose INR, USD, GBP or EUR"))?,
-            None => Currency::Inr,
-        };
-        let draft = ProjectDraft {
-            name: input.name.trim().to_owned(),
-            client: ClientDetails {
-                name: input.client_name.trim().to_owned(),
-                // Upper-cased as the terminal does; a GSTIN on a client abroad is refused by
-                // the domain rather than dropped
-                gstin: optional(&input.client_gstin).map(|g| g.to_uppercase()),
-                address: input.client_address,
-                region,
-                currency,
-            },
-            billing,
-        };
-        Ok(ProjectDetail::from(&self.projects.create(draft)?))
+        Ok(ProjectDetail::from(
+            &self.projects.create(project_draft(input)?)?,
+        ))
+    }
+
+    /// Change a project's details and billing; the currency is fixed once something is invoiced
+    pub fn edit_project(
+        &mut self,
+        id: String,
+        input: ProjectInput,
+    ) -> Result<ProjectDetail, ApiError> {
+        let id = project_id(&id)?;
+        Ok(ProjectDetail::from(
+            &self.projects.update_details(id, project_draft(input)?)?,
+        ))
+    }
+
+    /// Delete a project with nothing invoiced in it
+    pub fn delete_project(&mut self, id: String) -> Result<(), ApiError> {
+        Ok(self.projects.delete(project_id(&id)?)?)
     }
 
     pub fn add_milestone(
@@ -165,22 +148,38 @@ impl CompterApp {
         input: MilestoneInput,
     ) -> Result<ProjectDetail, ApiError> {
         let id = self::project_id(&project_id)?;
-        let due_date = date(&input.due_date, "due_date")?;
-        let hourly = matches!(self.projects.load(id)?.billing(), Billing::Hourly { .. });
-        let amount = match (hourly, input.amount.as_deref()) {
-            (true, _) => None,
-            (false, amount) => Some(
-                input::money(amount.unwrap_or_default())
-                    .map_err(|e| ApiError::invalid("amount", e))?,
-            ),
-        };
-        let draft = MilestoneDraft {
-            name: input.name.trim().to_owned(),
-            due_date,
-            amount,
-        };
+        let draft = milestone_draft(&self.projects.load(id)?, input)?;
         Ok(ProjectDetail::from(
             &self.projects.add_milestone(id, draft)?,
+        ))
+    }
+
+    /// Change a pending milestone
+    pub fn edit_milestone(
+        &mut self,
+        project_id: String,
+        milestone_id: String,
+        input: MilestoneInput,
+    ) -> Result<ProjectDetail, ApiError> {
+        let id = self::project_id(&project_id)?;
+        let project = self.projects.load(id)?;
+        let index = index_of(&project, &milestone_id)?;
+        let draft = milestone_draft(&project, input)?;
+        Ok(ProjectDetail::from(
+            &self.projects.edit_milestone(id, index, draft)?,
+        ))
+    }
+
+    /// Remove a milestone that has not been invoiced
+    pub fn remove_milestone(
+        &mut self,
+        project_id: String,
+        milestone_id: String,
+    ) -> Result<ProjectDetail, ApiError> {
+        let id = self::project_id(&project_id)?;
+        let index = index_of(&self.projects.load(id)?, &milestone_id)?;
+        Ok(ProjectDetail::from(
+            &self.projects.remove_milestone(id, index)?,
         ))
     }
 
@@ -192,19 +191,27 @@ impl CompterApp {
         input: TimeInput,
     ) -> Result<ProjectDetail, ApiError> {
         let id = self::project_id(&project_id)?;
-        let milestone = self::milestone_id(&milestone_id)?;
         let date = date(&input.date, "date")?;
         let minutes = input::duration_minutes(&input.duration)
             .map_err(|e| ApiError::invalid("duration", e))?;
         let entry = TimeEntry::new(date, minutes, input.note.trim())
             .map_err(|e| ApiError::invalid("duration", e.to_string()))?;
-        let index = self
-            .projects
-            .load(id)?
-            .milestone_index(milestone)
-            .ok_or_else(|| ApiError::invalid("milestone_id", "no such milestone"))?;
+        let index = index_of(&self.projects.load(id)?, &milestone_id)?;
         Ok(ProjectDetail::from(
             &self.projects.log_time(id, index, entry)?,
+        ))
+    }
+
+    /// Remove the last time entry logged on a pending milestone
+    pub fn undo_time(
+        &mut self,
+        project_id: String,
+        milestone_id: String,
+    ) -> Result<ProjectDetail, ApiError> {
+        let id = self::project_id(&project_id)?;
+        let index = index_of(&self.projects.load(id)?, &milestone_id)?;
+        Ok(ProjectDetail::from(
+            &self.projects.remove_last_time_entry(id, index)?,
         ))
     }
 
@@ -575,6 +582,67 @@ fn project_id(id: &str) -> Result<ProjectId, ApiError> {
 fn milestone_id(id: &str) -> Result<MilestoneId, ApiError> {
     id.parse()
         .map_err(|_| ApiError::invalid("milestone_id", "not a milestone id"))
+}
+
+/// Where milestone `id` is in `project`, as the project service takes it
+fn index_of(project: &Project, id: &str) -> Result<usize, ApiError> {
+    project
+        .milestone_index(milestone_id(id)?)
+        .ok_or_else(|| ApiError::invalid("milestone_id", "no such milestone"))
+}
+
+fn project_draft(input: ProjectInput) -> Result<ProjectDraft, ApiError> {
+    let billing = match input.hourly_rate.as_deref().and_then(input::optional) {
+        Some(rate) => {
+            let rate = input::money(&rate).map_err(|e| ApiError::invalid("hourly_rate", e))?;
+            Billing::hourly(rate).map_err(|e| ApiError::invalid("hourly_rate", e.to_string()))?
+        }
+        None => Billing::Fixed,
+    };
+    let optional = |text: &Option<String>| text.as_deref().and_then(input::optional);
+    let region = match optional(&input.client_country) {
+        Some(country) => ClientRegion::Abroad { country },
+        None => ClientRegion::India {
+            state: optional(&input.client_state)
+                .map(|code| StateCode::parse(&code))
+                .transpose()
+                .map_err(|e| ApiError::invalid("client_state", e.to_string()))?,
+        },
+    };
+    let currency = match optional(&input.currency) {
+        Some(code) => currency(&code)
+            .ok_or_else(|| ApiError::invalid("currency", "choose INR, USD, GBP or EUR"))?,
+        None => Currency::Inr,
+    };
+    Ok(ProjectDraft {
+        name: input.name.trim().to_owned(),
+        client: ClientDetails {
+            name: input.client_name.trim().to_owned(),
+            // Upper-cased as the terminal does; a GSTIN on a client abroad is refused by the
+            // domain rather than dropped
+            gstin: optional(&input.client_gstin).map(|g| g.to_uppercase()),
+            address: input.client_address,
+            region,
+            currency,
+        },
+        billing,
+    })
+}
+
+/// A milestone for `project`: an hourly one ignores any amount, it comes from logged time
+fn milestone_draft(project: &Project, input: MilestoneInput) -> Result<MilestoneDraft, ApiError> {
+    let hourly = matches!(project.billing(), Billing::Hourly { .. });
+    let amount = match (hourly, input.amount.as_deref()) {
+        (true, _) => None,
+        (false, amount) => Some(
+            input::money(amount.unwrap_or_default()).map_err(|e| ApiError::invalid("amount", e))?,
+        ),
+    };
+    Ok(MilestoneDraft {
+        name: input.name.trim().to_owned(),
+        due_date: date(&input.due_date, "due_date")?,
+        amount,
+    })
 }
 
 /// The typed rupees-per-unit rate, when one was asked for

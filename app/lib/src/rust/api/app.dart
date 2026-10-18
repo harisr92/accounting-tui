@@ -13,7 +13,7 @@ import 'profile.dart';
 import 'reports.dart';
 import 'rows.dart';
 
-// These functions are ignored because they are not marked as `pub`: `closed`, `credit_draft`, `date`, `exchange_rate`, `expense_draft`, `expense_id`, `milestone_id`, `over`, `project_id`, `today`
+// These functions are ignored because they are not marked as `pub`: `closed`, `credit_draft`, `date`, `exchange_rate`, `expense_draft`, `expense_id`, `index_of`, `milestone_draft`, `milestone_id`, `over`, `project_draft`, `project_id`, `today`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>>
 abstract class CompterApp implements RustOpaqueInterface {
@@ -33,6 +33,9 @@ abstract class CompterApp implements RustOpaqueInterface {
   /// Remove an expense and its ledger posting
   Future<void> deleteExpense({required String id});
 
+  /// Delete a project with nothing invoiced in it
+  Future<void> deleteProject({required String id});
+
   /// The sample business of `compter --demo`, in memory; nothing is saved. Its PDFs and
   /// returns are written to `scratch_dir`, a cache folder.
   static Future<CompterApp> demo({required String scratchDir}) =>
@@ -42,6 +45,19 @@ abstract class CompterApp implements RustOpaqueInterface {
   Future<ExpenseRow> editExpense({
     required String id,
     required ExpenseInput input,
+  });
+
+  /// Change a pending milestone
+  Future<ProjectDetail> editMilestone({
+    required String projectId,
+    required String milestoneId,
+    required MilestoneInput input,
+  });
+
+  /// Change a project's details and billing; the currency is fixed once something is invoiced
+  Future<ProjectDetail> editProject({
+    required String id,
+    required ProjectInput input,
   });
 
   /// The expenses of the financial year starting in April of `year`, by date
@@ -136,6 +152,12 @@ abstract class CompterApp implements RustOpaqueInterface {
     required PaymentInput input,
   });
 
+  /// Remove a milestone that has not been invoiced
+  Future<ProjectDetail> removeMilestone({
+    required String projectId,
+    required String milestoneId,
+  });
+
   /// The financial year starting in April of `year`, in numbers
   Future<ReportRow> report({required int year});
 
@@ -159,4 +181,10 @@ abstract class CompterApp implements RustOpaqueInterface {
 
   /// Where this phone's data stands against the computer's sync folder
   Future<SyncStatusRow> syncStatus();
+
+  /// Remove the last time entry logged on a pending milestone
+  Future<ProjectDetail> undoTime({
+    required String projectId,
+    required String milestoneId,
+  });
 }

@@ -14,7 +14,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 class ProfileInput {
   final String name;
 
-  /// Up to three lines; blank lines are dropped
+  /// One entry per line; blank lines are dropped
   final List<String> address;
 
   /// Blank when not registered under GST: invoices then carry no GST

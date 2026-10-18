@@ -1,4 +1,6 @@
+import 'package:compter/src/compter.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support.dart';
@@ -106,9 +108,48 @@ void main() {
       find.widgetWithText(TextField, 'Name'),
       'Nila Studio',
     );
+    final terms = find.widgetWithText(TextField, 'Terms');
+    await tester.ensureVisible(terms);
+    await tester.enterText(
+      terms,
+      'Bank: HDFC 0001234\n\nPayment due in 15 days\nThank you',
+    );
     await tester.tap(find.text('Save'));
     await pumpUntil(tester, find.text('Nila Studio'));
 
     expect(find.text('Business details saved'), findsOneWidget);
+    final saved = await tester.runAsync(
+      () => ProviderScope.containerOf(
+        tester.element(find.byType(Scaffold).first),
+      ).read(compterProvider).profile(),
+    );
+    // Blank lines are dropped
+    expect(saved!.terms, [
+      'Bank: HDFC 0001234',
+      'Payment due in 15 days',
+      'Thank you',
+    ]);
+  });
+
+  testWidgets('searching narrows the invoices by client, kind or status', (
+    tester,
+  ) async {
+    await launchDemo(tester);
+    await tester.tap(find.byIcon(Icons.receipt_long_outlined));
+    await settle(tester);
+    expect(find.text('Initrode GmbH'), findsOneWidget);
+    await tester.tap(find.byTooltip('Search'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'acme');
+    await tester.pumpAndSettle();
+    expect(find.text('Acme Pvt Ltd'), findsNWidgets(2));
+    expect(find.text('Initrode GmbH'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), 'export');
+    await tester.pumpAndSettle();
+    expect(find.text('Initrode GmbH'), findsOneWidget);
+    expect(find.text('Acme Pvt Ltd'), findsNothing);
+    expect(find.text('Outstanding'), findsOneWidget);
   });
 }

@@ -2,7 +2,7 @@ use chrono::Local;
 
 mod support;
 
-use compter_mobile::api::{ApiError, CompterApp};
+use compter_mobile::api::{ApiError, CompterApp, ProjectDetail, TimeInput};
 use support::{demo, milestone, project};
 
 fn field(error: ApiError) -> Option<String> {
@@ -123,4 +123,180 @@ fn projects_are_saved_in_the_data_folder() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].name, "Website");
     assert_eq!(rows[0].status, "ACTIVE");
+}
+
+#[test]
+fn a_project_is_edited_from_its_own_filled_form() {
+    let (_scratch, mut app) = demo();
+    let created = app
+        .create_project(project("Support", Some("1,500")))
+        .unwrap();
+    let with_october = app
+        .add_milestone(created.id.clone(), milestone("October", "", None))
+        .unwrap();
+    let october = with_october.milestones[0].id.clone();
+    app.log_time(created.id.clone(), october, time("2h"))
+        .unwrap();
+
+    let unchanged = app
+        .edit_project(created.id.clone(), created.edit.clone())
+        .unwrap();
+    assert_eq!(unchanged.edit, created.edit);
+
+    let mut input = created.edit;
+    input.name = "Support retainer".to_owned();
+    input.hourly_rate = Some("2000".to_owned());
+    let edited = app.edit_project(created.id, input).unwrap();
+
+    assert_eq!(edited.name, "Support retainer");
+    assert_eq!(edited.billing, "Hourly ₹2,000.00/h");
+    // The pending milestone is re-priced at the new rate
+    assert_eq!(edited.milestones[0].amount, "₹4,000.00");
+}
+
+#[test]
+fn a_project_with_an_invoice_keeps_its_currency_and_cannot_be_deleted() {
+    let (_scratch, mut app) = demo();
+    let billed = invoiced_project(&app);
+    assert!(!billed.deletable);
+
+    let mut input = billed.edit.clone();
+    input.client_country = Some("Germany".to_owned());
+    input.client_gstin = None;
+    let other = if billed.currency == "USD" {
+        "EUR"
+    } else {
+        "USD"
+    };
+    input.currency = Some(other.to_owned());
+    assert!(app.edit_project(billed.id.clone(), input).is_err());
+    assert!(app.delete_project(billed.id.clone()).is_err());
+    assert_eq!(app.project(billed.id).unwrap().currency, billed.currency);
+}
+
+#[test]
+fn a_project_with_nothing_invoiced_is_deleted() {
+    let (_scratch, mut app) = demo();
+    let created = app.create_project(project("Website", None)).unwrap();
+    assert!(created.deletable);
+
+    app.delete_project(created.id.clone()).unwrap();
+
+    assert!(app.project(created.id).is_err());
+}
+
+#[test]
+fn a_pending_milestone_is_edited_and_removed() {
+    let (_scratch, mut app) = demo();
+    let created = app.create_project(project("Website", None)).unwrap();
+    let detail = app
+        .add_milestone(
+            created.id.clone(),
+            milestone("Design", "2026-11-01", Some("50,000")),
+        )
+        .unwrap();
+    let design = &detail.milestones[0];
+    assert_eq!(
+        design.edit,
+        milestone("Design", "2026-11-01", Some("50000.00"))
+    );
+
+    let edited = app
+        .edit_milestone(
+            created.id.clone(),
+            design.id.clone(),
+            milestone("Design system", "2026-12-01", Some("60,000")),
+        )
+        .unwrap();
+    assert_eq!(edited.milestones[0].name, "Design system");
+    assert_eq!(edited.milestones[0].amount, "₹60,000.00");
+    assert_eq!(edited.total, "₹60,000.00");
+
+    let removed = app.remove_milestone(created.id, design.id.clone()).unwrap();
+    assert!(removed.milestones.is_empty());
+}
+
+#[test]
+fn an_invoiced_milestone_is_neither_edited_nor_removed() {
+    let (_scratch, mut app) = demo();
+    let billed = invoiced_project(&app);
+    let invoiced = billed
+        .milestones
+        .iter()
+        .find(|m| m.status != "PENDING")
+        .unwrap();
+    assert_eq!(invoiced.last_time, None);
+
+    assert!(
+        app.edit_milestone(
+            billed.id.clone(),
+            invoiced.id.clone(),
+            invoiced.edit.clone()
+        )
+        .is_err()
+    );
+    assert!(
+        app.remove_milestone(billed.id.clone(), invoiced.id.clone())
+            .is_err()
+    );
+    assert_eq!(app.project(billed.id.clone()).unwrap(), billed);
+}
+
+#[test]
+fn the_last_time_entry_is_undone() {
+    let (_scratch, mut app) = demo();
+    let created = app
+        .create_project(project("Support", Some("1,500")))
+        .unwrap();
+    let detail = app
+        .add_milestone(created.id.clone(), milestone("October", "", None))
+        .unwrap();
+    let october = detail.milestones[0].id.clone();
+    assert_eq!(detail.milestones[0].last_time, None);
+
+    let logged = app
+        .log_time(created.id.clone(), october.clone(), time("1h 30m"))
+        .unwrap();
+    let last = logged.milestones[0].last_time.clone().unwrap();
+    assert!(last.ends_with("1h 30m · Fixes"), "{last}");
+
+    let undone = app.undo_time(created.id.clone(), october.clone()).unwrap();
+    assert_eq!(undone.milestones[0].last_time, None);
+    assert_eq!(undone.milestones[0].amount, "₹0.00");
+    assert!(app.undo_time(created.id, october).is_err());
+}
+
+/// A demo project with at least one invoiced milestone
+fn invoiced_project(app: &CompterApp) -> ProjectDetail {
+    app.projects(true)
+        .unwrap()
+        .into_iter()
+        .map(|row| app.project(row.id).unwrap())
+        .find(|p| p.milestones.iter().any(|m| m.status != "PENDING"))
+        .unwrap()
+}
+
+fn time(duration: &str) -> TimeInput {
+    TimeInput {
+        date: String::new(),
+        duration: duration.to_owned(),
+        note: "Fixes".to_owned(),
+    }
+}
+
+#[test]
+fn editing_keeps_every_address_line() {
+    let (_scratch, mut app) = demo();
+    let mut input = project("Website", None);
+    input.client_address = vec![
+        "Floor 3".to_owned(),
+        "MG Road".to_owned(),
+        "Bengaluru 560001".to_owned(),
+    ];
+    let created = app.create_project(input.clone()).unwrap();
+    assert_eq!(created.edit.client_address, input.client_address);
+
+    let edited = app.edit_project(created.id, created.edit).unwrap();
+
+    assert_eq!(edited.edit.client_address, input.client_address);
 }

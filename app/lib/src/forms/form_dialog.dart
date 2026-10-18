@@ -14,6 +14,8 @@ class FieldSpec {
     this.keyboardType,
     this.initial = '',
     this.options,
+    this.date = false,
+    this.multiline = false,
   });
 
   final String key;
@@ -22,6 +24,8 @@ class FieldSpec {
   final TextInputType? keyboardType;
   final String initial;
   final List<String>? options;
+  final bool date;
+  final bool multiline;
 }
 
 /// Every form in the app, as a bottom sheet: its fields, then Cancel and the one filled action
@@ -186,10 +190,25 @@ class _FormDialogState<T> extends State<FormDialog<T>> {
   Widget _input(FieldSpec field, InputDecoration decoration) {
     final controller = _controllers[field.key]!;
     final options = field.options;
+    if (field.date) {
+      return TextField(
+        controller: controller,
+        readOnly: true,
+        decoration: decoration.copyWith(
+          hintText: 'Today',
+          suffixIcon: const Icon(Icons.calendar_today_outlined),
+        ),
+        onTap: () => _pickDate(controller),
+      );
+    }
     if (options == null) {
       return TextField(
         controller: controller,
-        keyboardType: field.keyboardType,
+        keyboardType: field.multiline
+            ? TextInputType.multiline
+            : field.keyboardType,
+        minLines: field.multiline ? 3 : 1,
+        maxLines: field.multiline ? null : 1,
         decoration: decoration,
       );
     }
@@ -203,4 +222,21 @@ class _FormDialogState<T> extends State<FormDialog<T>> {
       decoration: decoration,
     );
   }
+
+  Future<void> _pickDate(TextEditingController controller) async {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.tryParse(controller.text) ?? today,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(today.year + 10),
+    );
+    if (picked != null) controller.text = _isoDate(picked);
+  }
 }
+
+/// `YYYY-MM-DD`, as Rust parses dates
+String _isoDate(DateTime date) =>
+    '${date.year.toString().padLeft(4, '0')}-'
+    '${date.month.toString().padLeft(2, '0')}-'
+    '${date.day.toString().padLeft(2, '0')}';

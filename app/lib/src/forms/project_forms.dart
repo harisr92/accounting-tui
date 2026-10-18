@@ -9,34 +9,62 @@ const _amount = TextInputType.numberWithOptions(decimal: true);
 /// What projects and the profile can be billed in, as Rust names them
 const currencies = ['INR', 'USD', 'GBP', 'EUR'];
 
-/// New project. A client with a country is abroad: an export, billed in any currency. One in
-/// India without a GSTIN needs a state code, the place of supply. A blank rate is fixed price.
-Future<ProjectDetail?> newProjectForm(BuildContext context, CompterApp app) {
+/// New project, or [existing] edited with the form filled from it. A client with a country is
+/// abroad: an export, billed in any currency. One in India without a GSTIN needs a state code,
+/// the place of supply. A blank rate is fixed price.
+Future<ProjectDetail?> projectForm(
+  BuildContext context,
+  CompterApp app, {
+  ProjectDetail? existing,
+}) {
+  final values = existing?.edit;
   return FormDialog.show(
     context,
-    title: 'New project',
-    fields: const [
-      FieldSpec('name', 'Name', hint: 'e.g. Website Revamp'),
-      FieldSpec('client_name', 'Client', hint: 'e.g. Acme Pvt Ltd'),
+    title: existing == null ? 'New project' : 'Edit project',
+    fields: [
+      FieldSpec(
+        'name',
+        'Name',
+        hint: 'e.g. Website Revamp',
+        initial: values?.name ?? '',
+      ),
+      FieldSpec(
+        'client_name',
+        'Client',
+        hint: 'e.g. Acme Pvt Ltd',
+        initial: values?.clientName ?? '',
+      ),
       FieldSpec(
         'client_gstin',
         'Client GSTIN',
         hint: 'blank if unregistered or abroad',
+        initial: values?.clientGstin ?? '',
       ),
       FieldSpec(
         'client_state',
         'State code',
         hint: 'India, no GSTIN: e.g. 29',
         keyboardType: TextInputType.number,
+        initial: values?.clientState ?? '',
       ),
-      FieldSpec('client_country', 'Country', hint: 'abroad only, e.g. Germany'),
-      FieldSpec('address_1', 'Address', hint: 'street, building'),
-      FieldSpec('address_2', '', hint: 'city, PIN / postcode'),
+      FieldSpec(
+        'client_country',
+        'Country',
+        hint: 'abroad only, e.g. Germany',
+        initial: values?.clientCountry ?? '',
+      ),
+      FieldSpec(
+        'address',
+        'Address',
+        hint: 'one line each: street, city and PIN / postcode',
+        initial: values?.clientAddress.join('\n') ?? '',
+        multiline: true,
+      ),
       FieldSpec(
         'currency',
         'Currency',
         hint: 'anything but INR needs a client abroad',
-        initial: 'INR',
+        initial: values?.currency ?? 'INR',
         options: currencies,
       ),
       FieldSpec(
@@ -44,55 +72,74 @@ Future<ProjectDetail?> newProjectForm(BuildContext context, CompterApp app) {
         'Rate / hour',
         hint: 'blank for a fixed price',
         keyboardType: _amount,
+        initial: values?.hourlyRate ?? '',
       ),
     ],
-    submit: (values) => app.createProject(
-      input: ProjectInput(
+    submit: (values) {
+      final input = ProjectInput(
         name: values['name']!,
         clientName: values['client_name']!,
         clientGstin: values['client_gstin'],
         clientState: values['client_state'],
         clientCountry: values['client_country'],
-        clientAddress: [values['address_1']!, values['address_2']!],
+        clientAddress: values['address']!.split('\n'),
         currency: values['currency'],
         hourlyRate: values['hourly_rate'],
-      ),
-    ),
+      );
+      return existing == null
+          ? app.createProject(input: input)
+          : app.editProject(id: existing.id, input: input);
+    },
   );
 }
 
-/// New milestone; hourly projects take no amount, it comes from logged time
-Future<ProjectDetail?> addMilestoneForm(
+/// New milestone, or [existing] edited; hourly projects take no amount, it comes from logged
+/// time
+Future<ProjectDetail?> milestoneForm(
   BuildContext context,
   CompterApp app,
-  ProjectDetail project,
-) {
+  ProjectDetail project, {
+  MilestoneRow? existing,
+}) {
+  final values = existing?.edit;
   return FormDialog.show(
     context,
-    title: 'Add milestone',
+    title: existing == null ? 'Add milestone' : 'Edit milestone',
     fields: [
-      const FieldSpec('name', 'Name', hint: 'e.g. Design'),
-      const FieldSpec(
+      FieldSpec(
+        'name',
+        'Name',
+        hint: 'e.g. Design',
+        initial: values?.name ?? '',
+      ),
+      FieldSpec(
         'due_date',
         'Due date',
-        hint: 'YYYY-MM-DD, blank for today',
-        keyboardType: TextInputType.datetime,
+        date: true,
+        initial: values?.dueDate ?? '',
       ),
       if (!project.hourly)
-        const FieldSpec(
+        FieldSpec(
           'amount',
           'Amount',
           hint: 'e.g. 50,000',
           keyboardType: _amount,
+          initial: values?.amount ?? '',
         ),
     ],
-    submit: (values) => app.addMilestone(
-      projectId: project.id,
-      input: MilestoneInput(
+    submit: (values) {
+      final input = MilestoneInput(
         name: values['name']!,
         dueDate: values['due_date']!,
         amount: values['amount'],
-      ),
-    ),
+      );
+      return existing == null
+          ? app.addMilestone(projectId: project.id, input: input)
+          : app.editMilestone(
+              projectId: project.id,
+              milestoneId: existing.id,
+              input: input,
+            );
+    },
   );
 }
