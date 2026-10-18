@@ -33,12 +33,32 @@ pub struct QuarterlyGstr1 {
     pub credit_notes: usize,
 }
 
+impl QuarterlyGstr1 {
+    /// `3 tax invoice(s), 1 export(s), 0 credit note(s)`
+    pub fn summary(&self) -> String {
+        format!(
+            "{} tax invoice(s), {} export(s), {} credit note(s)",
+            self.tax_invoices, self.exports, self.credit_notes
+        )
+    }
+}
+
 /// A month's IFF as GST portal JSON: its B2B invoices and the credit notes on B2B invoices
 #[derive(Debug, Clone)]
 pub struct MonthlyIff {
     pub json: Value,
     pub invoices: usize,
     pub credit_notes: usize,
+}
+
+impl MonthlyIff {
+    /// `2 B2B invoice(s), 0 credit note(s)`
+    pub fn summary(&self) -> String {
+        format!(
+            "{} B2B invoice(s), {} credit note(s)",
+            self.invoices, self.credit_notes
+        )
+    }
 }
 
 /// Build the GSTR-1 for `quarter` from its tax and export invoices and the credit notes on them

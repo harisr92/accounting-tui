@@ -43,3 +43,40 @@ fn quarters_follow_april_to_march() {
     assert_eq!(year.quarters()[2].label(), "Q3 (Oct-Dec)");
     assert_eq!(year.next().previous(), year);
 }
+
+#[test]
+fn the_quarter_to_file_is_the_last_one_ended() {
+    let year = FiscalYear::containing(NaiveDate::from_ymd_opt(2026, 4, 1).unwrap());
+    let on = |y, m, d| NaiveDate::from_ymd_opt(y, m, d).unwrap();
+    let number = |today| year.quarter_to_file(today).number();
+
+    assert_eq!(number(on(2026, 5, 10)), 1, "Q1 still running");
+    assert_eq!(number(on(2026, 8, 10)), 1);
+    assert_eq!(number(on(2026, 10, 18)), 2);
+    assert_eq!(number(on(2027, 2, 1)), 3);
+    assert_eq!(number(on(2027, 6, 1)), 4, "a past year");
+    assert_eq!(number(on(2025, 6, 1)), 1, "a future year");
+}
+
+#[test]
+fn iff_months_are_the_first_two_of_each_quarter() {
+    let year = FiscalYear::containing(NaiveDate::from_ymd_opt(2026, 4, 1).unwrap());
+    let on = |y, m, d| NaiveDate::from_ymd_opt(y, m, d).unwrap();
+
+    assert_eq!(
+        year.iff_months(),
+        [
+            (2026, 4),
+            (2026, 5),
+            (2026, 7),
+            (2026, 8),
+            (2026, 10),
+            (2026, 11),
+            (2027, 1),
+            (2027, 2)
+        ]
+    );
+    assert_eq!(year.iff_month_to_file(on(2026, 10, 18)), 3, "August");
+    assert_eq!(year.iff_month_to_file(on(2026, 11, 1)), 4, "October ended");
+    assert_eq!(year.iff_month_to_file(on(2026, 4, 20)), 0, "none ended yet");
+}

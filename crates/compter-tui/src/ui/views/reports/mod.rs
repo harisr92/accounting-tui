@@ -3,7 +3,7 @@
 
 use crate::ui::key::Key;
 use bigdecimal::Zero;
-use chrono::{Local, Months, NaiveDate};
+use chrono::Local;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
@@ -14,8 +14,7 @@ use crate::ui::form::{Field, Form};
 use crate::ui::theme::{Theme, Tone};
 use crate::ui::view::{Action, KeyHint, Notice, View};
 use crate::ui::widgets::{header, money, panel, stat_tiles};
-use compter_core::domain::{FiscalYear, Quarter};
-use compter_core::services::reports::{PRESUMPTIVE_PERCENT, YearReport};
+use compter_core::services::reports::{PRESUMPTIVE_PERCENT, PresumptiveCheck, YearReport};
 use compter_core::services::{ReportService, ServiceError};
 use compter_core::storage::Repository;
 
@@ -70,15 +69,8 @@ impl<R: Repository> ReportsView<R> {
 
     /// The quarter to offer first: the last one that has ended, or Q1 of a future year
     fn default_quarter(&self) -> usize {
-        let today = Local::now().date_naive();
-        let current = Quarter::containing(today);
-        if current.year() == self.year.year() {
-            usize::from(current.number().saturating_sub(2))
-        } else if self.year.year() < current.year() {
-            3
-        } else {
-            0
-        }
+        let quarter = self.year.year().quarter_to_file(Local::now().date_naive());
+        usize::from(quarter.number() - 1)
     }
 
     fn export(&mut self, form: &Form) -> Result<Notice, String> {
@@ -95,54 +87,32 @@ impl<R: Repository> ReportsView<R> {
             .export_gstr1(quarter, furnished)
             .map_err(|e| e.to_string())?;
         Ok(Notice::success(format!(
-            "GSTR-1 {} {}: {} tax invoice(s), {} export(s), {} credit note(s) saved to {}",
+            "GSTR-1 {} {}: {} saved to {}",
             quarter.label(),
             quarter.year().label(),
-            gstr1.tax_invoices,
-            gstr1.exports,
-            gstr1.credit_notes,
+            gstr1.summary(),
             file_name(&path)
         )))
     }
 
     fn export_iff(&mut self, form: &Form) -> Result<Notice, String> {
         let choice = form.choice(0).min(IFF_MONTHS.len() - 1);
-        let quarter = self.year.year().quarters()[choice / 2];
-        let month = quarter.months()[choice % 2];
+        let month = self.year.year().iff_months()[choice];
         let (path, iff) = self.service.export_iff(month).map_err(|e| e.to_string())?;
         Ok(Notice::success(format!(
-            "IFF {} {}: {} B2B invoice(s), {} credit note(s) saved to {}",
+            "IFF {} {}: {} saved to {}",
             IFF_MONTHS[choice],
             month.0,
-            iff.invoices,
-            iff.credit_notes,
+            iff.summary(),
             file_name(&path)
         )))
     }
 
     /// The IFF month to offer first: the latest first-or-second month that has ended
     fn default_iff_month(&self) -> usize {
-        let today = Local::now().date_naive();
-        let year = self.year.year();
-        if year > FiscalYear::containing(today) {
-            return 0;
-        }
-        let ended = |(y, m): (i32, u32)| {
-            NaiveDate::from_ymd_opt(y, m, 1).is_some_and(|first| {
-                first
-                    .checked_add_months(Months::new(1))
-                    .is_some_and(|next| next <= today)
-            })
-        };
-        let months: Vec<(i32, u32)> = year
-            .quarters()
-            .iter()
-            .flat_map(|q| {
-                let [first, second, _] = q.months();
-                [first, second]
-            })
-            .collect();
-        months.into_iter().rposition(ended).unwrap_or(0)
+        self.year
+            .year()
+            .iff_month_to_file(Local::now().date_naive())
     }
 }
 
@@ -268,22 +238,13 @@ fn render_income_tax(frame: &mut Frame, area: Rect, report: &YearReport, theme: 
         ("Books profit", money(&report.books_profit())),
     ];
     stat_tiles(frame, tiles, &stats, theme);
-    let (text, tone) = if !report.within_presumptive_limit() {
-        (
-            "Gross receipts are over ₹75 lakh: 44ADA is not available, use your books",
-            Tone::Error,
-        )
-    } else if report.books_profit() < report.presumptive_income() {
-        (
-            "Books profit is below 44ADA income: declaring the lower figure needs a tax audit (44AB) if income is over the basic exemption",
-            Tone::Warning,
-        )
-    } else {
-        (
-            "Within the 44ADA limit. Gross receipts are invoices dated in the year, excl. GST",
-            Tone::Neutral,
-        )
+    let check = report.presumptive_check();
+    let tone = match check {
+        PresumptiveCheck::OverLimit => Tone::Error,
+        PresumptiveCheck::BooksBelow => Tone::Warning,
+        PresumptiveCheck::Within => Tone::Neutral,
     };
+    let text = check.message();
     let note_text = Paragraph::new(Line::styled(text, theme.tone(tone))).wrap(Wrap { trim: true });
     frame.render_widget(note_text, note);
 }
