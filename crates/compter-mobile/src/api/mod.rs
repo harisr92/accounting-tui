@@ -7,6 +7,7 @@ pub mod error;
 pub mod expenses;
 pub mod invoicing;
 pub mod profile;
+pub mod reports;
 pub mod rows;
 
 pub use app::CompterApp;
@@ -17,4 +18,5 @@ pub use invoicing::{
     InvoicePreviewRow, InvoiceRow, IssuedRow, PaymentInput, TimeInput,
 };
 pub use profile::{ProfileInput, ProfileRow};
+pub use reports::{ClientRow, ExportRow, FigureRow, QuarterGstRow, ReportRow, Tone};
 pub use rows::{MilestoneInput, MilestoneRow, ProjectDetail, ProjectInput, ProjectRow};

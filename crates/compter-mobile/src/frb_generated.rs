@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 623023564;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 511344433;
 
 // Section: executor
 
@@ -442,6 +442,120 @@ fn wire__crate__api__app__CompterApp_expenses_impl(
                     let api_that_guard = api_that_guard.unwrap();
                     let output_ok =
                         crate::api::app::CompterApp::expenses(&*api_that_guard, api_year)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__app__CompterApp_export_gstr1_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "CompterApp_export_gstr1",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>,
+            >>::sse_decode(&mut deserializer);
+            let api_year = <i32>::sse_decode(&mut deserializer);
+            let api_quarter = <u32>::sse_decode(&mut deserializer);
+            let api_first_month_filed = <bool>::sse_decode(&mut deserializer);
+            let api_second_month_filed = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::error::ApiError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::app::CompterApp::export_gstr1(
+                        &*api_that_guard,
+                        api_year,
+                        api_quarter,
+                        api_first_month_filed,
+                        api_second_month_filed,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__app__CompterApp_export_iff_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "CompterApp_export_iff",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>,
+            >>::sse_decode(&mut deserializer);
+            let api_year = <i32>::sse_decode(&mut deserializer);
+            let api_month = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::error::ApiError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::app::CompterApp::export_iff(
+                        &*api_that_guard,
+                        api_year,
+                        api_month,
+                    )?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -1169,6 +1283,57 @@ fn wire__crate__api__app__CompterApp_record_payment_impl(
         },
     )
 }
+fn wire__crate__api__app__CompterApp_report_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "CompterApp_report",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>,
+            >>::sse_decode(&mut deserializer);
+            let api_year = <i32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::error::ApiError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok =
+                        crate::api::app::CompterApp::report(&*api_that_guard, api_year)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__app__CompterApp_save_profile_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1334,6 +1499,22 @@ impl SseDecode for bool {
     }
 }
 
+impl SseDecode for crate::api::reports::ClientRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_client = <String>::sse_decode(deserializer);
+        let mut var_invoiced = <String>::sse_decode(deserializer);
+        let mut var_received = <String>::sse_decode(deserializer);
+        let mut var_tds = <String>::sse_decode(deserializer);
+        return crate::api::reports::ClientRow {
+            client: var_client,
+            invoiced: var_invoiced,
+            received: var_received,
+            tds: var_tds,
+        };
+    }
+}
+
 impl SseDecode for crate::api::invoicing::CreditInput {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1432,6 +1613,30 @@ impl SseDecode for crate::api::expenses::ExpenseRow {
             amount: var_amount,
             gst_credit: var_gstCredit,
             edit: var_edit,
+        };
+    }
+}
+
+impl SseDecode for crate::api::reports::ExportRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_path = <String>::sse_decode(deserializer);
+        let mut var_summary = <String>::sse_decode(deserializer);
+        return crate::api::reports::ExportRow {
+            path: var_path,
+            summary: var_summary,
+        };
+    }
+}
+
+impl SseDecode for crate::api::reports::FigureRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_label = <String>::sse_decode(deserializer);
+        let mut var_value = <String>::sse_decode(deserializer);
+        return crate::api::reports::FigureRow {
+            label: var_label,
+            value: var_value,
         };
     }
 }
@@ -1591,6 +1796,18 @@ impl SseDecode for Vec<String> {
     }
 }
 
+impl SseDecode for Vec<crate::api::reports::ClientRow> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::reports::ClientRow>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::expenses::ExpenseRow> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1598,6 +1815,18 @@ impl SseDecode for Vec<crate::api::expenses::ExpenseRow> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::expenses::ExpenseRow>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::reports::FigureRow> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::reports::FigureRow>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -1662,6 +1891,20 @@ impl SseDecode for Vec<crate::api::rows::ProjectRow> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::rows::ProjectRow>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::reports::QuarterGstRow> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::reports::QuarterGstRow>::sse_decode(
+                deserializer,
+            ));
         }
         return ans_;
     }
@@ -1869,6 +2112,56 @@ impl SseDecode for crate::api::rows::ProjectRow {
     }
 }
 
+impl SseDecode for crate::api::reports::QuarterGstRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_quarter = <String>::sse_decode(deserializer);
+        let mut var_cgst = <String>::sse_decode(deserializer);
+        let mut var_sgst = <String>::sse_decode(deserializer);
+        let mut var_igst = <String>::sse_decode(deserializer);
+        let mut var_inputCredit = <String>::sse_decode(deserializer);
+        let mut var_net = <String>::sse_decode(deserializer);
+        return crate::api::reports::QuarterGstRow {
+            quarter: var_quarter,
+            cgst: var_cgst,
+            sgst: var_sgst,
+            igst: var_igst,
+            input_credit: var_inputCredit,
+            net: var_net,
+        };
+    }
+}
+
+impl SseDecode for crate::api::reports::ReportRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_year = <String>::sse_decode(deserializer);
+        let mut var_income = <Vec<crate::api::reports::FigureRow>>::sse_decode(deserializer);
+        let mut var_incomeTax = <Vec<crate::api::reports::FigureRow>>::sse_decode(deserializer);
+        let mut var_incomeTaxNote = <String>::sse_decode(deserializer);
+        let mut var_incomeTaxTone = <crate::api::reports::Tone>::sse_decode(deserializer);
+        let mut var_gst = <Vec<crate::api::reports::QuarterGstRow>>::sse_decode(deserializer);
+        let mut var_clients = <Vec<crate::api::reports::ClientRow>>::sse_decode(deserializer);
+        let mut var_quarters = <Vec<String>>::sse_decode(deserializer);
+        let mut var_quarterToFile = <u32>::sse_decode(deserializer);
+        let mut var_iffMonths = <Vec<String>>::sse_decode(deserializer);
+        let mut var_iffMonthToFile = <u32>::sse_decode(deserializer);
+        return crate::api::reports::ReportRow {
+            year: var_year,
+            income: var_income,
+            income_tax: var_incomeTax,
+            income_tax_note: var_incomeTaxNote,
+            income_tax_tone: var_incomeTaxTone,
+            gst: var_gst,
+            clients: var_clients,
+            quarters: var_quarters,
+            quarter_to_file: var_quarterToFile,
+            iff_months: var_iffMonths,
+            iff_month_to_file: var_iffMonthToFile,
+        };
+    }
+}
+
 impl SseDecode for crate::api::invoicing::TimeInput {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1880,6 +2173,26 @@ impl SseDecode for crate::api::invoicing::TimeInput {
             duration: var_duration,
             note: var_note,
         };
+    }
+}
+
+impl SseDecode for crate::api::reports::Tone {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::reports::Tone::Neutral,
+            1 => crate::api::reports::Tone::Warning,
+            2 => crate::api::reports::Tone::Error,
+            _ => unreachable!("Invalid variant for Tone: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for u32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_u32::<NativeEndian>().unwrap()
     }
 }
 
@@ -1930,36 +2243,39 @@ fn pde_ffi_dispatcher_primary_impl(
         6 => wire__crate__api__app__CompterApp_demo_impl(port, ptr, rust_vec_len, data_len),
         7 => wire__crate__api__app__CompterApp_edit_expense_impl(port, ptr, rust_vec_len, data_len),
         8 => wire__crate__api__app__CompterApp_expenses_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__app__CompterApp_invoice_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__app__CompterApp_invoice_pdf_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__app__CompterApp_invoices_impl(port, ptr, rust_vec_len, data_len),
-        12 => {
+        9 => wire__crate__api__app__CompterApp_export_gstr1_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__app__CompterApp_export_iff_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__app__CompterApp_invoice_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__app__CompterApp_invoice_pdf_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__app__CompterApp_invoices_impl(port, ptr, rust_vec_len, data_len),
+        14 => {
             wire__crate__api__app__CompterApp_issue_credit_impl(port, ptr, rust_vec_len, data_len)
         }
-        13 => {
+        15 => {
             wire__crate__api__app__CompterApp_issue_invoice_impl(port, ptr, rust_vec_len, data_len)
         }
-        14 => wire__crate__api__app__CompterApp_log_time_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__app__CompterApp_open_impl(port, ptr, rust_vec_len, data_len),
-        16 => {
+        16 => wire__crate__api__app__CompterApp_log_time_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__app__CompterApp_open_impl(port, ptr, rust_vec_len, data_len),
+        18 => {
             wire__crate__api__app__CompterApp_preview_credit_impl(port, ptr, rust_vec_len, data_len)
         }
-        17 => wire__crate__api__app__CompterApp_preview_invoice_impl(
+        19 => wire__crate__api__app__CompterApp_preview_invoice_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        18 => wire__crate__api__app__CompterApp_profile_impl(port, ptr, rust_vec_len, data_len),
-        19 => {
+        20 => wire__crate__api__app__CompterApp_profile_impl(port, ptr, rust_vec_len, data_len),
+        21 => {
             wire__crate__api__app__CompterApp_profile_input_impl(port, ptr, rust_vec_len, data_len)
         }
-        20 => wire__crate__api__app__CompterApp_project_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__app__CompterApp_projects_impl(port, ptr, rust_vec_len, data_len),
-        22 => {
+        22 => wire__crate__api__app__CompterApp_project_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__app__CompterApp_projects_impl(port, ptr, rust_vec_len, data_len),
+        24 => {
             wire__crate__api__app__CompterApp_record_payment_impl(port, ptr, rust_vec_len, data_len)
         }
-        23 => {
+        25 => wire__crate__api__app__CompterApp_report_impl(port, ptr, rust_vec_len, data_len),
+        26 => {
             wire__crate__api__app__CompterApp_save_profile_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -1974,8 +2290,8 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        24 => wire__crate__api__expenses__current_year_impl(ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__expenses__expense_categories_impl(ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__expenses__current_year_impl(ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__expenses__expense_categories_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -2012,6 +2328,29 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::error::ApiError>
     for crate::api::error::ApiError
 {
     fn into_into_dart(self) -> crate::api::error::ApiError {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::reports::ClientRow {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.client.into_into_dart().into_dart(),
+            self.invoiced.into_into_dart().into_dart(),
+            self.received.into_into_dart().into_dart(),
+            self.tds.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::reports::ClientRow
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::reports::ClientRow>
+    for crate::api::reports::ClientRow
+{
+    fn into_into_dart(self) -> crate::api::reports::ClientRow {
         self
     }
 }
@@ -2153,6 +2492,48 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::expenses::ExpenseRow>
     for crate::api::expenses::ExpenseRow
 {
     fn into_into_dart(self) -> crate::api::expenses::ExpenseRow {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::reports::ExportRow {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.path.into_into_dart().into_dart(),
+            self.summary.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::reports::ExportRow
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::reports::ExportRow>
+    for crate::api::reports::ExportRow
+{
+    fn into_into_dart(self) -> crate::api::reports::ExportRow {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::reports::FigureRow {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.label.into_into_dart().into_dart(),
+            self.value.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::reports::FigureRow
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::reports::FigureRow>
+    for crate::api::reports::FigureRow
+{
+    fn into_into_dart(self) -> crate::api::reports::FigureRow {
         self
     }
 }
@@ -2522,6 +2903,61 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::rows::ProjectRow>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::reports::QuarterGstRow {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.quarter.into_into_dart().into_dart(),
+            self.cgst.into_into_dart().into_dart(),
+            self.sgst.into_into_dart().into_dart(),
+            self.igst.into_into_dart().into_dart(),
+            self.input_credit.into_into_dart().into_dart(),
+            self.net.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::reports::QuarterGstRow
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::reports::QuarterGstRow>
+    for crate::api::reports::QuarterGstRow
+{
+    fn into_into_dart(self) -> crate::api::reports::QuarterGstRow {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::reports::ReportRow {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.year.into_into_dart().into_dart(),
+            self.income.into_into_dart().into_dart(),
+            self.income_tax.into_into_dart().into_dart(),
+            self.income_tax_note.into_into_dart().into_dart(),
+            self.income_tax_tone.into_into_dart().into_dart(),
+            self.gst.into_into_dart().into_dart(),
+            self.clients.into_into_dart().into_dart(),
+            self.quarters.into_into_dart().into_dart(),
+            self.quarter_to_file.into_into_dart().into_dart(),
+            self.iff_months.into_into_dart().into_dart(),
+            self.iff_month_to_file.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::reports::ReportRow
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::reports::ReportRow>
+    for crate::api::reports::ReportRow
+{
+    fn into_into_dart(self) -> crate::api::reports::ReportRow {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::invoicing::TimeInput {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -2540,6 +2976,23 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::invoicing::TimeInput>
     for crate::api::invoicing::TimeInput
 {
     fn into_into_dart(self) -> crate::api::invoicing::TimeInput {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::reports::Tone {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Neutral => 0.into_dart(),
+            Self::Warning => 1.into_dart(),
+            Self::Error => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::reports::Tone {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::reports::Tone> for crate::api::reports::Tone {
+    fn into_into_dart(self) -> crate::api::reports::Tone {
         self
     }
 }
@@ -2581,6 +3034,16 @@ impl SseEncode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_u8(self as _).unwrap();
+    }
+}
+
+impl SseEncode for crate::api::reports::ClientRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.client, serializer);
+        <String>::sse_encode(self.invoiced, serializer);
+        <String>::sse_encode(self.received, serializer);
+        <String>::sse_encode(self.tds, serializer);
     }
 }
 
@@ -2644,6 +3107,22 @@ impl SseEncode for crate::api::expenses::ExpenseRow {
         <String>::sse_encode(self.amount, serializer);
         <Option<String>>::sse_encode(self.gst_credit, serializer);
         <crate::api::expenses::ExpenseInput>::sse_encode(self.edit, serializer);
+    }
+}
+
+impl SseEncode for crate::api::reports::ExportRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.path, serializer);
+        <String>::sse_encode(self.summary, serializer);
+    }
+}
+
+impl SseEncode for crate::api::reports::FigureRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.label, serializer);
+        <String>::sse_encode(self.value, serializer);
     }
 }
 
@@ -2744,12 +3223,32 @@ impl SseEncode for Vec<String> {
     }
 }
 
+impl SseEncode for Vec<crate::api::reports::ClientRow> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::reports::ClientRow>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::expenses::ExpenseRow> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::expenses::ExpenseRow>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::reports::FigureRow> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::reports::FigureRow>::sse_encode(item, serializer);
         }
     }
 }
@@ -2800,6 +3299,16 @@ impl SseEncode for Vec<crate::api::rows::ProjectRow> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::rows::ProjectRow>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::reports::QuarterGstRow> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::reports::QuarterGstRow>::sse_encode(item, serializer);
         }
     }
 }
@@ -2930,12 +3439,65 @@ impl SseEncode for crate::api::rows::ProjectRow {
     }
 }
 
+impl SseEncode for crate::api::reports::QuarterGstRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.quarter, serializer);
+        <String>::sse_encode(self.cgst, serializer);
+        <String>::sse_encode(self.sgst, serializer);
+        <String>::sse_encode(self.igst, serializer);
+        <String>::sse_encode(self.input_credit, serializer);
+        <String>::sse_encode(self.net, serializer);
+    }
+}
+
+impl SseEncode for crate::api::reports::ReportRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.year, serializer);
+        <Vec<crate::api::reports::FigureRow>>::sse_encode(self.income, serializer);
+        <Vec<crate::api::reports::FigureRow>>::sse_encode(self.income_tax, serializer);
+        <String>::sse_encode(self.income_tax_note, serializer);
+        <crate::api::reports::Tone>::sse_encode(self.income_tax_tone, serializer);
+        <Vec<crate::api::reports::QuarterGstRow>>::sse_encode(self.gst, serializer);
+        <Vec<crate::api::reports::ClientRow>>::sse_encode(self.clients, serializer);
+        <Vec<String>>::sse_encode(self.quarters, serializer);
+        <u32>::sse_encode(self.quarter_to_file, serializer);
+        <Vec<String>>::sse_encode(self.iff_months, serializer);
+        <u32>::sse_encode(self.iff_month_to_file, serializer);
+    }
+}
+
 impl SseEncode for crate::api::invoicing::TimeInput {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.date, serializer);
         <String>::sse_encode(self.duration, serializer);
         <String>::sse_encode(self.note, serializer);
+    }
+}
+
+impl SseEncode for crate::api::reports::Tone {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::reports::Tone::Neutral => 0,
+                crate::api::reports::Tone::Warning => 1,
+                crate::api::reports::Tone::Error => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for u32 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_u32::<NativeEndian>(self).unwrap();
     }
 }
 

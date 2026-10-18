@@ -11,16 +11,18 @@ use compter_core::domain::{
 use compter_core::input;
 use compter_core::services::{
     CreditDraft, ExpenseDraft, ExpenseService, InvoiceService, MilestoneDraft, ProjectDraft,
-    ProjectService, ServiceError,
+    ProjectService, ReportService, ServiceError,
 };
 use compter_core::storage::{DataDir, RedbRepository, Store};
 
 use super::expenses::{category, fiscal_year};
 use super::profile::currency;
+use super::reports::month_label;
 use super::{
     ApiError, CreditInput, CreditPreviewRow, CreditedRow, ExpenseInput, ExpenseList, ExpenseRow,
-    InvoiceDetail, InvoiceList, InvoicePreviewRow, InvoiceRow, IssuedRow, MilestoneInput,
-    PaymentInput, ProfileInput, ProfileRow, ProjectDetail, ProjectInput, ProjectRow, TimeInput,
+    ExportRow, InvoiceDetail, InvoiceList, InvoicePreviewRow, InvoiceRow, IssuedRow,
+    MilestoneInput, PaymentInput, ProfileInput, ProfileRow, ProjectDetail, ProjectInput,
+    ProjectRow, ReportRow, TimeInput,
 };
 
 /// The open database and the services over it. Dart opens one at start-up and keeps it for the
@@ -30,21 +32,22 @@ pub struct CompterApp {
     projects: ProjectService<RedbRepository>,
     invoices: InvoiceService<RedbRepository>,
     expenses: ExpenseService<RedbRepository>,
+    reports: ReportService<RedbRepository>,
     /// Kept so the database stays open as long as the services use it
     _store: Store,
 }
 
 impl CompterApp {
     /// Open (or create) `compter.redb` in `data_dir`, the app's private support folder. PDFs
-    /// are written under it too.
+    /// and returns are written under it too.
     pub fn open(data_dir: String) -> Result<Self, ApiError> {
         let dir = DataDir::new(data_dir);
         let store = Store::open(&dir).map_err(ServiceError::from)?;
         Ok(Self::over(store, dir))
     }
 
-    /// The sample business of `compter --demo`, in memory; nothing is saved. Its PDFs are
-    /// written to `scratch_dir`, a cache folder.
+    /// The sample business of `compter --demo`, in memory; nothing is saved. Its PDFs and
+    /// returns are written to `scratch_dir`, a cache folder.
     pub fn demo(scratch_dir: String) -> Result<Self, ApiError> {
         Ok(Self::over(demo::store()?, DataDir::new(scratch_dir)))
     }
@@ -52,8 +55,9 @@ impl CompterApp {
     fn over(store: Store, dir: DataDir) -> Self {
         Self {
             projects: ProjectService::new(store.repository()),
-            invoices: InvoiceService::new(store.repository(), Some(dir)),
+            invoices: InvoiceService::new(store.repository(), Some(dir.clone())),
             expenses: ExpenseService::new(store.repository()),
+            reports: ReportService::new(store.repository(), Some(dir)),
             _store: store,
         }
     }
@@ -347,6 +351,57 @@ impl CompterApp {
     /// Remove an expense and its ledger posting
     pub fn delete_expense(&mut self, id: String) -> Result<(), ApiError> {
         Ok(self.expenses.delete(expense_id(&id)?)?)
+    }
+
+    /// The financial year starting in April of `year`, in numbers
+    pub fn report(&self, year: i32) -> Result<ReportRow, ApiError> {
+        Ok(ReportRow::from(&self.reports.year(fiscal_year(year))?))
+    }
+
+    /// Write quarter `quarter` (1 to 4) of `year`'s GSTR-1 for the GST portal. The B2B part of
+    /// a month whose IFF was filed is left out.
+    pub fn export_gstr1(
+        &self,
+        year: i32,
+        quarter: u32,
+        first_month_filed: bool,
+        second_month_filed: bool,
+    ) -> Result<ExportRow, ApiError> {
+        let quarters = fiscal_year(year).quarters();
+        let quarter = usize::try_from(quarter)
+            .ok()
+            .and_then(|q| q.checked_sub(1))
+            .and_then(|q| quarters.get(q).copied())
+            .ok_or_else(|| ApiError::invalid("quarter", "choose a quarter, 1 to 4"))?;
+        let [first, second, _] = quarter.months();
+        let furnished: Vec<(i32, u32)> = [(first_month_filed, first), (second_month_filed, second)]
+            .into_iter()
+            .filter_map(|(filed, month)| filed.then_some(month))
+            .collect();
+        let (path, gstr1) = self.reports.export_gstr1(quarter, &furnished)?;
+        Ok(ExportRow {
+            path: path.to_string_lossy().into_owned(),
+            summary: format!(
+                "GSTR-1 {} {}: {}",
+                quarter.label(),
+                quarter.year().label(),
+                gstr1.summary()
+            ),
+        })
+    }
+
+    /// Write the IFF for `month`, a position in `ReportRow::iff_months` of `year`
+    pub fn export_iff(&self, year: i32, month: u32) -> Result<ExportRow, ApiError> {
+        let months = fiscal_year(year).iff_months();
+        let month = usize::try_from(month)
+            .ok()
+            .and_then(|m| months.get(m).copied())
+            .ok_or_else(|| ApiError::invalid("month", "choose a month"))?;
+        let (path, iff) = self.reports.export_iff(month)?;
+        Ok(ExportRow {
+            path: path.to_string_lossy().into_owned(),
+            summary: format!("IFF {}: {}", month_label(month), iff.summary()),
+        })
     }
 }
 
