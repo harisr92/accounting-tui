@@ -12,7 +12,7 @@ Engineering rules for `compter-tui`. Follow them for every change. See `README.m
 
 ## Module boundaries
 
-A Cargo workspace of two crates. `crates/compter-core` (`compter_core`) is the product with no UI, so every front end (the terminal app now, a mobile app later) shares it. `crates/compter-tui` (`compter_tui`) is the terminal app: a library plus a thin binary (`src/main.rs`). Public APIs live in the libraries, so items a UI doesn't use yet aren't dead code.
+A Cargo workspace of three crates, plus the Flutter app in `app/`. `crates/compter-core` (`compter_core`) is the product with no UI, so every front end (the terminal app now, a mobile app later) shares it. `crates/compter-tui` (`compter_tui`) is the terminal app: a library plus a thin binary (`src/main.rs`). Public APIs live in the libraries, so items a UI doesn't use yet aren't dead code.
 
 ```
 compter-core/src/
@@ -26,7 +26,12 @@ compter-tui/src/
   cli.rs     non-interactive commands (import-merges reads git here)
   viewer.rs  opens a written PDF in the desktop's default app
   ui/        rendering and key handling; changes data only by calling services
+compter-mobile/src/
+  api/       what the Flutter app calls (flutter_rust_bridge): CompterApp over the services,
+             plain rows of strings, ApiError { field, message }
 ```
+
+`compter-mobile` follows the view rules: it calls services only and hands Dart plain rows (formatted money, `YYYY-MM-DD` dates), never domain types. Typed text goes to Rust unparsed and is parsed by `compter_core::input`, the parsers the terminal's `ui/form/parse.rs` re-exports. No data-carrying enums under `api` (Dart would need freezed). After changing `api`, run `flutter_rust_bridge_codegen generate` in `app/` (see `app/README.md`). It is not a default workspace member, because flutter_rust_bridge compiles C that desktop cross-builds can't.
 
 Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain`. `domain` depends on nothing in this workspace. `compter-core` never depends on ratatui, crossterm, color-eyre, or anything that assumes a desktop: no spawning processes, and env vars are read only by the `from_env` helpers (`DataDir::from_env`, `SyncDir::from_env`, `sync::device_name_from_env`), which only a desktop binary calls; other front ends inject the values (`DataDir::new`). Services return file paths; showing a file is the front end's job (`viewer::open`).
 
