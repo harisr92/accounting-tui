@@ -1,0 +1,21 @@
+[package]
+name = "compter-core"
+version = "0.2.3"
+edition.workspace = true
+description = "compter's domain, storage and services, shared by every front end"
+
+[dependencies]
+accounting-core.workspace = true
+async-trait.workspace = true
+bigdecimal.workspace = true
+chrono.workspace = true
+redb.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+pollster.workspace = true
+tempfile.workspace = true
