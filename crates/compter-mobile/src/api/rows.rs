@@ -1,6 +1,7 @@
 use bigdecimal::Zero;
 use compter_core::domain::{
-    Billing, ClientRegion, Milestone, Project, ProjectSummary, format_duration, state_name,
+    Billing, ClientRegion, Milestone, MilestoneStatus, Project, ProjectSummary, format_duration,
+    state_name,
 };
 
 /// One line of the project list, from the stored summary (never the full record)
@@ -49,6 +50,10 @@ pub struct ProjectDetail {
     pub credited: Option<String>,
     pub outstanding: String,
     pub milestones: Vec<MilestoneRow>,
+    /// Nothing in it was invoiced, so it may be deleted
+    pub deletable: bool,
+    /// The form, filled with this project, to edit it
+    pub edit: ProjectInput,
 }
 
 impl From<&Project> for ProjectDetail {
@@ -89,6 +94,8 @@ impl From<&Project> for ProjectDetail {
                 .iter()
                 .map(|m| MilestoneRow::new(m, project, hourly))
                 .collect(),
+            deletable: project.ensure_deletable().is_ok(),
+            edit: ProjectInput::from(project),
         }
     }
 }
@@ -106,10 +113,16 @@ pub struct MilestoneRow {
     /// Logged time on an hourly milestone, as `6h 30m`
     pub logged: Option<String>,
     pub invoice_number: Option<String>,
+    /// The time entry undoing would remove, as `2026-10-18 · 1h 30m · note`; `None` when
+    /// there is none or the milestone is no longer pending
+    pub last_time: Option<String>,
+    /// The form, filled with this milestone, to edit it
+    pub edit: MilestoneInput,
 }
 
 impl MilestoneRow {
     fn new(milestone: &Milestone, project: &Project, hourly: bool) -> Self {
+        let pending = milestone.status() == MilestoneStatus::Pending;
         Self {
             id: milestone.id().to_string(),
             name: milestone.name().to_owned(),
@@ -118,11 +131,27 @@ impl MilestoneRow {
             status: milestone.status().label().to_owned(),
             logged: hourly.then(|| format_duration(milestone.logged_minutes())),
             invoice_number: milestone.invoice_number().map(str::to_owned),
+            last_time: milestone
+                .time_entries()
+                .last()
+                .filter(|_| pending)
+                .map(|entry| {
+                    let duration = format_duration(entry.minutes());
+                    match entry.note() {
+                        "" => format!("{} · {duration}", entry.date()),
+                        note => format!("{} · {duration} · {note}", entry.date()),
+                    }
+                }),
+            edit: MilestoneInput {
+                name: milestone.name().to_owned(),
+                due_date: milestone.due_date().to_string(),
+                amount: (!hourly).then(|| milestone.amount().to_string()),
+            },
         }
     }
 }
 
-/// A new project as typed. A client with a country is abroad (billed in any currency, invoiced
+/// A project as typed. A client with a country is abroad (billed in any currency, invoiced
 /// as an export); one without is in India, billed in rupees.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectInput {
@@ -134,7 +163,7 @@ pub struct ProjectInput {
     pub client_state: Option<String>,
     /// Blank for a client in India
     pub client_country: Option<String>,
-    /// Address lines; blank lines are dropped
+    /// One entry per line; blank lines are dropped
     pub client_address: Vec<String>,
     /// `INR`, `USD`, `GBP` or `EUR`; blank means INR
     pub currency: Option<String>,
@@ -142,7 +171,7 @@ pub struct ProjectInput {
     pub hourly_rate: Option<String>,
 }
 
-/// A new milestone as typed
+/// A milestone as typed
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MilestoneInput {
     pub name: String,
@@ -150,4 +179,24 @@ pub struct MilestoneInput {
     pub due_date: String,
     /// Needed on fixed-price projects, ignored on hourly ones
     pub amount: Option<String>,
+}
+
+impl From<&Project> for ProjectInput {
+    fn from(project: &Project) -> Self {
+        let client = project.client_details();
+        let (client_state, client_country) = match client.region {
+            ClientRegion::India { state } => (state.map(|s| s.as_str().to_owned()), None),
+            ClientRegion::Abroad { country } => (None, Some(country)),
+        };
+        Self {
+            name: project.name().to_owned(),
+            client_name: client.name,
+            client_gstin: client.gstin,
+            client_state,
+            client_country,
+            client_address: client.address,
+            currency: Some(client.currency.code().to_owned()),
+            hourly_rate: project.billing().rate().map(ToString::to_string),
+        }
+    }
 }

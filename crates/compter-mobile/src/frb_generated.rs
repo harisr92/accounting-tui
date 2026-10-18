@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1443576771;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1742015729;
 
 // Section: executor
 
@@ -309,6 +309,57 @@ fn wire__crate__api__app__CompterApp_delete_expense_impl(
         },
     )
 }
+fn wire__crate__api__app__CompterApp_delete_project_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "CompterApp_delete_project",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>,
+            >>::sse_decode(&mut deserializer);
+            let api_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::error::ApiError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_that_guard = api_that_guard.unwrap();
+                    let output_ok =
+                        crate::api::app::CompterApp::delete_project(&mut *api_that_guard, api_id)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__app__CompterApp_demo_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -387,6 +438,118 @@ fn wire__crate__api__app__CompterApp_edit_expense_impl(
                     }
                     let mut api_that_guard = api_that_guard.unwrap();
                     let output_ok = crate::api::app::CompterApp::edit_expense(
+                        &mut *api_that_guard,
+                        api_id,
+                        api_input,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__app__CompterApp_edit_milestone_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "CompterApp_edit_milestone",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>,
+            >>::sse_decode(&mut deserializer);
+            let api_project_id = <String>::sse_decode(&mut deserializer);
+            let api_milestone_id = <String>::sse_decode(&mut deserializer);
+            let api_input = <crate::api::rows::MilestoneInput>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::error::ApiError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::app::CompterApp::edit_milestone(
+                        &mut *api_that_guard,
+                        api_project_id,
+                        api_milestone_id,
+                        api_input,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__app__CompterApp_edit_project_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "CompterApp_edit_project",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>,
+            >>::sse_decode(&mut deserializer);
+            let api_id = <String>::sse_decode(&mut deserializer);
+            let api_input = <crate::api::rows::ProjectInput>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::error::ApiError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::app::CompterApp::edit_project(
                         &mut *api_that_guard,
                         api_id,
                         api_input,
@@ -1440,6 +1603,61 @@ fn wire__crate__api__app__CompterApp_record_payment_impl(
         },
     )
 }
+fn wire__crate__api__app__CompterApp_remove_milestone_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "CompterApp_remove_milestone",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>,
+            >>::sse_decode(&mut deserializer);
+            let api_project_id = <String>::sse_decode(&mut deserializer);
+            let api_milestone_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::error::ApiError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::app::CompterApp::remove_milestone(
+                        &mut *api_that_guard,
+                        api_project_id,
+                        api_milestone_id,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__app__CompterApp_report_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1697,6 +1915,61 @@ fn wire__crate__api__app__CompterApp_sync_status_impl(
                     }
                     let api_that_guard = api_that_guard.unwrap();
                     let output_ok = crate::api::app::CompterApp::sync_status(&*api_that_guard)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__app__CompterApp_undo_time_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "CompterApp_undo_time",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>,
+            >>::sse_decode(&mut deserializer);
+            let api_project_id = <String>::sse_decode(&mut deserializer);
+            let api_milestone_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::error::ApiError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, true,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref_mut()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let mut api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::app::CompterApp::undo_time(
+                        &mut *api_that_guard,
+                        api_project_id,
+                        api_milestone_id,
+                    )?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -2252,6 +2525,8 @@ impl SseDecode for crate::api::rows::MilestoneRow {
         let mut var_status = <String>::sse_decode(deserializer);
         let mut var_logged = <Option<String>>::sse_decode(deserializer);
         let mut var_invoiceNumber = <Option<String>>::sse_decode(deserializer);
+        let mut var_lastTime = <Option<String>>::sse_decode(deserializer);
+        let mut var_edit = <crate::api::rows::MilestoneInput>::sse_decode(deserializer);
         return crate::api::rows::MilestoneRow {
             id: var_id,
             name: var_name,
@@ -2260,6 +2535,8 @@ impl SseDecode for crate::api::rows::MilestoneRow {
             status: var_status,
             logged: var_logged,
             invoice_number: var_invoiceNumber,
+            last_time: var_lastTime,
+            edit: var_edit,
         };
     }
 }
@@ -2368,6 +2645,8 @@ impl SseDecode for crate::api::rows::ProjectDetail {
         let mut var_credited = <Option<String>>::sse_decode(deserializer);
         let mut var_outstanding = <String>::sse_decode(deserializer);
         let mut var_milestones = <Vec<crate::api::rows::MilestoneRow>>::sse_decode(deserializer);
+        let mut var_deletable = <bool>::sse_decode(deserializer);
+        let mut var_edit = <crate::api::rows::ProjectInput>::sse_decode(deserializer);
         return crate::api::rows::ProjectDetail {
             id: var_id,
             name: var_name,
@@ -2384,6 +2663,8 @@ impl SseDecode for crate::api::rows::ProjectDetail {
             credited: var_credited,
             outstanding: var_outstanding,
             milestones: var_milestones,
+            deletable: var_deletable,
+            edit: var_edit,
         };
     }
 }
@@ -2598,64 +2879,82 @@ fn pde_ffi_dispatcher_primary_impl(
         5 => {
             wire__crate__api__app__CompterApp_delete_expense_impl(port, ptr, rust_vec_len, data_len)
         }
-        6 => wire__crate__api__app__CompterApp_demo_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__app__CompterApp_edit_expense_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__app__CompterApp_expenses_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__app__CompterApp_export_gstr1_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__app__CompterApp_export_iff_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__app__CompterApp_invoice_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__app__CompterApp_invoice_pdf_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__app__CompterApp_invoices_impl(port, ptr, rust_vec_len, data_len),
-        14 => {
+        6 => {
+            wire__crate__api__app__CompterApp_delete_project_impl(port, ptr, rust_vec_len, data_len)
+        }
+        7 => wire__crate__api__app__CompterApp_demo_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__app__CompterApp_edit_expense_impl(port, ptr, rust_vec_len, data_len),
+        9 => {
+            wire__crate__api__app__CompterApp_edit_milestone_impl(port, ptr, rust_vec_len, data_len)
+        }
+        10 => {
+            wire__crate__api__app__CompterApp_edit_project_impl(port, ptr, rust_vec_len, data_len)
+        }
+        11 => wire__crate__api__app__CompterApp_expenses_impl(port, ptr, rust_vec_len, data_len),
+        12 => {
+            wire__crate__api__app__CompterApp_export_gstr1_impl(port, ptr, rust_vec_len, data_len)
+        }
+        13 => wire__crate__api__app__CompterApp_export_iff_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__app__CompterApp_invoice_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__app__CompterApp_invoice_pdf_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__app__CompterApp_invoices_impl(port, ptr, rust_vec_len, data_len),
+        17 => {
             wire__crate__api__app__CompterApp_issue_credit_impl(port, ptr, rust_vec_len, data_len)
         }
-        15 => {
+        18 => {
             wire__crate__api__app__CompterApp_issue_invoice_impl(port, ptr, rust_vec_len, data_len)
         }
-        16 => {
+        19 => {
             wire__crate__api__app__CompterApp_lease_holder_impl(port, ptr, rust_vec_len, data_len)
         }
-        17 => wire__crate__api__app__CompterApp_lease_json_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__app__CompterApp_log_time_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__app__CompterApp_open_impl(port, ptr, rust_vec_len, data_len),
-        20 => {
+        20 => wire__crate__api__app__CompterApp_lease_json_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__app__CompterApp_log_time_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__app__CompterApp_open_impl(port, ptr, rust_vec_len, data_len),
+        23 => {
             wire__crate__api__app__CompterApp_preview_credit_impl(port, ptr, rust_vec_len, data_len)
         }
-        21 => wire__crate__api__app__CompterApp_preview_invoice_impl(
+        24 => wire__crate__api__app__CompterApp_preview_invoice_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        22 => wire__crate__api__app__CompterApp_profile_impl(port, ptr, rust_vec_len, data_len),
-        23 => {
+        25 => wire__crate__api__app__CompterApp_profile_impl(port, ptr, rust_vec_len, data_len),
+        26 => {
             wire__crate__api__app__CompterApp_profile_input_impl(port, ptr, rust_vec_len, data_len)
         }
-        24 => wire__crate__api__app__CompterApp_project_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__app__CompterApp_projects_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__app__CompterApp_receive_snapshot_impl(
+        27 => wire__crate__api__app__CompterApp_project_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__app__CompterApp_projects_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__app__CompterApp_receive_snapshot_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        27 => {
+        30 => {
             wire__crate__api__app__CompterApp_record_payment_impl(port, ptr, rust_vec_len, data_len)
         }
-        28 => wire__crate__api__app__CompterApp_report_impl(port, ptr, rust_vec_len, data_len),
-        29 => {
-            wire__crate__api__app__CompterApp_save_profile_impl(port, ptr, rust_vec_len, data_len)
-        }
-        30 => {
-            wire__crate__api__app__CompterApp_send_snapshot_impl(port, ptr, rust_vec_len, data_len)
-        }
-        31 => wire__crate__api__app__CompterApp_settle_snapshot_impl(
+        31 => wire__crate__api__app__CompterApp_remove_milestone_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__app__CompterApp_sync_status_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__app__CompterApp_report_impl(port, ptr, rust_vec_len, data_len),
+        33 => {
+            wire__crate__api__app__CompterApp_save_profile_impl(port, ptr, rust_vec_len, data_len)
+        }
+        34 => {
+            wire__crate__api__app__CompterApp_send_snapshot_impl(port, ptr, rust_vec_len, data_len)
+        }
+        35 => wire__crate__api__app__CompterApp_settle_snapshot_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        36 => wire__crate__api__app__CompterApp_sync_status_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__app__CompterApp_undo_time_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -2668,8 +2967,8 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        33 => wire__crate__api__expenses__current_year_impl(ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__expenses__expense_categories_impl(ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__expenses__current_year_impl(ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__expenses__expense_categories_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3106,6 +3405,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::rows::MilestoneRow {
             self.status.into_into_dart().into_dart(),
             self.logged.into_into_dart().into_dart(),
             self.invoice_number.into_into_dart().into_dart(),
+            self.last_time.into_into_dart().into_dart(),
+            self.edit.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3217,6 +3518,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::rows::ProjectDetail {
             self.credited.into_into_dart().into_dart(),
             self.outstanding.into_into_dart().into_dart(),
             self.milestones.into_into_dart().into_dart(),
+            self.deletable.into_into_dart().into_dart(),
+            self.edit.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3772,6 +4075,8 @@ impl SseEncode for crate::api::rows::MilestoneRow {
         <String>::sse_encode(self.status, serializer);
         <Option<String>>::sse_encode(self.logged, serializer);
         <Option<String>>::sse_encode(self.invoice_number, serializer);
+        <Option<String>>::sse_encode(self.last_time, serializer);
+        <crate::api::rows::MilestoneInput>::sse_encode(self.edit, serializer);
     }
 }
 
@@ -3851,6 +4156,8 @@ impl SseEncode for crate::api::rows::ProjectDetail {
         <Option<String>>::sse_encode(self.credited, serializer);
         <String>::sse_encode(self.outstanding, serializer);
         <Vec<crate::api::rows::MilestoneRow>>::sse_encode(self.milestones, serializer);
+        <bool>::sse_encode(self.deletable, serializer);
+        <crate::api::rows::ProjectInput>::sse_encode(self.edit, serializer);
     }
 }
 

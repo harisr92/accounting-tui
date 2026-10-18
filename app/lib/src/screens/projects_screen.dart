@@ -47,10 +47,7 @@ class ProjectsScreen extends ConsumerWidget {
         icon: const Icon(Icons.add),
         label: const Text('New project'),
         onPressed: () async {
-          final created = await newProjectForm(
-            context,
-            ref.read(compterProvider),
-          );
+          final created = await projectForm(context, ref.read(compterProvider));
           if (created == null || !context.mounted) return;
           ref.invalidate(projectsProvider);
           context.go('/projects/${created.id}');
