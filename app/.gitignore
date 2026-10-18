@@ -46,3 +46,8 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# fastlane: written on every run
+**/fastlane/report.xml
+**/fastlane/README.md
+**/fastlane/test_output

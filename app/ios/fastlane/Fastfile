@@ -1,0 +1,66 @@
+# Builds the app with the distribution certificate and profile from the environment, and
+# uploads it to TestFlight. Every value comes from COMPTER_* variables, which
+# mobile-release.yml fills from repository secrets; app/README.md lists them.
+default_platform(:ios)
+
+platform :ios do
+  desc "Build a signed IPA and upload it to TestFlight"
+  lane :beta do
+    build_name = ENV.fetch("COMPTER_BUILD_NAME")
+    build_number = ENV.fetch("COMPTER_BUILD_NUMBER")
+    team_id = ENV.fetch("COMPTER_IOS_TEAM_ID")
+    profile_name = ENV.fetch("COMPTER_IOS_PROFILE_NAME")
+
+    # A throwaway keychain on CI, so the certificate never lands in the login keychain
+    setup_ci
+    import_certificate(
+      certificate_path: ENV.fetch("COMPTER_IOS_CERTIFICATE_PATH"),
+      certificate_password: ENV.fetch("COMPTER_IOS_CERTIFICATE_PASSWORD"),
+      keychain_name: "fastlane_tmp_keychain",
+      keychain_password: "",
+    )
+    install_provisioning_profile(path: ENV.fetch("COMPTER_IOS_PROFILE_PATH"))
+    update_code_signing_settings(
+      path: "Runner.xcodeproj",
+      use_automatic_signing: false,
+      team_id: team_id,
+      targets: ["Runner"],
+      build_configurations: ["Release"],
+      code_sign_identity: "Apple Distribution",
+      profile_name: profile_name,
+    )
+
+    export_options = File.expand_path("../../build/ExportOptions.plist", __dir__)
+    FileUtils.mkdir_p(File.dirname(export_options))
+    File.write(export_options, <<~PLIST)
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      <plist version="1.0">
+      <dict>
+        <key>method</key><string>app-store-connect</string>
+        <key>signingStyle</key><string>manual</string>
+        <key>teamID</key><string>#{team_id}</string>
+        <key>provisioningProfiles</key>
+        <dict><key>dev.compter.compter</key><string>#{profile_name}</string></dict>
+      </dict>
+      </plist>
+    PLIST
+
+    Dir.chdir("../..") do
+      sh("flutter", "build", "ipa", "--release",
+         "--build-name=#{build_name}", "--build-number=#{build_number}",
+         "--export-options-plist=#{export_options}")
+    end
+
+    upload_to_testflight(
+      api_key: app_store_connect_api_key(
+        key_id: ENV.fetch("COMPTER_ASC_KEY_ID"),
+        issuer_id: ENV.fetch("COMPTER_ASC_ISSUER_ID"),
+        key_content: ENV.fetch("COMPTER_ASC_KEY"),
+      ),
+      ipa: Dir[File.expand_path("../../build/ios/ipa/*.ipa", __dir__)].first,
+      # Processing takes a while; TestFlight emails when the build is ready
+      skip_waiting_for_build_processing: true,
+    )
+  end
+end

@@ -1,0 +1,30 @@
+# Builds the app bundle signed with the upload key and uploads it to Google Play's internal
+# track. Every value comes from COMPTER_* variables, which mobile-release.yml fills from
+# repository secrets; app/README.md lists them.
+default_platform(:android)
+
+platform :android do
+  desc "Build a signed app bundle and upload it to the internal testing track"
+  lane :internal do
+    # Without the upload key, android/app/build.gradle.kts signs with the debug key, which
+    # Play rejects; say so here instead
+    UI.user_error!("COMPTER_UPLOAD_STORE_FILE is not set") unless ENV["COMPTER_UPLOAD_STORE_FILE"]
+
+    Dir.chdir("../..") do
+      sh("flutter", "build", "appbundle", "--release",
+         "--build-name=#{ENV.fetch("COMPTER_BUILD_NAME")}",
+         "--build-number=#{ENV.fetch("COMPTER_BUILD_NUMBER")}")
+    end
+
+    upload_to_play_store(
+      track: "internal",
+      aab: File.expand_path("../../build/app/outputs/bundle/release/app-release.aab", __dir__),
+      json_key_data: ENV.fetch("COMPTER_PLAY_SERVICE_ACCOUNT_JSON"),
+      # "draft" until Play has published the app once; then "completed"
+      release_status: ENV.fetch("COMPTER_PLAY_RELEASE_STATUS", "draft"),
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    )
+  end
+end
