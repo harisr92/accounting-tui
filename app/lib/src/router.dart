@@ -6,6 +6,7 @@ import 'screens/invoice_screen.dart';
 import 'screens/invoices_screen.dart';
 import 'screens/project_screen.dart';
 import 'screens/projects_screen.dart';
+import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
 
 /// Where invoice [number] opens. Numbers hold slashes (`INV/26-27/004`), so they are encoded.
@@ -61,6 +62,14 @@ GoRouter buildRouter() => GoRouter(
         StatefulShellBranch(
           routes: [
             GoRoute(
+              path: '/reports',
+              builder: (context, state) => const ReportsScreen(),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
               path: '/settings',
               builder: (context, state) => const SettingsScreen(),
             ),
@@ -100,6 +109,11 @@ class _Tabs extends StatelessWidget {
             icon: Icon(Icons.account_balance_wallet_outlined),
             selectedIcon: Icon(Icons.account_balance_wallet),
             label: 'Expenses',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.insights_outlined),
+            selectedIcon: Icon(Icons.insights),
+            label: 'Reports',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),

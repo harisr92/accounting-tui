@@ -5,6 +5,7 @@ import 'rust/api/app.dart';
 import 'rust/api/expenses.dart';
 import 'rust/api/invoicing.dart';
 import 'rust/api/profile.dart';
+import 'rust/api/reports.dart';
 import 'rust/api/rows.dart';
 import 'year_picker.dart';
 
@@ -88,4 +89,14 @@ final expenseYearProvider = NotifierProvider<YearNotifier, int>(
 /// The expenses of a financial year, by its starting year. Invalidate it after a change.
 final expensesProvider = FutureProvider.family<ExpenseList, int>(
   (ref, year) => ref.watch(compterProvider).expenses(year: year),
+);
+
+/// The year the Reports tab shows
+final reportYearProvider = NotifierProvider<YearNotifier, int>(
+  YearNotifier.new,
+);
+
+/// A financial year in numbers, by its starting year. Computed on demand, never stored.
+final reportProvider = FutureProvider.family<ReportRow, int>(
+  (ref, year) => ref.watch(compterProvider).report(year: year),
 );

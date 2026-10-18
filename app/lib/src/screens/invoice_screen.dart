@@ -26,9 +26,9 @@ class InvoiceScreen extends ConsumerWidget {
         error: (error, _) => Center(child: Text('$error')),
         data: (detail) => _InvoiceBody(
           detail,
-          pdf: (share) => _pdf(context, ref, share: share),
-          creditNotePdf: (note, share) =>
-              _pdf(context, ref, creditNote: note, share: share),
+          pdf: (button, share) => _pdf(button, ref, share: share),
+          creditNotePdf: (button, note) =>
+              _pdf(button, ref, creditNote: note, share: true),
           pay: () => _pay(context, ref, detail),
           credit: () => _credit(context, ref, detail),
         ),
@@ -44,7 +44,8 @@ class InvoiceScreen extends ConsumerWidget {
     ref.invalidate(projectProvider);
   }
 
-  /// Open or share the invoice's PDF, or [creditNote]'s; Rust writes it first if it is missing
+  /// Open or share the invoice's PDF, or [creditNote]'s; Rust writes it first if it is missing.
+  /// [context] is the tapped button's, so the iPad share popover points at it.
   Future<void> _pdf(
     BuildContext context,
     WidgetRef ref, {
@@ -116,8 +117,10 @@ class _InvoiceBody extends StatelessWidget {
   });
 
   final InvoiceDetail invoice;
-  final void Function(bool share) pdf;
-  final void Function(String note, bool share) creditNotePdf;
+
+  /// Called with the tapped button's context
+  final void Function(BuildContext button, bool share) pdf;
+  final void Function(BuildContext row, String note) creditNotePdf;
   final VoidCallback pay;
   final VoidCallback credit;
 
@@ -164,13 +167,13 @@ class _InvoiceBody extends StatelessWidget {
               builder: (context) => OutlinedButton.icon(
                 icon: const Icon(Icons.ios_share),
                 label: const Text('Share PDF'),
-                onPressed: () => pdf(true),
+                onPressed: () => pdf(context, true),
               ),
             ),
             OutlinedButton.icon(
               icon: const Icon(Icons.picture_as_pdf_outlined),
               label: const Text('Open PDF'),
-              onPressed: () => pdf(false),
+              onPressed: () => pdf(context, false),
             ),
             if (!invoice.settled) ...[
               FilledButton.icon(
@@ -194,24 +197,27 @@ class _InvoiceBody extends StatelessWidget {
             child: Text('Nothing received yet'),
           ),
         for (final row in invoice.history)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text('${row.document} · ${row.date}'),
-            subtitle: row.creditNote
-                ? const Text('Tap to share its PDF')
-                : Text(
-                    [
-                      if (row.received != null) 'Received ${row.received}',
-                      if (row.tdsOrBanked != null)
-                        invoice.foreign
-                            ? 'Banked ${row.tdsOrBanked}'
-                            : 'TDS ${row.tdsOrBanked}',
-                    ].join(' · '),
-                  ),
-            trailing: Text(row.settled, style: text.titleSmall),
-            onTap: row.creditNote
-                ? () => creditNotePdf(row.document, true)
-                : null,
+          Builder(
+            // Its own context, so the iPad share popover points at the row
+            builder: (context) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text('${row.document} · ${row.date}'),
+              subtitle: row.creditNote
+                  ? const Text('Tap to share its PDF')
+                  : Text(
+                      [
+                        if (row.received != null) 'Received ${row.received}',
+                        if (row.tdsOrBanked != null)
+                          invoice.foreign
+                              ? 'Banked ${row.tdsOrBanked}'
+                              : 'TDS ${row.tdsOrBanked}',
+                      ].join(' · '),
+                    ),
+              trailing: Text(row.settled, style: text.titleSmall),
+              onTap: row.creditNote
+                  ? () => creditNotePdf(context, row.document)
+                  : null,
+            ),
           ),
       ],
     );

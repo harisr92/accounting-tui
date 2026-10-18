@@ -8,6 +8,7 @@ import 'api/error.dart';
 import 'api/expenses.dart';
 import 'api/invoicing.dart';
 import 'api/profile.dart';
+import 'api/reports.dart';
 import 'api/rows.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -69,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 623023564;
+  int get rustContentHash => 511344433;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -118,6 +119,20 @@ abstract class RustLibApi extends BaseApi {
   Future<ExpenseList> crateApiAppCompterAppExpenses({
     required CompterApp that,
     required int year,
+  });
+
+  Future<ExportRow> crateApiAppCompterAppExportGstr1({
+    required CompterApp that,
+    required int year,
+    required int quarter,
+    required bool firstMonthFiled,
+    required bool secondMonthFiled,
+  });
+
+  Future<ExportRow> crateApiAppCompterAppExportIff({
+    required CompterApp that,
+    required int year,
+    required int month,
   });
 
   Future<InvoiceDetail> crateApiAppCompterAppInvoice({
@@ -187,6 +202,11 @@ abstract class RustLibApi extends BaseApi {
     required CompterApp that,
     required String number,
     required PaymentInput input,
+  });
+
+  Future<ReportRow> crateApiAppCompterAppReport({
+    required CompterApp that,
+    required int year,
   });
 
   Future<ProfileRow> crateApiAppCompterAppSaveProfile({
@@ -517,6 +537,96 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ExportRow> crateApiAppCompterAppExportGstr1({
+    required CompterApp that,
+    required int year,
+    required int quarter,
+    required bool firstMonthFiled,
+    required bool secondMonthFiled,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_i_32(year, serializer);
+          sse_encode_u_32(quarter, serializer);
+          sse_encode_bool(firstMonthFiled, serializer);
+          sse_encode_bool(secondMonthFiled, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_export_row,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppExportGstr1ConstMeta,
+        argValues: [that, year, quarter, firstMonthFiled, secondMonthFiled],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppExportGstr1ConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_export_gstr1",
+        argNames: [
+          "that",
+          "year",
+          "quarter",
+          "firstMonthFiled",
+          "secondMonthFiled",
+        ],
+      );
+
+  @override
+  Future<ExportRow> crateApiAppCompterAppExportIff({
+    required CompterApp that,
+    required int year,
+    required int month,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_i_32(year, serializer);
+          sse_encode_u_32(month, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 10,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_export_row,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppExportIffConstMeta,
+        argValues: [that, year, month],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppExportIffConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_export_iff",
+        argNames: ["that", "year", "month"],
+      );
+
+  @override
   Future<InvoiceDetail> crateApiAppCompterAppInvoice({
     required CompterApp that,
     required String number,
@@ -533,7 +643,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 11,
             port: port_,
           );
         },
@@ -571,7 +681,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 12,
             port: port_,
           );
         },
@@ -607,7 +717,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 13,
             port: port_,
           );
         },
@@ -644,7 +754,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 14,
             port: port_,
           );
         },
@@ -686,7 +796,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 15,
             port: port_,
           );
         },
@@ -728,7 +838,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 16,
             port: port_,
           );
         },
@@ -759,7 +869,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 17,
             port: port_,
           );
         },
@@ -797,7 +907,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 18,
             port: port_,
           );
         },
@@ -839,7 +949,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 19,
             port: port_,
           );
         },
@@ -873,7 +983,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 20,
             port: port_,
           );
         },
@@ -906,7 +1016,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 21,
             port: port_,
           );
         },
@@ -944,7 +1054,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 22,
             port: port_,
           );
         },
@@ -982,7 +1092,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 23,
             port: port_,
           );
         },
@@ -1022,7 +1132,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 24,
             port: port_,
           );
         },
@@ -1044,6 +1154,44 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ReportRow> crateApiAppCompterAppReport({
+    required CompterApp that,
+    required int year,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_i_32(year, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 25,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_report_row,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppReportConstMeta,
+        argValues: [that, year],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppReportConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_report",
+        argNames: ["that", "year"],
+      );
+
+  @override
   Future<ProfileRow> crateApiAppCompterAppSaveProfile({
     required CompterApp that,
     required ProfileInput input,
@@ -1060,7 +1208,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 26,
             port: port_,
           );
         },
@@ -1087,7 +1235,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_i_32,
@@ -1109,7 +1257,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
@@ -1242,6 +1390,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ClientRow dco_decode_client_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return ClientRow(
+      client: dco_decode_String(arr[0]),
+      invoiced: dco_decode_String(arr[1]),
+      received: dco_decode_String(arr[2]),
+      tds: dco_decode_String(arr[3]),
+    );
+  }
+
+  @protected
   CreditInput dco_decode_credit_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1325,6 +1487,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       amount: dco_decode_String(arr[4]),
       gstCredit: dco_decode_opt_String(arr[5]),
       edit: dco_decode_expense_input(arr[6]),
+    );
+  }
+
+  @protected
+  ExportRow dco_decode_export_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return ExportRow(
+      path: dco_decode_String(arr[0]),
+      summary: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
+  FigureRow dco_decode_figure_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return FigureRow(
+      label: dco_decode_String(arr[0]),
+      value: dco_decode_String(arr[1]),
     );
   }
 
@@ -1445,9 +1631,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<ClientRow> dco_decode_list_client_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_client_row).toList();
+  }
+
+  @protected
   List<ExpenseRow> dco_decode_list_expense_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_expense_row).toList();
+  }
+
+  @protected
+  List<FigureRow> dco_decode_list_figure_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_figure_row).toList();
   }
 
   @protected
@@ -1478,6 +1676,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<ProjectRow> dco_decode_list_project_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_project_row).toList();
+  }
+
+  @protected
+  List<QuarterGstRow> dco_decode_list_quarter_gst_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_quarter_gst_row).toList();
   }
 
   @protected
@@ -1631,6 +1835,43 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QuarterGstRow dco_decode_quarter_gst_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return QuarterGstRow(
+      quarter: dco_decode_String(arr[0]),
+      cgst: dco_decode_String(arr[1]),
+      sgst: dco_decode_String(arr[2]),
+      igst: dco_decode_String(arr[3]),
+      inputCredit: dco_decode_String(arr[4]),
+      net: dco_decode_String(arr[5]),
+    );
+  }
+
+  @protected
+  ReportRow dco_decode_report_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    return ReportRow(
+      year: dco_decode_String(arr[0]),
+      income: dco_decode_list_figure_row(arr[1]),
+      incomeTax: dco_decode_list_figure_row(arr[2]),
+      incomeTaxNote: dco_decode_String(arr[3]),
+      incomeTaxTone: dco_decode_tone(arr[4]),
+      gst: dco_decode_list_quarter_gst_row(arr[5]),
+      clients: dco_decode_list_client_row(arr[6]),
+      quarters: dco_decode_list_String(arr[7]),
+      quarterToFile: dco_decode_u_32(arr[8]),
+      iffMonths: dco_decode_list_String(arr[9]),
+      iffMonthToFile: dco_decode_u_32(arr[10]),
+    );
+  }
+
+  @protected
   TimeInput dco_decode_time_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1641,6 +1882,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       duration: dco_decode_String(arr[1]),
       note: dco_decode_String(arr[2]),
     );
+  }
+
+  @protected
+  Tone dco_decode_tone(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return Tone.values[raw as int];
+  }
+
+  @protected
+  int dco_decode_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
   }
 
   @protected
@@ -1791,6 +2044,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ClientRow sse_decode_client_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_client = sse_decode_String(deserializer);
+    var var_invoiced = sse_decode_String(deserializer);
+    var var_received = sse_decode_String(deserializer);
+    var var_tds = sse_decode_String(deserializer);
+    return ClientRow(
+      client: var_client,
+      invoiced: var_invoiced,
+      received: var_received,
+      tds: var_tds,
+    );
+  }
+
+  @protected
   CreditInput sse_decode_credit_input(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_date = sse_decode_String(deserializer);
@@ -1876,6 +2144,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       gstCredit: var_gstCredit,
       edit: var_edit,
     );
+  }
+
+  @protected
+  ExportRow sse_decode_export_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_path = sse_decode_String(deserializer);
+    var var_summary = sse_decode_String(deserializer);
+    return ExportRow(path: var_path, summary: var_summary);
+  }
+
+  @protected
+  FigureRow sse_decode_figure_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_label = sse_decode_String(deserializer);
+    var var_value = sse_decode_String(deserializer);
+    return FigureRow(label: var_label, value: var_value);
   }
 
   @protected
@@ -2026,6 +2310,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<ClientRow> sse_decode_list_client_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <ClientRow>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_client_row(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<ExpenseRow> sse_decode_list_expense_row(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -2033,6 +2329,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <ExpenseRow>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_expense_row(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<FigureRow> sse_decode_list_figure_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <FigureRow>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_figure_row(deserializer));
     }
     return ans_;
   }
@@ -2090,6 +2398,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <ProjectRow>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_project_row(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<QuarterGstRow> sse_decode_list_quarter_gst_row(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <QuarterGstRow>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_quarter_gst_row(deserializer));
     }
     return ans_;
   }
@@ -2291,12 +2613,73 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  QuarterGstRow sse_decode_quarter_gst_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_quarter = sse_decode_String(deserializer);
+    var var_cgst = sse_decode_String(deserializer);
+    var var_sgst = sse_decode_String(deserializer);
+    var var_igst = sse_decode_String(deserializer);
+    var var_inputCredit = sse_decode_String(deserializer);
+    var var_net = sse_decode_String(deserializer);
+    return QuarterGstRow(
+      quarter: var_quarter,
+      cgst: var_cgst,
+      sgst: var_sgst,
+      igst: var_igst,
+      inputCredit: var_inputCredit,
+      net: var_net,
+    );
+  }
+
+  @protected
+  ReportRow sse_decode_report_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_year = sse_decode_String(deserializer);
+    var var_income = sse_decode_list_figure_row(deserializer);
+    var var_incomeTax = sse_decode_list_figure_row(deserializer);
+    var var_incomeTaxNote = sse_decode_String(deserializer);
+    var var_incomeTaxTone = sse_decode_tone(deserializer);
+    var var_gst = sse_decode_list_quarter_gst_row(deserializer);
+    var var_clients = sse_decode_list_client_row(deserializer);
+    var var_quarters = sse_decode_list_String(deserializer);
+    var var_quarterToFile = sse_decode_u_32(deserializer);
+    var var_iffMonths = sse_decode_list_String(deserializer);
+    var var_iffMonthToFile = sse_decode_u_32(deserializer);
+    return ReportRow(
+      year: var_year,
+      income: var_income,
+      incomeTax: var_incomeTax,
+      incomeTaxNote: var_incomeTaxNote,
+      incomeTaxTone: var_incomeTaxTone,
+      gst: var_gst,
+      clients: var_clients,
+      quarters: var_quarters,
+      quarterToFile: var_quarterToFile,
+      iffMonths: var_iffMonths,
+      iffMonthToFile: var_iffMonthToFile,
+    );
+  }
+
+  @protected
   TimeInput sse_decode_time_input(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_date = sse_decode_String(deserializer);
     var var_duration = sse_decode_String(deserializer);
     var var_note = sse_decode_String(deserializer);
     return TimeInput(date: var_date, duration: var_duration, note: var_note);
+  }
+
+  @protected
+  Tone sse_decode_tone(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return Tone.values[inner];
+  }
+
+  @protected
+  int sse_decode_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint32();
   }
 
   @protected
@@ -2460,6 +2843,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_client_row(ClientRow self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.client, serializer);
+    sse_encode_String(self.invoiced, serializer);
+    sse_encode_String(self.received, serializer);
+    sse_encode_String(self.tds, serializer);
+  }
+
+  @protected
   void sse_encode_credit_input(CreditInput self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.date, serializer);
@@ -2517,6 +2909,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.amount, serializer);
     sse_encode_opt_String(self.gstCredit, serializer);
     sse_encode_expense_input(self.edit, serializer);
+  }
+
+  @protected
+  void sse_encode_export_row(ExportRow self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.path, serializer);
+    sse_encode_String(self.summary, serializer);
+  }
+
+  @protected
+  void sse_encode_figure_row(FigureRow self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.label, serializer);
+    sse_encode_String(self.value, serializer);
   }
 
   @protected
@@ -2612,6 +3018,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_client_row(
+    List<ClientRow> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_client_row(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_expense_row(
     List<ExpenseRow> self,
     SseSerializer serializer,
@@ -2620,6 +3038,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_expense_row(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_figure_row(
+    List<FigureRow> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_figure_row(item, serializer);
     }
   }
 
@@ -2678,6 +3108,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_project_row(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_quarter_gst_row(
+    List<QuarterGstRow> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_quarter_gst_row(item, serializer);
     }
   }
 
@@ -2806,11 +3248,53 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_quarter_gst_row(
+    QuarterGstRow self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.quarter, serializer);
+    sse_encode_String(self.cgst, serializer);
+    sse_encode_String(self.sgst, serializer);
+    sse_encode_String(self.igst, serializer);
+    sse_encode_String(self.inputCredit, serializer);
+    sse_encode_String(self.net, serializer);
+  }
+
+  @protected
+  void sse_encode_report_row(ReportRow self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.year, serializer);
+    sse_encode_list_figure_row(self.income, serializer);
+    sse_encode_list_figure_row(self.incomeTax, serializer);
+    sse_encode_String(self.incomeTaxNote, serializer);
+    sse_encode_tone(self.incomeTaxTone, serializer);
+    sse_encode_list_quarter_gst_row(self.gst, serializer);
+    sse_encode_list_client_row(self.clients, serializer);
+    sse_encode_list_String(self.quarters, serializer);
+    sse_encode_u_32(self.quarterToFile, serializer);
+    sse_encode_list_String(self.iffMonths, serializer);
+    sse_encode_u_32(self.iffMonthToFile, serializer);
+  }
+
+  @protected
   void sse_encode_time_input(TimeInput self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.date, serializer);
     sse_encode_String(self.duration, serializer);
     sse_encode_String(self.note, serializer);
+  }
+
+  @protected
+  void sse_encode_tone(Tone self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint32(self);
   }
 
   @protected
@@ -2891,6 +3375,29 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
   /// The expenses of the financial year starting in April of `year`, by date
   Future<ExpenseList> expenses({required int year}) => RustLib.instance.api
       .crateApiAppCompterAppExpenses(that: this, year: year);
+
+  /// Write quarter `quarter` (1 to 4) of `year`'s GSTR-1 for the GST portal. The B2B part of
+  /// a month whose IFF was filed is left out.
+  Future<ExportRow> exportGstr1({
+    required int year,
+    required int quarter,
+    required bool firstMonthFiled,
+    required bool secondMonthFiled,
+  }) => RustLib.instance.api.crateApiAppCompterAppExportGstr1(
+    that: this,
+    year: year,
+    quarter: quarter,
+    firstMonthFiled: firstMonthFiled,
+    secondMonthFiled: secondMonthFiled,
+  );
+
+  /// Write the IFF for `month`, a position in `ReportRow::iff_months` of `year`
+  Future<ExportRow> exportIff({required int year, required int month}) =>
+      RustLib.instance.api.crateApiAppCompterAppExportIff(
+        that: this,
+        year: year,
+        month: month,
+      );
 
   Future<InvoiceDetail> invoice({required String number}) => RustLib
       .instance
@@ -2990,6 +3497,10 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
     number: number,
     input: input,
   );
+
+  /// The financial year starting in April of `year`, in numbers
+  Future<ReportRow> report({required int year}) =>
+      RustLib.instance.api.crateApiAppCompterAppReport(that: this, year: year);
 
   /// Save the business profile; the logo, set elsewhere, is kept
   Future<ProfileRow> saveProfile({required ProfileInput input}) => RustLib

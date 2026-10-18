@@ -8,9 +8,11 @@ the Rust core in `../crates/compter-core`, reached through `../crates/compter-mo
 lib/main.dart              opens the database, starts the app
 lib/src/compter.dart       the opened CompterApp and the Riverpod providers over it
 lib/src/router.dart        go_router: Projects, Invoices and Settings tabs, each with its own stack
-lib/src/screens/           projects, a project, invoices, an invoice, settings
+lib/src/screens/           one per tab (projects, invoices, expenses, reports, settings), plus a
+                           project and an invoice
 lib/src/forms/             FormDialog (every form) and the forms and flows built on it
-lib/src/notice.dart        snack bars, yes/no questions, opening and sharing PDFs
+lib/src/notice.dart        snack bars, yes/no questions, opening and sharing files
+lib/src/year_picker.dart   the financial year a tab shows, stepped like [ and ] in the terminal
 lib/src/rust/              generated bindings: never edit, re-run codegen
 rust_builder/              cargokit plugin that builds the Rust crate in Xcode and Gradle
 test/                      widget tests on the host, loading ../target/debug's library

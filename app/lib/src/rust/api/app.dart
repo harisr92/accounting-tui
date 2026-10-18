@@ -9,6 +9,7 @@ import 'expenses.dart';
 import 'invoicing.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'profile.dart';
+import 'reports.dart';
 import 'rows.dart';
 
 // These functions are ignored because they are not marked as `pub`: `credit_draft`, `date`, `exchange_rate`, `expense_draft`, `expense_id`, `milestone_id`, `over`, `project_id`, `today`
@@ -31,8 +32,8 @@ abstract class CompterApp implements RustOpaqueInterface {
   /// Remove an expense and its ledger posting
   Future<void> deleteExpense({required String id});
 
-  /// The sample business of `compter --demo`, in memory; nothing is saved. Its PDFs are
-  /// written to `scratch_dir`, a cache folder.
+  /// The sample business of `compter --demo`, in memory; nothing is saved. Its PDFs and
+  /// returns are written to `scratch_dir`, a cache folder.
   static Future<CompterApp> demo({required String scratchDir}) =>
       RustLib.instance.api.crateApiAppCompterAppDemo(scratchDir: scratchDir);
 
@@ -44,6 +45,18 @@ abstract class CompterApp implements RustOpaqueInterface {
 
   /// The expenses of the financial year starting in April of `year`, by date
   Future<ExpenseList> expenses({required int year});
+
+  /// Write quarter `quarter` (1 to 4) of `year`'s GSTR-1 for the GST portal. The B2B part of
+  /// a month whose IFF was filed is left out.
+  Future<ExportRow> exportGstr1({
+    required int year,
+    required int quarter,
+    required bool firstMonthFiled,
+    required bool secondMonthFiled,
+  });
+
+  /// Write the IFF for `month`, a position in `ReportRow::iff_months` of `year`
+  Future<ExportRow> exportIff({required int year, required int month});
 
   Future<InvoiceDetail> invoice({required String number});
 
@@ -74,7 +87,7 @@ abstract class CompterApp implements RustOpaqueInterface {
   });
 
   /// Open (or create) `compter.redb` in `data_dir`, the app's private support folder. PDFs
-  /// are written under it too.
+  /// and returns are written under it too.
   static Future<CompterApp> open({required String dataDir}) =>
       RustLib.instance.api.crateApiAppCompterAppOpen(dataDir: dataDir);
 
@@ -109,6 +122,9 @@ abstract class CompterApp implements RustOpaqueInterface {
     required String number,
     required PaymentInput input,
   });
+
+  /// The financial year starting in April of `year`, in numbers
+  Future<ReportRow> report({required int year});
 
   /// Save the business profile; the logo, set elsewhere, is kept
   Future<ProfileRow> saveProfile({required ProfileInput input});
