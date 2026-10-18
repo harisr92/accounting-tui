@@ -35,7 +35,8 @@ void main() {
     await tester.tap(find.text('Save'));
     await settle(tester);
 
-    expect(find.text('New project'), findsOneWidget);
+    // Still open: the sheet's title over the button that opened it
+    expect(find.text('New project'), findsNWidgets(2));
     expect(find.textContaining('amount must be a number'), findsOneWidget);
   });
 
@@ -48,8 +49,8 @@ void main() {
     await tester.tap(find.text('Save'));
     await settle(tester);
 
-    expect(find.text('No milestones yet'), findsOneWidget);
-    await tester.tap(find.text('Milestone'));
+    expect(find.textContaining('No milestones yet'), findsOneWidget);
+    await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Design');
     await tester.enterText(

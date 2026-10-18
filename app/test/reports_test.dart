@@ -48,8 +48,11 @@ void main() {
 
     expect(find.text('FY 2026-27'), findsOneWidget);
     expect(find.text('₹2,50,750.00'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.textContaining('tax audit (44AB)'),
+      200,
+    );
     expect(find.text('₹1,25,375.00'), findsOneWidget);
-    expect(find.textContaining('tax audit (44AB)'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Q2 (Jul-Sep)'), 200);
     expect(find.text('-₹13,680.00'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Acme Pvt Ltd'), 200);
@@ -60,11 +63,9 @@ void main() {
     tester,
   ) async {
     await openReports(tester);
-    await tester.scrollUntilVisible(find.text('Export GSTR-1'), 200);
-    // Clear of the navigation bar, which covers the bottom edge of the list
-    await tester.ensureVisible(find.text('Export GSTR-1'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Export GSTR-1'));
+    await tester.tap(find.text('Export return'));
+    await settle(tester);
+    await tester.tap(find.text('GSTR-1 for a quarter'));
     await settle(tester);
     await tester.tap(find.byType(DropdownButtonFormField<String>).first);
     await tester.pumpAndSettle();
@@ -86,6 +87,9 @@ void main() {
     await settle(tester);
 
     expect(find.text('FY 2025-26'), findsOneWidget);
-    expect(find.textContaining('Within the 44ADA limit'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.textContaining('Within the 44ADA limit'),
+      200,
+    );
   });
 }

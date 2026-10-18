@@ -48,7 +48,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('PART PAID'), findsOneWidget);
 
-    await tester.tap(find.text('Open PDF'));
+    await tester.tap(find.byTooltip('Open PDF'));
     await tester.pump(const Duration(seconds: 2));
 
     // An error from Rust or the viewer would show in a snack bar

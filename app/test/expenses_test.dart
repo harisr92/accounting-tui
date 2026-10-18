@@ -93,7 +93,8 @@ void main() {
     await tester.tap(find.text('Save'));
     await settle(tester);
 
-    expect(find.text('Add expense'), findsOneWidget);
+    // Still open: the sheet's title over the button that opened it
+    expect(find.text('Add expense'), findsNWidgets(2));
     expect(find.textContaining('amount must be a number'), findsOneWidget);
   });
 }

@@ -31,10 +31,10 @@ void main() {
       findsOneWidget,
     );
     await tester.tap(find.text('Issue'));
-    await pumpUntil(tester, find.text('Share PDF'));
+    await pumpUntil(tester, find.byTooltip('Share PDF'));
 
     expect(find.text('Record payment'), findsOneWidget);
-    expect(find.text('Share PDF'), findsOneWidget);
+    expect(find.byTooltip('Open PDF'), findsOneWidget);
     expect(find.text('Nothing received yet'), findsOneWidget);
     expect(find.textContaining('Issued NDC/'), findsOneWidget);
   });
@@ -54,7 +54,7 @@ void main() {
     await settle(tester);
 
     expect(find.text('Payment recorded; ₹25,400.00 still due'), findsOneWidget);
-    expect(find.textContaining('Payment · '), findsNWidgets(2));
+    expect(find.text('Payment'), findsNWidgets(2));
   });
 
   testWidgets('a refused payment stays in the form under its field', (
@@ -76,7 +76,7 @@ void main() {
     await launchDemo(tester);
     await openInvoice(tester, 'Dashboards');
 
-    await tester.tap(find.text('Credit note'));
+    await tester.tap(find.byTooltip('Credit note'));
     await settle(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Reason'),
@@ -100,7 +100,7 @@ void main() {
     await settle(tester);
     expect(find.text('Nila Design & Code'), findsOneWidget);
 
-    await tester.tap(find.text('Edit business details'));
+    await tester.tap(find.byTooltip('Edit business details'));
     await settle(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Name'),

@@ -186,12 +186,9 @@ void main() {
     await openSync(tester);
 
     expect(find.text('sync is off in demo mode'), findsOneWidget);
-    final button = tester.widget<OutlinedButton>(
-      find.ancestor(
-        of: find.text('Get from computer'),
-        matching: find.byWidgetPredicate((w) => w is OutlinedButton),
-      ),
+    final get = tester.widget<ListTile>(
+      find.widgetWithText(ListTile, 'Get from computer'),
     );
-    expect(button.onPressed, isNull);
+    expect(get.enabled, isFalse);
   });
 }
