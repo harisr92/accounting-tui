@@ -99,8 +99,11 @@ security assessment.
    - **Android**, package `dev.compter.compter`, with the SHA-1 of each key that signs the
      app: the debug key (`keytool -list -v -keystore ~/.android/debug.keystore -storepass
      android`) and the upload key.
-   - **Web application**: Android's sign-in needs its client ID, passed when building:
-     `flutter run --dart-define=COMPTER_GOOGLE_SERVER_CLIENT_ID=<web client ID>`.
+     Its ID goes nowhere: Google finds it by package and SHA-1.
+   - **Web application**, in the same project, with no origins or redirect URIs (it has no
+     SHA-1). Android's sign-in needs its client ID, passed when building:
+     `flutter run --dart-define=COMPTER_GOOGLE_SERVER_CLIENT_ID=<web client ID>`. Passing the
+     Android client's ID instead fails with "Developer console is not set up correctly".
 4. On the computer, set compter's sync folder (Settings → `s`) to the local Google Drive copy
    of the folder the phone uses, e.g. `~/Library/CloudStorage/GoogleDrive-you@example.com/My
    Drive/compter-sync`.
