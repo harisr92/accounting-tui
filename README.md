@@ -386,7 +386,9 @@ Conflict copies made by the sync client (`compter (1).redb` and the like) are ne
 
 ### Phones
 
-The phone app can't see the synced folder, so you carry its two files across by hand, in **Settings → Sync with your computer**. Quit compter on the computer first, and let the sync client finish.
+With the synced folder in Google Drive, the phone app syncs with it automatically: **Settings → Sync method → Google Drive**, then pick the folder. It takes the computer's newer snapshot whenever you open the app, sends its changes every minute and when you put it away, and holds a lease while open, so compter on the computer waits for it (and the other way round). Setting up the Google sign-in it needs is described in `app/README.md`.
+
+Otherwise you carry the two files across by hand, in **Settings → Sync with your computer**. Quit compter on the computer first, and let the sync client finish.
 
 - **Get from computer** picks `compter.redb` and `manifest.json` from the synced folder (Files on iPhone, the file picker on Android, both showing iCloud Drive and Google Drive). A new install simply takes them. If the phone changed since its last hand-off, it asks which side to keep, as `compter sync` does.
 - **Send to computer** writes the phone's snapshot and manifest and opens the share sheet: save both into the synced folder, **replacing** the ones there. On iPhone, Files asks to replace them. The Google Drive app on Android uploads new files instead (`compter (1).redb`); then replace the originals with them from the computer.

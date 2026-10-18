@@ -14,6 +14,7 @@ lib/src/forms/             FormDialog (every form) and the forms and flows built
 lib/src/notice.dart        snack bars, yes/no questions, opening and sharing files
 lib/src/handoff.dart       picking and staging the snapshot and manifest carried to and from the
                            computer's sync folder (see "Phones" in the main README)
+lib/src/sync/              automatic sync through Google Drive (see "Google Drive sync")
 lib/src/year_picker.dart   the financial year a tab shows, stepped like [ and ] in the terminal
 lib/src/rust/              generated bindings: never edit, re-run codegen
 hook/build.dart            builds ../crates/compter-mobile whenever Flutter builds (see below)
@@ -69,7 +70,42 @@ CocoaPods or Swift Package Manager plugin is involved. The build goes to
 To move to a newer Rust, change `channel` in `rust-toolchain.toml`; it must be an exact
 version, and `targets` must list every platform built for, the host included.
 
-## Releasing
+## Google Drive sync
+
+Settings → Sync method → **Google Drive, automatic** keeps the phone and compter on a computer
+in step through the computer's sync folder in Google Drive (`lib/src/sync/`):
+
+- On opening and on every return to the app, the phone takes the computer's newer snapshot and
+  writes its own `lease.json`, so compter on the computer waits until the phone is put away.
+- Every minute while open, and when sent to the background, it sends what changed (snapshot,
+  then manifest, updating the same Drive files) and refreshes or releases the lease.
+- If compter is open on the computer, the phone takes nothing over it and sends nothing until
+  it closes. If both sides changed, Settings (badged) asks which to keep.
+
+It needs the full `drive` permission: the narrower `drive.file` can't read the `compter.redb`
+that the computer's Drive client uploaded. Google calls that scope restricted. For your own use,
+keep the OAuth app in **Testing** with yourself as a test user; sign-in then lapses after 7 days
+and Settings asks again. Publishing it to others needs Google's verification and a paid
+security assessment.
+
+### One-time setup
+
+1. In Google Cloud: a project, with the **Google Drive API** enabled.
+2. OAuth consent screen: External, publishing status **Testing**, your account as a test
+   user, scope `https://www.googleapis.com/auth/drive`.
+3. OAuth clients (Credentials → Create credentials → OAuth client ID):
+   - **iOS**, bundle ID `dev.compter.compter`. Copy `ios/Flutter/Google.xcconfig.example` to
+     `ios/Flutter/Google.xcconfig` (gitignored) and fill in its client ID and reversed ID.
+   - **Android**, package `dev.compter.compter`, with the SHA-1 of each key that signs the
+     app: the debug key (`keytool -list -v -keystore ~/.android/debug.keystore -storepass
+     android`) and the upload key.
+   - **Web application**: Android's sign-in needs its client ID, passed when building:
+     `flutter run --dart-define=COMPTER_GOOGLE_SERVER_CLIENT_ID=<web client ID>`.
+4. On the computer, set compter's sync folder (Settings → `s`) to the local Google Drive copy
+   of the folder the phone uses, e.g. `~/Library/CloudStorage/GoogleDrive-you@example.com/My
+   Drive/compter-sync`.
+
+
 
 CI (`.github/workflows/mobile.yml`) checks the bindings are current, runs `flutter analyze` and
 the widget tests, and builds both apps on every push to `trunk` that touches `app/` or
