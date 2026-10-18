@@ -1,4 +1,5 @@
 use std::fmt;
+use std::str::FromStr;
 
 use bigdecimal::{BigDecimal, RoundingMode, Zero};
 use chrono::NaiveDate;
@@ -26,6 +27,15 @@ impl ExpenseId {
 impl fmt::Display for ExpenseId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+/// The [`Display`](fmt::Display) form back, for front ends that hand ids around as text
+impl FromStr for ExpenseId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::parse_str(s).map(Self)
     }
 }
 
