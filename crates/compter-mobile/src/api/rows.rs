@@ -1,5 +1,7 @@
 use bigdecimal::Zero;
-use compter_core::domain::{Billing, Milestone, Project, ProjectSummary, format_duration};
+use compter_core::domain::{
+    Billing, ClientRegion, Milestone, Project, ProjectSummary, format_duration, state_name,
+};
 
 /// One line of the project list, from the stored summary (never the full record)
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,6 +33,8 @@ pub struct ProjectDetail {
     pub name: String,
     pub client_name: String,
     pub client_gstin: Option<String>,
+    /// `Karnataka (29)` or `Germany`; `None` when not known
+    pub client_location: Option<String>,
     /// `INR`, `USD`, `GBP` or `EUR`
     pub currency: String,
     /// `Fixed` or `Hourly ₹1,500.00/h`
@@ -61,6 +65,16 @@ impl From<&Project> for ProjectDetail {
             name: project.name().to_owned(),
             client_name: project.client_name().to_owned(),
             client_gstin: project.client_gstin().map(ToString::to_string),
+            client_location: match project.client_region() {
+                ClientRegion::India { state: Some(code) } => {
+                    Some(match state_name(code.as_str()) {
+                        Some(name) => format!("{name} ({code})"),
+                        None => code.as_str().to_owned(),
+                    })
+                }
+                ClientRegion::India { state: None } => None,
+                ClientRegion::Abroad { country } => Some(country.clone()),
+            },
             currency: currency.code().to_owned(),
             billing,
             hourly,
@@ -108,13 +122,22 @@ impl MilestoneRow {
     }
 }
 
-/// A new project as typed: an Indian client billed in rupees. Clients abroad, addresses and
-/// other currencies come with the full project form.
+/// A new project as typed. A client with a country is abroad (billed in any currency, invoiced
+/// as an export); one without is in India, billed in rupees.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectInput {
     pub name: String,
     pub client_name: String,
+    /// Blank for an unregistered client or one abroad
     pub client_gstin: Option<String>,
+    /// GST state code (`29`): the place of supply for a client in India without a GSTIN
+    pub client_state: Option<String>,
+    /// Blank for a client in India
+    pub client_country: Option<String>,
+    /// Address lines; blank lines are dropped
+    pub client_address: Vec<String>,
+    /// `INR`, `USD`, `GBP` or `EUR`; blank means INR
+    pub currency: Option<String>,
     /// Blank or `None` for a fixed-price project
     pub hourly_rate: Option<String>,
 }

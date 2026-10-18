@@ -1,23 +1,9 @@
 use chrono::Local;
 
-use compter_mobile::api::{ApiError, CompterApp, MilestoneInput, ProjectInput};
+mod support;
 
-fn project(name: &str, hourly_rate: Option<&str>) -> ProjectInput {
-    ProjectInput {
-        name: name.to_owned(),
-        client_name: "Acme Pvt Ltd".to_owned(),
-        client_gstin: None,
-        hourly_rate: hourly_rate.map(str::to_owned),
-    }
-}
-
-fn milestone(name: &str, due_date: &str, amount: Option<&str>) -> MilestoneInput {
-    MilestoneInput {
-        name: name.to_owned(),
-        due_date: due_date.to_owned(),
-        amount: amount.map(str::to_owned),
-    }
-}
+use compter_mobile::api::{ApiError, CompterApp};
+use support::{demo, milestone, project};
 
 fn field(error: ApiError) -> Option<String> {
     error.field
@@ -32,7 +18,7 @@ fn the_app_handle_can_cross_threads() {
 
 #[test]
 fn demo_lists_projects_and_opens_one_with_formatted_amounts() {
-    let app = CompterApp::demo().unwrap();
+    let (_scratch, app) = demo();
     let rows = app.projects(true).unwrap();
     let pipeline = rows.iter().find(|p| p.name == "Data Pipeline").unwrap();
 
@@ -47,7 +33,7 @@ fn demo_lists_projects_and_opens_one_with_formatted_amounts() {
 
 #[test]
 fn a_fixed_project_takes_milestones_with_amounts() {
-    let mut app = CompterApp::demo().unwrap();
+    let (_scratch, mut app) = demo();
     let created = app.create_project(project("Website", Some("  "))).unwrap();
     assert_eq!(created.billing, "Fixed");
     assert!(!created.hourly);
@@ -69,7 +55,7 @@ fn a_fixed_project_takes_milestones_with_amounts() {
 
 #[test]
 fn an_hourly_milestone_ignores_an_amount_and_defaults_to_today() {
-    let mut app = CompterApp::demo().unwrap();
+    let (_scratch, mut app) = demo();
     let created = app
         .create_project(project("Support", Some("1,500")))
         .unwrap();
@@ -87,7 +73,7 @@ fn an_hourly_milestone_ignores_an_amount_and_defaults_to_today() {
 
 #[test]
 fn refused_input_names_its_field_and_saves_nothing() {
-    let mut app = CompterApp::demo().unwrap();
+    let (_scratch, mut app) = demo();
     let before = app.projects(true).unwrap().len();
 
     let bad_rate = app
@@ -116,7 +102,7 @@ fn refused_input_names_its_field_and_saves_nothing() {
 
 #[test]
 fn domain_rules_come_back_as_messages_without_a_field() {
-    let mut app = CompterApp::demo().unwrap();
+    let (_scratch, mut app) = demo();
     let error = app.create_project(project("", None)).unwrap_err();
     assert_eq!(error.field, None);
     assert!(!error.message.is_empty());

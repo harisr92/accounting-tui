@@ -423,6 +423,7 @@ dependencies = [
 name = "compter-mobile"
 version = "0.2.3"
 dependencies = [
+ "accounting-core",
  "bigdecimal",
  "chrono",
  "compter-core",

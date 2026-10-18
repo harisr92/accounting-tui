@@ -4,8 +4,15 @@
 // Public so flutter_rust_bridge writes one Dart file per module (`api/app.dart`, ...)
 pub mod app;
 pub mod error;
+pub mod invoicing;
+pub mod profile;
 pub mod rows;
 
 pub use app::CompterApp;
 pub use error::ApiError;
+pub use invoicing::{
+    CreditInput, CreditPreviewRow, CreditedRow, HistoryRow, InvoiceDetail, InvoiceList,
+    InvoicePreviewRow, InvoiceRow, IssuedRow, PaymentInput, TimeInput,
+};
+pub use profile::{ProfileInput, ProfileRow};
 pub use rows::{MilestoneInput, MilestoneRow, ProjectDetail, ProjectInput, ProjectRow};

@@ -9,6 +9,7 @@ description = "compter's API for the Flutter app, bridged with flutter_rust_brid
 crate-type = ["staticlib", "cdylib", "lib"]
 
 [dependencies]
+accounting-core.workspace = true
 bigdecimal.workspace = true
 chrono.workspace = true
 compter-core.workspace = true
