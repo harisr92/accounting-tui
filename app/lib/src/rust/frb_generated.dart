@@ -5,6 +5,8 @@
 
 import 'api/app.dart';
 import 'api/error.dart';
+import 'api/invoicing.dart';
+import 'api/profile.dart';
 import 'api/rows.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -66,7 +68,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 574060965;
+  int get rustContentHash => 1089846269;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -89,9 +91,65 @@ abstract class RustLibApi extends BaseApi {
     required ProjectInput input,
   });
 
-  Future<CompterApp> crateApiAppCompterAppDemo();
+  Future<String> crateApiAppCompterAppCreditNotePdf({
+    required CompterApp that,
+    required String number,
+  });
+
+  Future<CompterApp> crateApiAppCompterAppDemo({required String scratchDir});
+
+  Future<InvoiceDetail> crateApiAppCompterAppInvoice({
+    required CompterApp that,
+    required String number,
+  });
+
+  Future<String> crateApiAppCompterAppInvoicePdf({
+    required CompterApp that,
+    required String number,
+  });
+
+  Future<InvoiceList> crateApiAppCompterAppInvoices({required CompterApp that});
+
+  Future<CreditedRow> crateApiAppCompterAppIssueCredit({
+    required CompterApp that,
+    required String number,
+    required CreditInput input,
+  });
+
+  Future<IssuedRow> crateApiAppCompterAppIssueInvoice({
+    required CompterApp that,
+    required String projectId,
+    required String milestoneId,
+    String? rate,
+  });
+
+  Future<ProjectDetail> crateApiAppCompterAppLogTime({
+    required CompterApp that,
+    required String projectId,
+    required String milestoneId,
+    required TimeInput input,
+  });
 
   Future<CompterApp> crateApiAppCompterAppOpen({required String dataDir});
+
+  Future<CreditPreviewRow> crateApiAppCompterAppPreviewCredit({
+    required CompterApp that,
+    required String number,
+    required CreditInput input,
+  });
+
+  Future<InvoicePreviewRow> crateApiAppCompterAppPreviewInvoice({
+    required CompterApp that,
+    required String projectId,
+    required String milestoneId,
+    String? rate,
+  });
+
+  Future<ProfileRow?> crateApiAppCompterAppProfile({required CompterApp that});
+
+  Future<ProfileInput> crateApiAppCompterAppProfileInput({
+    required CompterApp that,
+  });
 
   Future<ProjectDetail> crateApiAppCompterAppProject({
     required CompterApp that,
@@ -101,6 +159,17 @@ abstract class RustLibApi extends BaseApi {
   Future<List<ProjectRow>> crateApiAppCompterAppProjects({
     required CompterApp that,
     required bool includeArchived,
+  });
+
+  Future<InvoiceDetail> crateApiAppCompterAppRecordPayment({
+    required CompterApp that,
+    required String number,
+    required PaymentInput input,
+  });
+
+  Future<ProfileRow> crateApiAppCompterAppSaveProfile({
+    required CompterApp that,
+    required ProfileInput input,
   });
 
   RustArcIncrementStrongCountFnType
@@ -199,15 +268,54 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<CompterApp> crateApiAppCompterAppDemo() {
+  Future<String> crateApiAppCompterAppCreditNotePdf({
+    required CompterApp that,
+    required String number,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(number, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
             funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppCreditNotePdfConstMeta,
+        argValues: [that, number],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppCreditNotePdfConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_credit_note_pdf",
+        argNames: ["that", "number"],
+      );
+
+  @override
+  Future<CompterApp> crateApiAppCompterAppDemo({required String scratchDir}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(scratchDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
             port: port_,
           );
         },
@@ -217,14 +325,249 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_api_error,
         ),
         constMeta: kCrateApiAppCompterAppDemoConstMeta,
-        argValues: [],
+        argValues: [scratchDir],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiAppCompterAppDemoConstMeta =>
-      const TaskConstMeta(debugName: "CompterApp_demo", argNames: []);
+  TaskConstMeta get kCrateApiAppCompterAppDemoConstMeta => const TaskConstMeta(
+    debugName: "CompterApp_demo",
+    argNames: ["scratchDir"],
+  );
+
+  @override
+  Future<InvoiceDetail> crateApiAppCompterAppInvoice({
+    required CompterApp that,
+    required String number,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(number, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_invoice_detail,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppInvoiceConstMeta,
+        argValues: [that, number],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppInvoiceConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_invoice",
+        argNames: ["that", "number"],
+      );
+
+  @override
+  Future<String> crateApiAppCompterAppInvoicePdf({
+    required CompterApp that,
+    required String number,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(number, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppInvoicePdfConstMeta,
+        argValues: [that, number],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppInvoicePdfConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_invoice_pdf",
+        argNames: ["that", "number"],
+      );
+
+  @override
+  Future<InvoiceList> crateApiAppCompterAppInvoices({
+    required CompterApp that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_invoice_list,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppInvoicesConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppInvoicesConstMeta =>
+      const TaskConstMeta(debugName: "CompterApp_invoices", argNames: ["that"]);
+
+  @override
+  Future<CreditedRow> crateApiAppCompterAppIssueCredit({
+    required CompterApp that,
+    required String number,
+    required CreditInput input,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(number, serializer);
+          sse_encode_box_autoadd_credit_input(input, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 8,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_credited_row,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppIssueCreditConstMeta,
+        argValues: [that, number, input],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppIssueCreditConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_issue_credit",
+        argNames: ["that", "number", "input"],
+      );
+
+  @override
+  Future<IssuedRow> crateApiAppCompterAppIssueInvoice({
+    required CompterApp that,
+    required String projectId,
+    required String milestoneId,
+    String? rate,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(milestoneId, serializer);
+          sse_encode_opt_String(rate, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_issued_row,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppIssueInvoiceConstMeta,
+        argValues: [that, projectId, milestoneId, rate],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppIssueInvoiceConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_issue_invoice",
+        argNames: ["that", "projectId", "milestoneId", "rate"],
+      );
+
+  @override
+  Future<ProjectDetail> crateApiAppCompterAppLogTime({
+    required CompterApp that,
+    required String projectId,
+    required String milestoneId,
+    required TimeInput input,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(milestoneId, serializer);
+          sse_encode_box_autoadd_time_input(input, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 10,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_detail,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppLogTimeConstMeta,
+        argValues: [that, projectId, milestoneId, input],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppLogTimeConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_log_time",
+        argNames: ["that", "projectId", "milestoneId", "input"],
+      );
 
   @override
   Future<CompterApp> crateApiAppCompterAppOpen({required String dataDir}) {
@@ -236,7 +579,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 11,
             port: port_,
           );
         },
@@ -256,6 +599,155 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "CompterApp_open", argNames: ["dataDir"]);
 
   @override
+  Future<CreditPreviewRow> crateApiAppCompterAppPreviewCredit({
+    required CompterApp that,
+    required String number,
+    required CreditInput input,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(number, serializer);
+          sse_encode_box_autoadd_credit_input(input, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_credit_preview_row,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppPreviewCreditConstMeta,
+        argValues: [that, number, input],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppPreviewCreditConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_preview_credit",
+        argNames: ["that", "number", "input"],
+      );
+
+  @override
+  Future<InvoicePreviewRow> crateApiAppCompterAppPreviewInvoice({
+    required CompterApp that,
+    required String projectId,
+    required String milestoneId,
+    String? rate,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(milestoneId, serializer);
+          sse_encode_opt_String(rate, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_invoice_preview_row,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppPreviewInvoiceConstMeta,
+        argValues: [that, projectId, milestoneId, rate],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppPreviewInvoiceConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_preview_invoice",
+        argNames: ["that", "projectId", "milestoneId", "rate"],
+      );
+
+  @override
+  Future<ProfileRow?> crateApiAppCompterAppProfile({required CompterApp that}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 14,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_box_autoadd_profile_row,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppProfileConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppProfileConstMeta =>
+      const TaskConstMeta(debugName: "CompterApp_profile", argNames: ["that"]);
+
+  @override
+  Future<ProfileInput> crateApiAppCompterAppProfileInput({
+    required CompterApp that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 15,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_profile_input,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppProfileInputConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppProfileInputConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_profile_input",
+        argNames: ["that"],
+      );
+
+  @override
   Future<ProjectDetail> crateApiAppCompterAppProject({
     required CompterApp that,
     required String id,
@@ -272,7 +764,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 16,
             port: port_,
           );
         },
@@ -310,7 +802,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 17,
             port: port_,
           );
         },
@@ -329,6 +821,84 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "CompterApp_projects",
         argNames: ["that", "includeArchived"],
+      );
+
+  @override
+  Future<InvoiceDetail> crateApiAppCompterAppRecordPayment({
+    required CompterApp that,
+    required String number,
+    required PaymentInput input,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(number, serializer);
+          sse_encode_box_autoadd_payment_input(input, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 18,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_invoice_detail,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppRecordPaymentConstMeta,
+        argValues: [that, number, input],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppRecordPaymentConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_record_payment",
+        argNames: ["that", "number", "input"],
+      );
+
+  @override
+  Future<ProfileRow> crateApiAppCompterAppSaveProfile({
+    required CompterApp that,
+    required ProfileInput input,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_box_autoadd_profile_input(input, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 19,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_profile_row,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppSaveProfileConstMeta,
+        argValues: [that, input],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppSaveProfileConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_save_profile",
+        argNames: ["that", "input"],
       );
 
   RustArcIncrementStrongCountFnType
@@ -400,15 +970,209 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  CreditInput dco_decode_box_autoadd_credit_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_credit_input(raw);
+  }
+
+  @protected
   MilestoneInput dco_decode_box_autoadd_milestone_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_milestone_input(raw);
   }
 
   @protected
+  PaymentInput dco_decode_box_autoadd_payment_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_payment_input(raw);
+  }
+
+  @protected
+  ProfileInput dco_decode_box_autoadd_profile_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_profile_input(raw);
+  }
+
+  @protected
+  ProfileRow dco_decode_box_autoadd_profile_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_profile_row(raw);
+  }
+
+  @protected
   ProjectInput dco_decode_box_autoadd_project_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_project_input(raw);
+  }
+
+  @protected
+  TimeInput dco_decode_box_autoadd_time_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_time_input(raw);
+  }
+
+  @protected
+  CreditInput dco_decode_credit_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return CreditInput(
+      date: dco_decode_String(arr[0]),
+      amount: dco_decode_String(arr[1]),
+      reason: dco_decode_String(arr[2]),
+    );
+  }
+
+  @protected
+  CreditPreviewRow dco_decode_credit_preview_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return CreditPreviewRow(
+      number: dco_decode_String(arr[0]),
+      invoice: dco_decode_String(arr[1]),
+      total: dco_decode_String(arr[2]),
+      gst: dco_decode_opt_String(arr[3]),
+      balanceAfter: dco_decode_String(arr[4]),
+      warnings: dco_decode_list_String(arr[5]),
+    );
+  }
+
+  @protected
+  CreditedRow dco_decode_credited_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return CreditedRow(
+      noteNumber: dco_decode_String(arr[0]),
+      invoice: dco_decode_invoice_detail(arr[1]),
+      pdfError: dco_decode_opt_String(arr[2]),
+    );
+  }
+
+  @protected
+  HistoryRow dco_decode_history_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return HistoryRow(
+      date: dco_decode_String(arr[0]),
+      document: dco_decode_String(arr[1]),
+      creditNote: dco_decode_bool(arr[2]),
+      received: dco_decode_opt_String(arr[3]),
+      tdsOrBanked: dco_decode_opt_String(arr[4]),
+      settled: dco_decode_String(arr[5]),
+    );
+  }
+
+  @protected
+  InvoiceDetail dco_decode_invoice_detail(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 18)
+      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
+    return InvoiceDetail(
+      number: dco_decode_String(arr[0]),
+      date: dco_decode_String(arr[1]),
+      kind: dco_decode_String(arr[2]),
+      clientName: dco_decode_String(arr[3]),
+      milestoneName: dco_decode_String(arr[4]),
+      currency: dco_decode_String(arr[5]),
+      exchangeRate: dco_decode_opt_String(arr[6]),
+      total: dco_decode_String(arr[7]),
+      breakdown: dco_decode_String(arr[8]),
+      totalInr: dco_decode_opt_String(arr[9]),
+      balance: dco_decode_String(arr[10]),
+      status: dco_decode_String(arr[11]),
+      settled: dco_decode_bool(arr[12]),
+      foreign: dco_decode_bool(arr[13]),
+      history: dco_decode_list_history_row(arr[14]),
+      balanceValue: dco_decode_String(arr[15]),
+      usualTds: dco_decode_opt_String(arr[16]),
+      creditValue: dco_decode_opt_String(arr[17]),
+    );
+  }
+
+  @protected
+  InvoiceList dco_decode_invoice_list(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return InvoiceList(
+      outstanding: dco_decode_String(arr[0]),
+      invoices: dco_decode_list_invoice_row(arr[1]),
+    );
+  }
+
+  @protected
+  InvoicePreviewRow dco_decode_invoice_preview_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return InvoicePreviewRow(
+      number: dco_decode_String(arr[0]),
+      clientName: dco_decode_String(arr[1]),
+      kind: dco_decode_String(arr[2]),
+      total: dco_decode_String(arr[3]),
+      breakdown: dco_decode_String(arr[4]),
+      totalInr: dco_decode_opt_String(arr[5]),
+      warnings: dco_decode_list_String(arr[6]),
+    );
+  }
+
+  @protected
+  InvoiceRow dco_decode_invoice_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return InvoiceRow(
+      number: dco_decode_String(arr[0]),
+      date: dco_decode_String(arr[1]),
+      clientName: dco_decode_String(arr[2]),
+      milestoneName: dco_decode_String(arr[3]),
+      kind: dco_decode_String(arr[4]),
+      total: dco_decode_String(arr[5]),
+      due: dco_decode_opt_String(arr[6]),
+      status: dco_decode_String(arr[7]),
+    );
+  }
+
+  @protected
+  IssuedRow dco_decode_issued_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return IssuedRow(
+      invoice: dco_decode_invoice_detail(arr[0]),
+      project: dco_decode_project_detail(arr[1]),
+      pdfError: dco_decode_opt_String(arr[2]),
+    );
+  }
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_String).toList();
+  }
+
+  @protected
+  List<HistoryRow> dco_decode_list_history_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_history_row).toList();
+  }
+
+  @protected
+  List<InvoiceRow> dco_decode_list_invoice_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_invoice_row).toList();
   }
 
   @protected
@@ -466,26 +1230,83 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProfileRow? dco_decode_opt_box_autoadd_profile_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_profile_row(raw);
+  }
+
+  @protected
+  PaymentInput dco_decode_payment_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return PaymentInput(
+      date: dco_decode_String(arr[0]),
+      received: dco_decode_String(arr[1]),
+      tdsOrBanked: dco_decode_String(arr[2]),
+    );
+  }
+
+  @protected
+  ProfileInput dco_decode_profile_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return ProfileInput(
+      name: dco_decode_String(arr[0]),
+      address: dco_decode_list_String(arr[1]),
+      gstin: dco_decode_String(arr[2]),
+      sacCode: dco_decode_String(arr[3]),
+      invoicePrefix: dco_decode_String(arr[4]),
+      lutArn: dco_decode_String(arr[5]),
+      terms: dco_decode_list_String(arr[6]),
+      currency: dco_decode_String(arr[7]),
+    );
+  }
+
+  @protected
+  ProfileRow dco_decode_profile_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return ProfileRow(
+      name: dco_decode_String(arr[0]),
+      address: dco_decode_list_String(arr[1]),
+      gstin: dco_decode_opt_String(arr[2]),
+      sacCode: dco_decode_String(arr[3]),
+      sacDescription: dco_decode_opt_String(arr[4]),
+      invoicePrefix: dco_decode_String(arr[5]),
+      lutArn: dco_decode_opt_String(arr[6]),
+      terms: dco_decode_list_String(arr[7]),
+      currency: dco_decode_String(arr[8]),
+    );
+  }
+
+  @protected
   ProjectDetail dco_decode_project_detail(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 14)
-      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
     return ProjectDetail(
       id: dco_decode_String(arr[0]),
       name: dco_decode_String(arr[1]),
       clientName: dco_decode_String(arr[2]),
       clientGstin: dco_decode_opt_String(arr[3]),
-      currency: dco_decode_String(arr[4]),
-      billing: dco_decode_String(arr[5]),
-      hourly: dco_decode_bool(arr[6]),
-      status: dco_decode_String(arr[7]),
-      archived: dco_decode_bool(arr[8]),
-      total: dco_decode_String(arr[9]),
-      paid: dco_decode_String(arr[10]),
-      credited: dco_decode_opt_String(arr[11]),
-      outstanding: dco_decode_String(arr[12]),
-      milestones: dco_decode_list_milestone_row(arr[13]),
+      clientLocation: dco_decode_opt_String(arr[4]),
+      currency: dco_decode_String(arr[5]),
+      billing: dco_decode_String(arr[6]),
+      hourly: dco_decode_bool(arr[7]),
+      status: dco_decode_String(arr[8]),
+      archived: dco_decode_bool(arr[9]),
+      total: dco_decode_String(arr[10]),
+      paid: dco_decode_String(arr[11]),
+      credited: dco_decode_opt_String(arr[12]),
+      outstanding: dco_decode_String(arr[13]),
+      milestones: dco_decode_list_milestone_row(arr[14]),
     );
   }
 
@@ -493,13 +1314,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProjectInput dco_decode_project_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return ProjectInput(
       name: dco_decode_String(arr[0]),
       clientName: dco_decode_String(arr[1]),
       clientGstin: dco_decode_opt_String(arr[2]),
-      hourlyRate: dco_decode_opt_String(arr[3]),
+      clientState: dco_decode_opt_String(arr[3]),
+      clientCountry: dco_decode_opt_String(arr[4]),
+      clientAddress: dco_decode_list_String(arr[5]),
+      currency: dco_decode_opt_String(arr[6]),
+      hourlyRate: dco_decode_opt_String(arr[7]),
     );
   }
 
@@ -515,6 +1340,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       clientName: dco_decode_String(arr[2]),
       status: dco_decode_String(arr[3]),
       archived: dco_decode_bool(arr[4]),
+    );
+  }
+
+  @protected
+  TimeInput dco_decode_time_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return TimeInput(
+      date: dco_decode_String(arr[0]),
+      duration: dco_decode_String(arr[1]),
+      note: dco_decode_String(arr[2]),
     );
   }
 
@@ -600,6 +1438,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  CreditInput sse_decode_box_autoadd_credit_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_credit_input(deserializer));
+  }
+
+  @protected
   MilestoneInput sse_decode_box_autoadd_milestone_input(
     SseDeserializer deserializer,
   ) {
@@ -608,11 +1454,245 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PaymentInput sse_decode_box_autoadd_payment_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_payment_input(deserializer));
+  }
+
+  @protected
+  ProfileInput sse_decode_box_autoadd_profile_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_profile_input(deserializer));
+  }
+
+  @protected
+  ProfileRow sse_decode_box_autoadd_profile_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_profile_row(deserializer));
+  }
+
+  @protected
   ProjectInput sse_decode_box_autoadd_project_input(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_project_input(deserializer));
+  }
+
+  @protected
+  TimeInput sse_decode_box_autoadd_time_input(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_time_input(deserializer));
+  }
+
+  @protected
+  CreditInput sse_decode_credit_input(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_date = sse_decode_String(deserializer);
+    var var_amount = sse_decode_String(deserializer);
+    var var_reason = sse_decode_String(deserializer);
+    return CreditInput(date: var_date, amount: var_amount, reason: var_reason);
+  }
+
+  @protected
+  CreditPreviewRow sse_decode_credit_preview_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_number = sse_decode_String(deserializer);
+    var var_invoice = sse_decode_String(deserializer);
+    var var_total = sse_decode_String(deserializer);
+    var var_gst = sse_decode_opt_String(deserializer);
+    var var_balanceAfter = sse_decode_String(deserializer);
+    var var_warnings = sse_decode_list_String(deserializer);
+    return CreditPreviewRow(
+      number: var_number,
+      invoice: var_invoice,
+      total: var_total,
+      gst: var_gst,
+      balanceAfter: var_balanceAfter,
+      warnings: var_warnings,
+    );
+  }
+
+  @protected
+  CreditedRow sse_decode_credited_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_noteNumber = sse_decode_String(deserializer);
+    var var_invoice = sse_decode_invoice_detail(deserializer);
+    var var_pdfError = sse_decode_opt_String(deserializer);
+    return CreditedRow(
+      noteNumber: var_noteNumber,
+      invoice: var_invoice,
+      pdfError: var_pdfError,
+    );
+  }
+
+  @protected
+  HistoryRow sse_decode_history_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_date = sse_decode_String(deserializer);
+    var var_document = sse_decode_String(deserializer);
+    var var_creditNote = sse_decode_bool(deserializer);
+    var var_received = sse_decode_opt_String(deserializer);
+    var var_tdsOrBanked = sse_decode_opt_String(deserializer);
+    var var_settled = sse_decode_String(deserializer);
+    return HistoryRow(
+      date: var_date,
+      document: var_document,
+      creditNote: var_creditNote,
+      received: var_received,
+      tdsOrBanked: var_tdsOrBanked,
+      settled: var_settled,
+    );
+  }
+
+  @protected
+  InvoiceDetail sse_decode_invoice_detail(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_number = sse_decode_String(deserializer);
+    var var_date = sse_decode_String(deserializer);
+    var var_kind = sse_decode_String(deserializer);
+    var var_clientName = sse_decode_String(deserializer);
+    var var_milestoneName = sse_decode_String(deserializer);
+    var var_currency = sse_decode_String(deserializer);
+    var var_exchangeRate = sse_decode_opt_String(deserializer);
+    var var_total = sse_decode_String(deserializer);
+    var var_breakdown = sse_decode_String(deserializer);
+    var var_totalInr = sse_decode_opt_String(deserializer);
+    var var_balance = sse_decode_String(deserializer);
+    var var_status = sse_decode_String(deserializer);
+    var var_settled = sse_decode_bool(deserializer);
+    var var_foreign = sse_decode_bool(deserializer);
+    var var_history = sse_decode_list_history_row(deserializer);
+    var var_balanceValue = sse_decode_String(deserializer);
+    var var_usualTds = sse_decode_opt_String(deserializer);
+    var var_creditValue = sse_decode_opt_String(deserializer);
+    return InvoiceDetail(
+      number: var_number,
+      date: var_date,
+      kind: var_kind,
+      clientName: var_clientName,
+      milestoneName: var_milestoneName,
+      currency: var_currency,
+      exchangeRate: var_exchangeRate,
+      total: var_total,
+      breakdown: var_breakdown,
+      totalInr: var_totalInr,
+      balance: var_balance,
+      status: var_status,
+      settled: var_settled,
+      foreign: var_foreign,
+      history: var_history,
+      balanceValue: var_balanceValue,
+      usualTds: var_usualTds,
+      creditValue: var_creditValue,
+    );
+  }
+
+  @protected
+  InvoiceList sse_decode_invoice_list(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_outstanding = sse_decode_String(deserializer);
+    var var_invoices = sse_decode_list_invoice_row(deserializer);
+    return InvoiceList(outstanding: var_outstanding, invoices: var_invoices);
+  }
+
+  @protected
+  InvoicePreviewRow sse_decode_invoice_preview_row(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_number = sse_decode_String(deserializer);
+    var var_clientName = sse_decode_String(deserializer);
+    var var_kind = sse_decode_String(deserializer);
+    var var_total = sse_decode_String(deserializer);
+    var var_breakdown = sse_decode_String(deserializer);
+    var var_totalInr = sse_decode_opt_String(deserializer);
+    var var_warnings = sse_decode_list_String(deserializer);
+    return InvoicePreviewRow(
+      number: var_number,
+      clientName: var_clientName,
+      kind: var_kind,
+      total: var_total,
+      breakdown: var_breakdown,
+      totalInr: var_totalInr,
+      warnings: var_warnings,
+    );
+  }
+
+  @protected
+  InvoiceRow sse_decode_invoice_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_number = sse_decode_String(deserializer);
+    var var_date = sse_decode_String(deserializer);
+    var var_clientName = sse_decode_String(deserializer);
+    var var_milestoneName = sse_decode_String(deserializer);
+    var var_kind = sse_decode_String(deserializer);
+    var var_total = sse_decode_String(deserializer);
+    var var_due = sse_decode_opt_String(deserializer);
+    var var_status = sse_decode_String(deserializer);
+    return InvoiceRow(
+      number: var_number,
+      date: var_date,
+      clientName: var_clientName,
+      milestoneName: var_milestoneName,
+      kind: var_kind,
+      total: var_total,
+      due: var_due,
+      status: var_status,
+    );
+  }
+
+  @protected
+  IssuedRow sse_decode_issued_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_invoice = sse_decode_invoice_detail(deserializer);
+    var var_project = sse_decode_project_detail(deserializer);
+    var var_pdfError = sse_decode_opt_String(deserializer);
+    return IssuedRow(
+      invoice: var_invoice,
+      project: var_project,
+      pdfError: var_pdfError,
+    );
+  }
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <String>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<HistoryRow> sse_decode_list_history_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <HistoryRow>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_history_row(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<InvoiceRow> sse_decode_list_invoice_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <InvoiceRow>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_invoice_row(deserializer));
+    }
+    return ans_;
   }
 
   @protected
@@ -694,12 +1774,87 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProfileRow? sse_decode_opt_box_autoadd_profile_row(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_profile_row(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  PaymentInput sse_decode_payment_input(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_date = sse_decode_String(deserializer);
+    var var_received = sse_decode_String(deserializer);
+    var var_tdsOrBanked = sse_decode_String(deserializer);
+    return PaymentInput(
+      date: var_date,
+      received: var_received,
+      tdsOrBanked: var_tdsOrBanked,
+    );
+  }
+
+  @protected
+  ProfileInput sse_decode_profile_input(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_address = sse_decode_list_String(deserializer);
+    var var_gstin = sse_decode_String(deserializer);
+    var var_sacCode = sse_decode_String(deserializer);
+    var var_invoicePrefix = sse_decode_String(deserializer);
+    var var_lutArn = sse_decode_String(deserializer);
+    var var_terms = sse_decode_list_String(deserializer);
+    var var_currency = sse_decode_String(deserializer);
+    return ProfileInput(
+      name: var_name,
+      address: var_address,
+      gstin: var_gstin,
+      sacCode: var_sacCode,
+      invoicePrefix: var_invoicePrefix,
+      lutArn: var_lutArn,
+      terms: var_terms,
+      currency: var_currency,
+    );
+  }
+
+  @protected
+  ProfileRow sse_decode_profile_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_address = sse_decode_list_String(deserializer);
+    var var_gstin = sse_decode_opt_String(deserializer);
+    var var_sacCode = sse_decode_String(deserializer);
+    var var_sacDescription = sse_decode_opt_String(deserializer);
+    var var_invoicePrefix = sse_decode_String(deserializer);
+    var var_lutArn = sse_decode_opt_String(deserializer);
+    var var_terms = sse_decode_list_String(deserializer);
+    var var_currency = sse_decode_String(deserializer);
+    return ProfileRow(
+      name: var_name,
+      address: var_address,
+      gstin: var_gstin,
+      sacCode: var_sacCode,
+      sacDescription: var_sacDescription,
+      invoicePrefix: var_invoicePrefix,
+      lutArn: var_lutArn,
+      terms: var_terms,
+      currency: var_currency,
+    );
+  }
+
+  @protected
   ProjectDetail sse_decode_project_detail(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_String(deserializer);
     var var_name = sse_decode_String(deserializer);
     var var_clientName = sse_decode_String(deserializer);
     var var_clientGstin = sse_decode_opt_String(deserializer);
+    var var_clientLocation = sse_decode_opt_String(deserializer);
     var var_currency = sse_decode_String(deserializer);
     var var_billing = sse_decode_String(deserializer);
     var var_hourly = sse_decode_bool(deserializer);
@@ -715,6 +1870,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       name: var_name,
       clientName: var_clientName,
       clientGstin: var_clientGstin,
+      clientLocation: var_clientLocation,
       currency: var_currency,
       billing: var_billing,
       hourly: var_hourly,
@@ -734,11 +1890,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_name = sse_decode_String(deserializer);
     var var_clientName = sse_decode_String(deserializer);
     var var_clientGstin = sse_decode_opt_String(deserializer);
+    var var_clientState = sse_decode_opt_String(deserializer);
+    var var_clientCountry = sse_decode_opt_String(deserializer);
+    var var_clientAddress = sse_decode_list_String(deserializer);
+    var var_currency = sse_decode_opt_String(deserializer);
     var var_hourlyRate = sse_decode_opt_String(deserializer);
     return ProjectInput(
       name: var_name,
       clientName: var_clientName,
       clientGstin: var_clientGstin,
+      clientState: var_clientState,
+      clientCountry: var_clientCountry,
+      clientAddress: var_clientAddress,
+      currency: var_currency,
       hourlyRate: var_hourlyRate,
     );
   }
@@ -758,6 +1922,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       status: var_status,
       archived: var_archived,
     );
+  }
+
+  @protected
+  TimeInput sse_decode_time_input(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_date = sse_decode_String(deserializer);
+    var var_duration = sse_decode_String(deserializer);
+    var var_note = sse_decode_String(deserializer);
+    return TimeInput(date: var_date, duration: var_duration, note: var_note);
   }
 
   @protected
@@ -850,6 +2023,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_credit_input(
+    CreditInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_credit_input(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_milestone_input(
     MilestoneInput self,
     SseSerializer serializer,
@@ -859,12 +2041,188 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_payment_input(
+    PaymentInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_payment_input(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_profile_input(
+    ProfileInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_profile_input(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_profile_row(
+    ProfileRow self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_profile_row(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_project_input(
     ProjectInput self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_project_input(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_time_input(
+    TimeInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_time_input(self, serializer);
+  }
+
+  @protected
+  void sse_encode_credit_input(CreditInput self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.date, serializer);
+    sse_encode_String(self.amount, serializer);
+    sse_encode_String(self.reason, serializer);
+  }
+
+  @protected
+  void sse_encode_credit_preview_row(
+    CreditPreviewRow self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.number, serializer);
+    sse_encode_String(self.invoice, serializer);
+    sse_encode_String(self.total, serializer);
+    sse_encode_opt_String(self.gst, serializer);
+    sse_encode_String(self.balanceAfter, serializer);
+    sse_encode_list_String(self.warnings, serializer);
+  }
+
+  @protected
+  void sse_encode_credited_row(CreditedRow self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.noteNumber, serializer);
+    sse_encode_invoice_detail(self.invoice, serializer);
+    sse_encode_opt_String(self.pdfError, serializer);
+  }
+
+  @protected
+  void sse_encode_history_row(HistoryRow self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.date, serializer);
+    sse_encode_String(self.document, serializer);
+    sse_encode_bool(self.creditNote, serializer);
+    sse_encode_opt_String(self.received, serializer);
+    sse_encode_opt_String(self.tdsOrBanked, serializer);
+    sse_encode_String(self.settled, serializer);
+  }
+
+  @protected
+  void sse_encode_invoice_detail(InvoiceDetail self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.number, serializer);
+    sse_encode_String(self.date, serializer);
+    sse_encode_String(self.kind, serializer);
+    sse_encode_String(self.clientName, serializer);
+    sse_encode_String(self.milestoneName, serializer);
+    sse_encode_String(self.currency, serializer);
+    sse_encode_opt_String(self.exchangeRate, serializer);
+    sse_encode_String(self.total, serializer);
+    sse_encode_String(self.breakdown, serializer);
+    sse_encode_opt_String(self.totalInr, serializer);
+    sse_encode_String(self.balance, serializer);
+    sse_encode_String(self.status, serializer);
+    sse_encode_bool(self.settled, serializer);
+    sse_encode_bool(self.foreign, serializer);
+    sse_encode_list_history_row(self.history, serializer);
+    sse_encode_String(self.balanceValue, serializer);
+    sse_encode_opt_String(self.usualTds, serializer);
+    sse_encode_opt_String(self.creditValue, serializer);
+  }
+
+  @protected
+  void sse_encode_invoice_list(InvoiceList self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.outstanding, serializer);
+    sse_encode_list_invoice_row(self.invoices, serializer);
+  }
+
+  @protected
+  void sse_encode_invoice_preview_row(
+    InvoicePreviewRow self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.number, serializer);
+    sse_encode_String(self.clientName, serializer);
+    sse_encode_String(self.kind, serializer);
+    sse_encode_String(self.total, serializer);
+    sse_encode_String(self.breakdown, serializer);
+    sse_encode_opt_String(self.totalInr, serializer);
+    sse_encode_list_String(self.warnings, serializer);
+  }
+
+  @protected
+  void sse_encode_invoice_row(InvoiceRow self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.number, serializer);
+    sse_encode_String(self.date, serializer);
+    sse_encode_String(self.clientName, serializer);
+    sse_encode_String(self.milestoneName, serializer);
+    sse_encode_String(self.kind, serializer);
+    sse_encode_String(self.total, serializer);
+    sse_encode_opt_String(self.due, serializer);
+    sse_encode_String(self.status, serializer);
+  }
+
+  @protected
+  void sse_encode_issued_row(IssuedRow self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_invoice_detail(self.invoice, serializer);
+    sse_encode_project_detail(self.project, serializer);
+    sse_encode_opt_String(self.pdfError, serializer);
+  }
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_String(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_history_row(
+    List<HistoryRow> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_history_row(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_invoice_row(
+    List<InvoiceRow> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_invoice_row(item, serializer);
+    }
   }
 
   @protected
@@ -935,12 +2293,61 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_profile_row(
+    ProfileRow? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_profile_row(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_payment_input(PaymentInput self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.date, serializer);
+    sse_encode_String(self.received, serializer);
+    sse_encode_String(self.tdsOrBanked, serializer);
+  }
+
+  @protected
+  void sse_encode_profile_input(ProfileInput self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_list_String(self.address, serializer);
+    sse_encode_String(self.gstin, serializer);
+    sse_encode_String(self.sacCode, serializer);
+    sse_encode_String(self.invoicePrefix, serializer);
+    sse_encode_String(self.lutArn, serializer);
+    sse_encode_list_String(self.terms, serializer);
+    sse_encode_String(self.currency, serializer);
+  }
+
+  @protected
+  void sse_encode_profile_row(ProfileRow self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_list_String(self.address, serializer);
+    sse_encode_opt_String(self.gstin, serializer);
+    sse_encode_String(self.sacCode, serializer);
+    sse_encode_opt_String(self.sacDescription, serializer);
+    sse_encode_String(self.invoicePrefix, serializer);
+    sse_encode_opt_String(self.lutArn, serializer);
+    sse_encode_list_String(self.terms, serializer);
+    sse_encode_String(self.currency, serializer);
+  }
+
+  @protected
   void sse_encode_project_detail(ProjectDetail self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.id, serializer);
     sse_encode_String(self.name, serializer);
     sse_encode_String(self.clientName, serializer);
     sse_encode_opt_String(self.clientGstin, serializer);
+    sse_encode_opt_String(self.clientLocation, serializer);
     sse_encode_String(self.currency, serializer);
     sse_encode_String(self.billing, serializer);
     sse_encode_bool(self.hourly, serializer);
@@ -959,6 +2366,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.name, serializer);
     sse_encode_String(self.clientName, serializer);
     sse_encode_opt_String(self.clientGstin, serializer);
+    sse_encode_opt_String(self.clientState, serializer);
+    sse_encode_opt_String(self.clientCountry, serializer);
+    sse_encode_list_String(self.clientAddress, serializer);
+    sse_encode_opt_String(self.currency, serializer);
     sse_encode_opt_String(self.hourlyRate, serializer);
   }
 
@@ -970,6 +2381,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.clientName, serializer);
     sse_encode_String(self.status, serializer);
     sse_encode_bool(self.archived, serializer);
+  }
+
+  @protected
+  void sse_encode_time_input(TimeInput self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.date, serializer);
+    sse_encode_String(self.duration, serializer);
+    sse_encode_String(self.note, serializer);
   }
 
   @protected
@@ -1024,6 +2443,88 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
       .api
       .crateApiAppCompterAppCreateProject(that: this, input: input);
 
+  /// Where credit note `number`'s PDF is, writing it first if it is missing
+  Future<String> creditNotePdf({required String number}) => RustLib.instance.api
+      .crateApiAppCompterAppCreditNotePdf(that: this, number: number);
+
+  Future<InvoiceDetail> invoice({required String number}) => RustLib
+      .instance
+      .api
+      .crateApiAppCompterAppInvoice(that: this, number: number);
+
+  /// Where invoice `number`'s PDF is, writing it first if it is missing
+  Future<String> invoicePdf({required String number}) => RustLib.instance.api
+      .crateApiAppCompterAppInvoicePdf(that: this, number: number);
+
+  /// Every issued invoice, newest first
+  Future<InvoiceList> invoices() =>
+      RustLib.instance.api.crateApiAppCompterAppInvoices(that: this);
+
+  /// Issue a credit note against invoice `number` and write its PDF
+  Future<CreditedRow> issueCredit({
+    required String number,
+    required CreditInput input,
+  }) => RustLib.instance.api.crateApiAppCompterAppIssueCredit(
+    that: this,
+    number: number,
+    input: input,
+  );
+
+  /// Issue today's invoice for a pending milestone and write its PDF
+  Future<IssuedRow> issueInvoice({
+    required String projectId,
+    required String milestoneId,
+    String? rate,
+  }) => RustLib.instance.api.crateApiAppCompterAppIssueInvoice(
+    that: this,
+    projectId: projectId,
+    milestoneId: milestoneId,
+    rate: rate,
+  );
+
+  /// Log time worked on a pending milestone of an hourly project
+  Future<ProjectDetail> logTime({
+    required String projectId,
+    required String milestoneId,
+    required TimeInput input,
+  }) => RustLib.instance.api.crateApiAppCompterAppLogTime(
+    that: this,
+    projectId: projectId,
+    milestoneId: milestoneId,
+    input: input,
+  );
+
+  /// The credit note `input` would make against invoice `number`, without saving
+  Future<CreditPreviewRow> previewCredit({
+    required String number,
+    required CreditInput input,
+  }) => RustLib.instance.api.crateApiAppCompterAppPreviewCredit(
+    that: this,
+    number: number,
+    input: input,
+  );
+
+  /// The invoice a pending milestone would get today, without saving anything. `rate` (rupees
+  /// per unit) is needed when the project is billed in a foreign currency.
+  Future<InvoicePreviewRow> previewInvoice({
+    required String projectId,
+    required String milestoneId,
+    String? rate,
+  }) => RustLib.instance.api.crateApiAppCompterAppPreviewInvoice(
+    that: this,
+    projectId: projectId,
+    milestoneId: milestoneId,
+    rate: rate,
+  );
+
+  /// The business profile, or `None` before it is set up (invoicing needs it)
+  Future<ProfileRow?> profile() =>
+      RustLib.instance.api.crateApiAppCompterAppProfile(that: this);
+
+  /// The profile form, prefilled with what is saved or the usual first values
+  Future<ProfileInput> profileInput() =>
+      RustLib.instance.api.crateApiAppCompterAppProfileInput(that: this);
+
   Future<ProjectDetail> project({required String id}) =>
       RustLib.instance.api.crateApiAppCompterAppProject(that: this, id: id);
 
@@ -1033,4 +2534,21 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
         that: this,
         includeArchived: includeArchived,
       );
+
+  /// Record all or part of a payment. On a rupee invoice `tds_or_banked` is the TDS withheld;
+  /// on a foreign one it is the rupees that reached the bank.
+  Future<InvoiceDetail> recordPayment({
+    required String number,
+    required PaymentInput input,
+  }) => RustLib.instance.api.crateApiAppCompterAppRecordPayment(
+    that: this,
+    number: number,
+    input: input,
+  );
+
+  /// Save the business profile; the logo, set elsewhere, is kept
+  Future<ProfileRow> saveProfile({required ProfileInput input}) => RustLib
+      .instance
+      .api
+      .crateApiAppCompterAppSaveProfile(that: this, input: input);
 }

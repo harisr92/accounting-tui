@@ -8,6 +8,8 @@
 
 import 'api/app.dart';
 import 'api/error.dart';
+import 'api/invoicing.dart';
+import 'api/profile.dart';
 import 'api/rows.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -60,10 +62,61 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  CreditInput dco_decode_box_autoadd_credit_input(dynamic raw);
+
+  @protected
   MilestoneInput dco_decode_box_autoadd_milestone_input(dynamic raw);
 
   @protected
+  PaymentInput dco_decode_box_autoadd_payment_input(dynamic raw);
+
+  @protected
+  ProfileInput dco_decode_box_autoadd_profile_input(dynamic raw);
+
+  @protected
+  ProfileRow dco_decode_box_autoadd_profile_row(dynamic raw);
+
+  @protected
   ProjectInput dco_decode_box_autoadd_project_input(dynamic raw);
+
+  @protected
+  TimeInput dco_decode_box_autoadd_time_input(dynamic raw);
+
+  @protected
+  CreditInput dco_decode_credit_input(dynamic raw);
+
+  @protected
+  CreditPreviewRow dco_decode_credit_preview_row(dynamic raw);
+
+  @protected
+  CreditedRow dco_decode_credited_row(dynamic raw);
+
+  @protected
+  HistoryRow dco_decode_history_row(dynamic raw);
+
+  @protected
+  InvoiceDetail dco_decode_invoice_detail(dynamic raw);
+
+  @protected
+  InvoiceList dco_decode_invoice_list(dynamic raw);
+
+  @protected
+  InvoicePreviewRow dco_decode_invoice_preview_row(dynamic raw);
+
+  @protected
+  InvoiceRow dco_decode_invoice_row(dynamic raw);
+
+  @protected
+  IssuedRow dco_decode_issued_row(dynamic raw);
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<HistoryRow> dco_decode_list_history_row(dynamic raw);
+
+  @protected
+  List<InvoiceRow> dco_decode_list_invoice_row(dynamic raw);
 
   @protected
   List<MilestoneRow> dco_decode_list_milestone_row(dynamic raw);
@@ -84,6 +137,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  ProfileRow? dco_decode_opt_box_autoadd_profile_row(dynamic raw);
+
+  @protected
+  PaymentInput dco_decode_payment_input(dynamic raw);
+
+  @protected
+  ProfileInput dco_decode_profile_input(dynamic raw);
+
+  @protected
+  ProfileRow dco_decode_profile_row(dynamic raw);
+
+  @protected
   ProjectDetail dco_decode_project_detail(dynamic raw);
 
   @protected
@@ -91,6 +156,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectRow dco_decode_project_row(dynamic raw);
+
+  @protected
+  TimeInput dco_decode_time_input(dynamic raw);
 
   @protected
   int dco_decode_u_8(dynamic raw);
@@ -132,14 +200,71 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  CreditInput sse_decode_box_autoadd_credit_input(SseDeserializer deserializer);
+
+  @protected
   MilestoneInput sse_decode_box_autoadd_milestone_input(
     SseDeserializer deserializer,
   );
 
   @protected
+  PaymentInput sse_decode_box_autoadd_payment_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProfileInput sse_decode_box_autoadd_profile_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProfileRow sse_decode_box_autoadd_profile_row(SseDeserializer deserializer);
+
+  @protected
   ProjectInput sse_decode_box_autoadd_project_input(
     SseDeserializer deserializer,
   );
+
+  @protected
+  TimeInput sse_decode_box_autoadd_time_input(SseDeserializer deserializer);
+
+  @protected
+  CreditInput sse_decode_credit_input(SseDeserializer deserializer);
+
+  @protected
+  CreditPreviewRow sse_decode_credit_preview_row(SseDeserializer deserializer);
+
+  @protected
+  CreditedRow sse_decode_credited_row(SseDeserializer deserializer);
+
+  @protected
+  HistoryRow sse_decode_history_row(SseDeserializer deserializer);
+
+  @protected
+  InvoiceDetail sse_decode_invoice_detail(SseDeserializer deserializer);
+
+  @protected
+  InvoiceList sse_decode_invoice_list(SseDeserializer deserializer);
+
+  @protected
+  InvoicePreviewRow sse_decode_invoice_preview_row(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  InvoiceRow sse_decode_invoice_row(SseDeserializer deserializer);
+
+  @protected
+  IssuedRow sse_decode_issued_row(SseDeserializer deserializer);
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<HistoryRow> sse_decode_list_history_row(SseDeserializer deserializer);
+
+  @protected
+  List<InvoiceRow> sse_decode_list_invoice_row(SseDeserializer deserializer);
 
   @protected
   List<MilestoneRow> sse_decode_list_milestone_row(
@@ -162,6 +287,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  ProfileRow? sse_decode_opt_box_autoadd_profile_row(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PaymentInput sse_decode_payment_input(SseDeserializer deserializer);
+
+  @protected
+  ProfileInput sse_decode_profile_input(SseDeserializer deserializer);
+
+  @protected
+  ProfileRow sse_decode_profile_row(SseDeserializer deserializer);
+
+  @protected
   ProjectDetail sse_decode_project_detail(SseDeserializer deserializer);
 
   @protected
@@ -169,6 +308,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectRow sse_decode_project_row(SseDeserializer deserializer);
+
+  @protected
+  TimeInput sse_decode_time_input(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
@@ -217,14 +359,92 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_credit_input(
+    CreditInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_milestone_input(
     MilestoneInput self,
     SseSerializer serializer,
   );
 
   @protected
+  void sse_encode_box_autoadd_payment_input(
+    PaymentInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_profile_input(
+    ProfileInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_profile_row(
+    ProfileRow self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_project_input(
     ProjectInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_time_input(
+    TimeInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_credit_input(CreditInput self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_credit_preview_row(
+    CreditPreviewRow self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_credited_row(CreditedRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_history_row(HistoryRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_invoice_detail(InvoiceDetail self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_invoice_list(InvoiceList self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_invoice_preview_row(
+    InvoicePreviewRow self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_invoice_row(InvoiceRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_issued_row(IssuedRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_history_row(
+    List<HistoryRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_invoice_row(
+    List<InvoiceRow> self,
     SseSerializer serializer,
   );
 
@@ -259,6 +479,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_profile_row(
+    ProfileRow? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_payment_input(PaymentInput self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_profile_input(ProfileInput self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_profile_row(ProfileRow self, SseSerializer serializer);
+
+  @protected
   void sse_encode_project_detail(ProjectDetail self, SseSerializer serializer);
 
   @protected
@@ -266,6 +501,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_project_row(ProjectRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_time_input(TimeInput self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);

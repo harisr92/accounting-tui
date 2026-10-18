@@ -5,10 +5,12 @@
 
 import '../frb_generated.dart';
 import 'error.dart';
+import 'invoicing.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'profile.dart';
 import 'rows.dart';
 
-// These functions are ignored because they are not marked as `pub`: `over`, `project_id`
+// These functions are ignored because they are not marked as `pub`: `credit_draft`, `date`, `exchange_rate`, `milestone_id`, `over`, `project_id`, `today`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>>
 abstract class CompterApp implements RustOpaqueInterface {
@@ -19,16 +21,79 @@ abstract class CompterApp implements RustOpaqueInterface {
 
   Future<ProjectDetail> createProject({required ProjectInput input});
 
-  /// The sample business of `compter --demo`, in memory; nothing is saved
-  static Future<CompterApp> demo() =>
-      RustLib.instance.api.crateApiAppCompterAppDemo();
+  /// Where credit note `number`'s PDF is, writing it first if it is missing
+  Future<String> creditNotePdf({required String number});
 
-  /// Open (or create) `compter.redb` in `data_dir`, the app's private support folder
+  /// The sample business of `compter --demo`, in memory; nothing is saved. Its PDFs are
+  /// written to `scratch_dir`, a cache folder.
+  static Future<CompterApp> demo({required String scratchDir}) =>
+      RustLib.instance.api.crateApiAppCompterAppDemo(scratchDir: scratchDir);
+
+  Future<InvoiceDetail> invoice({required String number});
+
+  /// Where invoice `number`'s PDF is, writing it first if it is missing
+  Future<String> invoicePdf({required String number});
+
+  /// Every issued invoice, newest first
+  Future<InvoiceList> invoices();
+
+  /// Issue a credit note against invoice `number` and write its PDF
+  Future<CreditedRow> issueCredit({
+    required String number,
+    required CreditInput input,
+  });
+
+  /// Issue today's invoice for a pending milestone and write its PDF
+  Future<IssuedRow> issueInvoice({
+    required String projectId,
+    required String milestoneId,
+    String? rate,
+  });
+
+  /// Log time worked on a pending milestone of an hourly project
+  Future<ProjectDetail> logTime({
+    required String projectId,
+    required String milestoneId,
+    required TimeInput input,
+  });
+
+  /// Open (or create) `compter.redb` in `data_dir`, the app's private support folder. PDFs
+  /// are written under it too.
   static Future<CompterApp> open({required String dataDir}) =>
       RustLib.instance.api.crateApiAppCompterAppOpen(dataDir: dataDir);
+
+  /// The credit note `input` would make against invoice `number`, without saving
+  Future<CreditPreviewRow> previewCredit({
+    required String number,
+    required CreditInput input,
+  });
+
+  /// The invoice a pending milestone would get today, without saving anything. `rate` (rupees
+  /// per unit) is needed when the project is billed in a foreign currency.
+  Future<InvoicePreviewRow> previewInvoice({
+    required String projectId,
+    required String milestoneId,
+    String? rate,
+  });
+
+  /// The business profile, or `None` before it is set up (invoicing needs it)
+  Future<ProfileRow?> profile();
+
+  /// The profile form, prefilled with what is saved or the usual first values
+  Future<ProfileInput> profileInput();
 
   Future<ProjectDetail> project({required String id});
 
   /// The project list, from summaries; archived projects only when asked for
   Future<List<ProjectRow>> projects({required bool includeArchived});
+
+  /// Record all or part of a payment. On a rupee invoice `tds_or_banked` is the TDS withheld;
+  /// on a foreign one it is the rupees that reached the bank.
+  Future<InvoiceDetail> recordPayment({
+    required String number,
+    required PaymentInput input,
+  });
+
+  /// Save the business profile; the logo, set elsewhere, is kept
+  Future<ProfileRow> saveProfile({required ProfileInput input});
 }

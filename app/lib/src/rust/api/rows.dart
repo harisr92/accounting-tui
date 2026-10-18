@@ -95,6 +95,9 @@ class ProjectDetail {
   final String clientName;
   final String? clientGstin;
 
+  /// `Karnataka (29)` or `Germany`; `None` when not known
+  final String? clientLocation;
+
   /// `INR`, `USD`, `GBP` or `EUR`
   final String currency;
 
@@ -118,6 +121,7 @@ class ProjectDetail {
     required this.name,
     required this.clientName,
     this.clientGstin,
+    this.clientLocation,
     required this.currency,
     required this.billing,
     required this.hourly,
@@ -136,6 +140,7 @@ class ProjectDetail {
       name.hashCode ^
       clientName.hashCode ^
       clientGstin.hashCode ^
+      clientLocation.hashCode ^
       currency.hashCode ^
       billing.hashCode ^
       hourly.hashCode ^
@@ -156,6 +161,7 @@ class ProjectDetail {
           name == other.name &&
           clientName == other.clientName &&
           clientGstin == other.clientGstin &&
+          clientLocation == other.clientLocation &&
           currency == other.currency &&
           billing == other.billing &&
           hourly == other.hourly &&
@@ -168,12 +174,26 @@ class ProjectDetail {
           milestones == other.milestones;
 }
 
-/// A new project as typed: an Indian client billed in rupees. Clients abroad, addresses and
-/// other currencies come with the full project form.
+/// A new project as typed. A client with a country is abroad (billed in any currency, invoiced
+/// as an export); one without is in India, billed in rupees.
 class ProjectInput {
   final String name;
   final String clientName;
+
+  /// Blank for an unregistered client or one abroad
   final String? clientGstin;
+
+  /// GST state code (`29`): the place of supply for a client in India without a GSTIN
+  final String? clientState;
+
+  /// Blank for a client in India
+  final String? clientCountry;
+
+  /// Address lines; blank lines are dropped
+  final List<String> clientAddress;
+
+  /// `INR`, `USD`, `GBP` or `EUR`; blank means INR
+  final String? currency;
 
   /// Blank or `None` for a fixed-price project
   final String? hourlyRate;
@@ -182,6 +202,10 @@ class ProjectInput {
     required this.name,
     required this.clientName,
     this.clientGstin,
+    this.clientState,
+    this.clientCountry,
+    required this.clientAddress,
+    this.currency,
     this.hourlyRate,
   });
 
@@ -190,6 +214,10 @@ class ProjectInput {
       name.hashCode ^
       clientName.hashCode ^
       clientGstin.hashCode ^
+      clientState.hashCode ^
+      clientCountry.hashCode ^
+      clientAddress.hashCode ^
+      currency.hashCode ^
       hourlyRate.hashCode;
 
   @override
@@ -200,6 +228,10 @@ class ProjectInput {
           name == other.name &&
           clientName == other.clientName &&
           clientGstin == other.clientGstin &&
+          clientState == other.clientState &&
+          clientCountry == other.clientCountry &&
+          clientAddress == other.clientAddress &&
+          currency == other.currency &&
           hourlyRate == other.hourlyRate;
 }
 
