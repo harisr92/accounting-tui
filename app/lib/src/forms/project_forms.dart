@@ -6,7 +6,11 @@ import 'form_dialog.dart';
 
 const _amount = TextInputType.numberWithOptions(decimal: true);
 
-/// New project for an Indian client billed in rupees; a blank rate means fixed price
+/// What projects and the profile can be billed in, as Rust names them
+const currencies = ['INR', 'USD', 'GBP', 'EUR'];
+
+/// New project. A client with a country is abroad: an export, billed in any currency. One in
+/// India without a GSTIN needs a state code, the place of supply. A blank rate is fixed price.
 Future<ProjectDetail?> newProjectForm(BuildContext context, CompterApp app) {
   return FormDialog.show(
     context,
@@ -14,7 +18,27 @@ Future<ProjectDetail?> newProjectForm(BuildContext context, CompterApp app) {
     fields: const [
       FieldSpec('name', 'Name', hint: 'e.g. Website Revamp'),
       FieldSpec('client_name', 'Client', hint: 'e.g. Acme Pvt Ltd'),
-      FieldSpec('client_gstin', 'Client GSTIN', hint: 'blank if unregistered'),
+      FieldSpec(
+        'client_gstin',
+        'Client GSTIN',
+        hint: 'blank if unregistered or abroad',
+      ),
+      FieldSpec(
+        'client_state',
+        'State code',
+        hint: 'India, no GSTIN: e.g. 29',
+        keyboardType: TextInputType.number,
+      ),
+      FieldSpec('client_country', 'Country', hint: 'abroad only, e.g. Germany'),
+      FieldSpec('address_1', 'Address', hint: 'street, building'),
+      FieldSpec('address_2', '', hint: 'city, PIN / postcode'),
+      FieldSpec(
+        'currency',
+        'Currency',
+        hint: 'anything but INR needs a client abroad',
+        initial: 'INR',
+        options: currencies,
+      ),
       FieldSpec(
         'hourly_rate',
         'Rate / hour',
@@ -27,6 +51,10 @@ Future<ProjectDetail?> newProjectForm(BuildContext context, CompterApp app) {
         name: values['name']!,
         clientName: values['client_name']!,
         clientGstin: values['client_gstin'],
+        clientState: values['client_state'],
+        clientCountry: values['client_country'],
+        clientAddress: [values['address_1']!, values['address_2']!],
+        currency: values['currency'],
         hourlyRate: values['hourly_rate'],
       ),
     ),
