@@ -13,6 +13,7 @@ use compter_core::services::{
     CreditDraft, ExpenseDraft, ExpenseService, InvoiceService, MilestoneDraft, ProjectDraft,
     ProjectService, ReportService, ServiceError,
 };
+use compter_core::storage::sync::{self, Resolution, SyncDir, SyncError};
 use compter_core::storage::{DataDir, RedbRepository, Store};
 
 use super::expenses::{category, fiscal_year};
@@ -22,19 +23,22 @@ use super::{
     ApiError, CreditInput, CreditPreviewRow, CreditedRow, ExpenseInput, ExpenseList, ExpenseRow,
     ExportRow, InvoiceDetail, InvoiceList, InvoicePreviewRow, InvoiceRow, IssuedRow,
     MilestoneInput, PaymentInput, ProfileInput, ProfileRow, ProjectDetail, ProjectInput,
-    ProjectRow, ReportRow, TimeInput,
+    ProjectRow, ReceivedRow, ReportRow, SentRow, SyncStatusRow, TimeInput,
 };
 
 /// The open database and the services over it. Dart opens one at start-up and keeps it for the
-/// life of the app; only one can have the database file open.
+/// life of the app; only one can have the database file open. Handing the data to or from the
+/// computer closes and reopens it.
 #[frb(opaque)]
 pub struct CompterApp {
     projects: ProjectService<RedbRepository>,
     invoices: InvoiceService<RedbRepository>,
     expenses: ExpenseService<RedbRepository>,
     reports: ReportService<RedbRepository>,
-    /// Kept so the database stays open as long as the services use it
-    _store: Store,
+    store: Store,
+    dir: DataDir,
+    /// In memory: nothing to hand off
+    demo: bool,
 }
 
 impl CompterApp {
@@ -43,23 +47,61 @@ impl CompterApp {
     pub fn open(data_dir: String) -> Result<Self, ApiError> {
         let dir = DataDir::new(data_dir);
         let store = Store::open(&dir).map_err(ServiceError::from)?;
-        Ok(Self::over(store, dir))
+        Ok(Self::over(store, dir, false))
     }
 
     /// The sample business of `compter --demo`, in memory; nothing is saved. Its PDFs and
     /// returns are written to `scratch_dir`, a cache folder.
     pub fn demo(scratch_dir: String) -> Result<Self, ApiError> {
-        Ok(Self::over(demo::store()?, DataDir::new(scratch_dir)))
+        Ok(Self::over(demo::store()?, DataDir::new(scratch_dir), true))
     }
 
-    fn over(store: Store, dir: DataDir) -> Self {
+    fn over(store: Store, dir: DataDir, demo: bool) -> Self {
         Self {
             projects: ProjectService::new(store.repository()),
             invoices: InvoiceService::new(store.repository(), Some(dir.clone())),
             expenses: ExpenseService::new(store.repository()),
-            reports: ReportService::new(store.repository(), Some(dir)),
-            _store: store,
+            reports: ReportService::new(store.repository(), Some(dir.clone())),
+            store,
+            dir,
+            demo,
         }
+    }
+
+    /// Close the database, run `step` on its folder, and open it again, whether or not `step`
+    /// worked. Should reopening fail, the app is left on an empty in-memory database, and the
+    /// error says to restart.
+    fn closed<T>(
+        &mut self,
+        step: impl FnOnce(&DataDir) -> Result<T, SyncError>,
+    ) -> Result<T, ApiError> {
+        if self.demo {
+            return Err(ServiceError::NoSyncInDemo.into());
+        }
+        let dir = self.dir.clone();
+        let stand_in = Self::over(
+            Store::in_memory().map_err(ServiceError::from)?,
+            dir.clone(),
+            true,
+        );
+        let Self {
+            projects,
+            invoices,
+            expenses,
+            reports,
+            store,
+            ..
+        } = std::mem::replace(self, stand_in);
+        // Every repository goes before the store can close
+        drop((projects, invoices, expenses, reports));
+        store.close().map_err(ServiceError::from)?;
+        let result = step(&dir);
+        let store = Store::open(&dir).map_err(|e| ApiError {
+            field: None,
+            message: format!("{e}; restart compter"),
+        })?;
+        *self = Self::over(store, dir, false);
+        Ok(result.map_err(ServiceError::from)?)
     }
 
     /// The project list, from summaries; archived projects only when asked for
@@ -401,6 +443,84 @@ impl CompterApp {
         Ok(ExportRow {
             path: path.to_string_lossy().into_owned(),
             summary: format!("IFF {}: {}", month_label(month), iff.summary()),
+        })
+    }
+
+    /// Where this phone's data stands against the computer's sync folder
+    pub fn sync_status(&self) -> Result<SyncStatusRow, ApiError> {
+        if self.demo {
+            return Err(ServiceError::NoSyncInDemo.into());
+        }
+        let state = sync::state(&self.dir, &self.store).map_err(ServiceError::from)?;
+        Ok(SyncStatusRow::from(state))
+    }
+
+    /// Take the snapshot in `folder`, where Dart copied `compter.redb` and `manifest.json` from
+    /// the computer's sync folder. A new install's empty database is simply replaced.
+    pub fn receive_snapshot(&mut self, folder: String) -> Result<ReceivedRow, ApiError> {
+        let blank = self.store.is_blank().map_err(ServiceError::from)?;
+        let from = SyncDir::new(folder);
+        let received = self.closed(|dir| match sync::receive(dir, &from, blank) {
+            Err(SyncError::Conflict { device, .. }) => Ok(ReceivedRow {
+                message: format!(
+                    "This phone and {device} both changed the data since they last synced. Keep this phone's, or take {device}'s?"
+                ),
+                conflict: true,
+            }),
+            Err(error @ SyncError::Undelivered { .. }) => Ok(ReceivedRow {
+                message: error.to_string(),
+                conflict: true,
+            }),
+            Ok(Some(generation)) => Ok(ReceivedRow {
+                message: format!("Took snapshot {generation} from the computer"),
+                conflict: false,
+            }),
+            Ok(None) => Ok(ReceivedRow {
+                message: "Already up to date with the computer".to_owned(),
+                conflict: false,
+            }),
+            Err(error) => Err(error),
+        })?;
+        Ok(received)
+    }
+
+    /// Settle what `receive_snapshot` couldn't: keep this phone's data (send it next), or take
+    /// the snapshot in `folder`, keeping this phone's database beside it as a backup
+    pub fn settle_snapshot(
+        &mut self,
+        folder: String,
+        keep_this_phone: bool,
+        device_name: String,
+    ) -> Result<String, ApiError> {
+        let from = SyncDir::new(folder);
+        let resolution = if keep_this_phone {
+            Resolution::KeepLocal
+        } else {
+            Resolution::KeepRemote
+        };
+        self.closed(|dir| sync::settle_received(dir, &from, &device_name, resolution))?;
+        Ok(if keep_this_phone {
+            "Kept this phone's data: send it to the computer next".to_owned()
+        } else {
+            "Took the computer's data; this phone's is kept as a backup".to_owned()
+        })
+    }
+
+    /// Write this phone's database to `folder` as `compter.redb` and `manifest.json`, for the
+    /// user to save into the computer's sync folder
+    pub fn send_snapshot(
+        &mut self,
+        folder: String,
+        device_name: String,
+    ) -> Result<SentRow, ApiError> {
+        let to = SyncDir::new(folder);
+        let generation = self.closed(|dir| sync::send(dir, &to, &device_name))?;
+        Ok(SentRow {
+            snapshot: to.snapshot_path().to_string_lossy().into_owned(),
+            manifest: to.manifest_path().to_string_lossy().into_owned(),
+            message: format!(
+                "Snapshot {generation} is ready: save both files into your compter sync folder, replacing the ones there"
+            ),
         })
     }
 }

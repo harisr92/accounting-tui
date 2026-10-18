@@ -5,6 +5,7 @@
 pub mod app;
 pub mod error;
 pub mod expenses;
+pub mod handoff;
 pub mod invoicing;
 pub mod profile;
 pub mod reports;
@@ -13,6 +14,7 @@ pub mod rows;
 pub use app::CompterApp;
 pub use error::ApiError;
 pub use expenses::{ExpenseInput, ExpenseList, ExpenseRow};
+pub use handoff::{ReceivedRow, SentRow, SyncStatusRow};
 pub use invoicing::{
     CreditInput, CreditPreviewRow, CreditedRow, HistoryRow, InvoiceDetail, InvoiceList,
     InvoicePreviewRow, InvoiceRow, IssuedRow, PaymentInput, TimeInput,
