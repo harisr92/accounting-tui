@@ -1,0 +1,143 @@
+name: Mobile release
+
+# A tag like mobile-v0.3.0 uploads that version to TestFlight and Google Play's internal track.
+# The version must match app/pubspec.yaml; the build number is this workflow's run number, so
+# every upload is higher than the last. One-time setup and the secrets: app/README.md.
+on:
+  push:
+    tags:
+      - 'mobile-v*'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  FLUTTER_VERSION: "3.47.7"
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.version.outputs.name }}
+      number: ${{ steps.version.outputs.number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read and check the version
+        id: version
+        run: |
+          name=$(sed -n 's/^version: \([0-9.]*\).*/\1/p' app/pubspec.yaml)
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "mobile-v$name" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME doesn't match app/pubspec.yaml version $name"
+            exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "number=$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+
+  android:
+    name: Google Play (internal)
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      COMPTER_BUILD_NAME: ${{ needs.version.outputs.name }}
+      COMPTER_BUILD_NUMBER: ${{ needs.version.outputs.number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: app
+
+      - name: Upload key
+        env:
+          UPLOAD_KEYSTORE: ${{ secrets.COMPTER_UPLOAD_KEYSTORE_BASE64 }}
+        run: echo "$UPLOAD_KEYSTORE" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+
+      - name: Build and upload
+        working-directory: app/android
+        env:
+          BUNDLE_GEMFILE: ${{ github.workspace }}/app/Gemfile
+          COMPTER_UPLOAD_STORE_FILE: ${{ runner.temp }}/upload.jks
+          COMPTER_UPLOAD_STORE_PASSWORD: ${{ secrets.COMPTER_UPLOAD_STORE_PASSWORD }}
+          COMPTER_UPLOAD_KEY_ALIAS: ${{ secrets.COMPTER_UPLOAD_KEY_ALIAS }}
+          COMPTER_UPLOAD_KEY_PASSWORD: ${{ secrets.COMPTER_UPLOAD_KEY_PASSWORD }}
+          COMPTER_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.COMPTER_PLAY_SERVICE_ACCOUNT_JSON }}
+          COMPTER_PLAY_RELEASE_STATUS: ${{ vars.COMPTER_PLAY_RELEASE_STATUS }}
+        run: bundle exec fastlane internal
+
+      - name: Remove the upload key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload.jks"
+
+  ios:
+    name: TestFlight
+    needs: version
+    runs-on: macos-latest
+    env:
+      COMPTER_BUILD_NAME: ${{ needs.version.outputs.name }}
+      COMPTER_BUILD_NUMBER: ${{ needs.version.outputs.number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          working-directory: app
+
+      - name: Certificate and provisioning profile
+        env:
+          CERTIFICATE: ${{ secrets.COMPTER_IOS_CERTIFICATE_BASE64 }}
+          PROFILE: ${{ secrets.COMPTER_IOS_PROFILE_BASE64 }}
+        run: |
+          echo "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/distribution.p12"
+          echo "$PROFILE" | base64 --decode > "$RUNNER_TEMP/compter.mobileprovision"
+
+      - name: Build and upload
+        working-directory: app/ios
+        env:
+          BUNDLE_GEMFILE: ${{ github.workspace }}/app/Gemfile
+          COMPTER_IOS_TEAM_ID: ${{ secrets.COMPTER_IOS_TEAM_ID }}
+          COMPTER_IOS_CERTIFICATE_PATH: ${{ runner.temp }}/distribution.p12
+          COMPTER_IOS_CERTIFICATE_PASSWORD: ${{ secrets.COMPTER_IOS_CERTIFICATE_PASSWORD }}
+          COMPTER_IOS_PROFILE_PATH: ${{ runner.temp }}/compter.mobileprovision
+          COMPTER_IOS_PROFILE_NAME: ${{ secrets.COMPTER_IOS_PROFILE_NAME }}
+          COMPTER_ASC_KEY_ID: ${{ secrets.COMPTER_ASC_KEY_ID }}
+          COMPTER_ASC_ISSUER_ID: ${{ secrets.COMPTER_ASC_ISSUER_ID }}
+          COMPTER_ASC_KEY: ${{ secrets.COMPTER_ASC_KEY }}
+        run: bundle exec fastlane beta
+
+      - name: Remove the certificate and profile
+        if: always()
+        run: rm -f "$RUNNER_TEMP/distribution.p12" "$RUNNER_TEMP/compter.mobileprovision"
