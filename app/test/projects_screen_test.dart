@@ -216,6 +216,28 @@ void main() {
     expect(find.byTooltip('Edit project'), findsOneWidget);
     expect(find.byTooltip('Delete project'), findsNothing);
   });
+
+  testWidgets('searching narrows the projects by name or client', (
+    tester,
+  ) async {
+    await launchDemo(tester);
+    await tester.tap(find.byTooltip('Search'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'globex');
+    await tester.pumpAndSettle();
+    expect(find.text('Mobile App'), findsOneWidget);
+    expect(find.text('Data Pipeline'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), 'nothing like this');
+    await tester.pumpAndSettle();
+    expect(find.text('Nothing matches “nothing like this”'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Close search'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mobile App'), findsOneWidget);
+    expect(find.text('Data Pipeline'), findsOneWidget);
+  });
 }
 
 /// Launch the demo and create a project called [name], landing on it

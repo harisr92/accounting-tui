@@ -10,48 +10,64 @@ import '../ui/action_sheet.dart';
 import '../ui/empty_state.dart';
 import '../ui/figures.dart';
 import '../ui/record_tile.dart';
+import '../ui/search.dart';
 import '../ui/section.dart';
 import '../year_picker.dart';
 
 /// A financial year's business expenses, like the terminal's Expenses tab. Tapping one offers
 /// to edit or delete it.
-class ExpensesScreen extends ConsumerWidget {
+class ExpensesScreen extends ConsumerStatefulWidget {
   const ExpensesScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ExpensesScreen> createState() => _ExpensesScreenState();
+}
+
+class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
+    with Searching {
+  @override
+  Widget build(BuildContext context) {
     final year = ref.watch(expenseYearProvider);
     final expenses = ref.watch(expensesProvider(year));
     return Scaffold(
-      appBar: AppBar(title: const Text('Expenses')),
+      appBar: searchAppBar(title: 'Expenses', hint: 'Description or category'),
       body: expenses.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('$error')),
-        data: (list) => ListView(
-          padding: const EdgeInsets.only(bottom: 96),
-          children: [
-            FiscalYearPicker(expenseYearProvider, label: list.year),
-            if (list.expenses.isEmpty)
-              const EmptyState(
-                icon: Icons.account_balance_wallet_outlined,
-                message: 'No expenses this year',
-              )
-            else ...[
-              FigureGrid([('After GST credit', list.cost)]),
-              const SectionHeader('By date'),
+        data: (list) {
+          final matches = query.apply(
+            list.expenses,
+            (expense) => [expense.description, expense.category],
+          );
+          return ListView(
+            padding: const EdgeInsets.only(bottom: 96),
+            children: [
+              FiscalYearPicker(expenseYearProvider, label: list.year),
+              if (list.expenses.isEmpty)
+                const EmptyState(
+                  icon: Icons.account_balance_wallet_outlined,
+                  message: 'No expenses this year',
+                )
+              else ...[
+                FigureGrid([('After GST credit', list.cost)]),
+                if (matches.isEmpty)
+                  noMatches(query)
+                else
+                  const SectionHeader('By date'),
+              ],
+              for (final expense in matches)
+                RecordTile(
+                  title: expense.description,
+                  supporting: [expense.date, expense.category].join(' · '),
+                  amount: expense.amount,
+                  detail: expense.gstCredit == null
+                      ? null
+                      : 'GST ${expense.gstCredit}',
+                  onTap: () => _actions(expense),
+                ),
             ],
-            for (final expense in list.expenses)
-              RecordTile(
-                title: expense.description,
-                supporting: [expense.date, expense.category].join(' · '),
-                amount: expense.amount,
-                detail: expense.gstCredit == null
-                    ? null
-                    : 'GST ${expense.gstCredit}',
-                onTap: () => _actions(context, ref, expense),
-              ),
-          ],
-        ),
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton.extended(
         // Every tab stays mounted in one route, so their buttons would share the default hero tag
@@ -62,7 +78,7 @@ class ExpensesScreen extends ConsumerWidget {
         onPressed: () async {
           final added = await expenseForm(context, ref.read(compterProvider));
           if (added == null || !context.mounted) return;
-          _changed(ref);
+          _changed();
           notify(context, 'Added ${added.description} for ${added.amount}');
         },
       ),
@@ -70,13 +86,9 @@ class ExpensesScreen extends ConsumerWidget {
   }
 
   /// Every year's list may have changed: an edit can move an expense to another year
-  void _changed(WidgetRef ref) => ref.invalidate(expensesProvider);
+  void _changed() => ref.invalidate(expensesProvider);
 
-  Future<void> _actions(
-    BuildContext context,
-    WidgetRef ref,
-    ExpenseRow expense,
-  ) async {
+  Future<void> _actions(ExpenseRow expense) async {
     final edit = await showActionSheet<bool>(
       context,
       title: expense.description,
@@ -86,12 +98,12 @@ class ExpensesScreen extends ConsumerWidget {
         (icon: Icons.delete_outline, label: 'Delete', value: false),
       ],
     );
-    if (edit == null || !context.mounted) return;
+    if (edit == null || !mounted) return;
     final app = ref.read(compterProvider);
     if (edit) {
       final saved = await expenseForm(context, app, existing: expense);
-      if (saved == null || !context.mounted) return;
-      _changed(ref);
+      if (saved == null || !mounted) return;
+      _changed();
       notify(context, 'Saved ${saved.description} for ${saved.amount}');
       return;
     }
@@ -106,11 +118,11 @@ class ExpensesScreen extends ConsumerWidget {
     if (!yes) return;
     try {
       await app.deleteExpense(id: expense.id);
-      if (!context.mounted) return;
-      _changed(ref);
+      if (!mounted) return;
+      _changed();
       notify(context, 'Deleted ${expense.description}');
     } on ApiError catch (error) {
-      if (context.mounted) notify(context, error.message, error: true);
+      if (mounted) notify(context, error.message, error: true);
     }
   }
 }

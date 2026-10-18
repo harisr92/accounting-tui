@@ -130,4 +130,26 @@ void main() {
       'Thank you',
     ]);
   });
+
+  testWidgets('searching narrows the invoices by client, kind or status', (
+    tester,
+  ) async {
+    await launchDemo(tester);
+    await tester.tap(find.byIcon(Icons.receipt_long_outlined));
+    await settle(tester);
+    expect(find.text('Initrode GmbH'), findsOneWidget);
+    await tester.tap(find.byTooltip('Search'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'acme');
+    await tester.pumpAndSettle();
+    expect(find.text('Acme Pvt Ltd'), findsNWidgets(2));
+    expect(find.text('Initrode GmbH'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), 'export');
+    await tester.pumpAndSettle();
+    expect(find.text('Initrode GmbH'), findsOneWidget);
+    expect(find.text('Acme Pvt Ltd'), findsNothing);
+    expect(find.text('Outstanding'), findsOneWidget);
+  });
 }

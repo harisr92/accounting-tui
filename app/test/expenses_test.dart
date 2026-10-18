@@ -97,4 +97,22 @@ void main() {
     expect(find.text('Add expense'), findsNWidgets(2));
     expect(find.textContaining('amount must be a number'), findsOneWidget);
   });
+
+  testWidgets('searching narrows the expenses by description or category', (
+    tester,
+  ) async {
+    await openExpenses(tester);
+    await tester.tap(find.byTooltip('Search'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'equipment');
+    await tester.pumpAndSettle();
+    expect(find.text('Laptop'), findsOneWidget);
+    expect(find.text('Fibre broadband'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), 'zzz');
+    await tester.pumpAndSettle();
+    expect(find.text('Nothing matches “zzz”'), findsOneWidget);
+    expect(find.text('By date'), findsNothing);
+  });
 }
