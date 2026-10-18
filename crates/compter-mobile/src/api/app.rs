@@ -1,23 +1,26 @@
 use accounting_core::StateCode;
+use bigdecimal::{BigDecimal, Zero};
 use chrono::{Local, NaiveDate};
 use flutter_rust_bridge::frb;
 
 use compter_core::demo;
 use compter_core::domain::{
-    Billing, ClientDetails, ClientRegion, Currency, ExchangeRate, InvoiceNumber, MilestoneId,
-    ProfileDraft, ProjectId, TimeEntry,
+    Billing, ClientDetails, ClientRegion, Currency, ExchangeRate, ExpenseId, InvoiceNumber,
+    MilestoneId, ProfileDraft, ProjectId, TimeEntry,
 };
 use compter_core::input;
 use compter_core::services::{
-    CreditDraft, InvoiceService, MilestoneDraft, ProjectDraft, ProjectService, ServiceError,
+    CreditDraft, ExpenseDraft, ExpenseService, InvoiceService, MilestoneDraft, ProjectDraft,
+    ProjectService, ServiceError,
 };
 use compter_core::storage::{DataDir, RedbRepository, Store};
 
+use super::expenses::{category, fiscal_year};
 use super::profile::currency;
 use super::{
-    ApiError, CreditInput, CreditPreviewRow, CreditedRow, InvoiceDetail, InvoiceList,
-    InvoicePreviewRow, InvoiceRow, IssuedRow, MilestoneInput, PaymentInput, ProfileInput,
-    ProfileRow, ProjectDetail, ProjectInput, ProjectRow, TimeInput,
+    ApiError, CreditInput, CreditPreviewRow, CreditedRow, ExpenseInput, ExpenseList, ExpenseRow,
+    InvoiceDetail, InvoiceList, InvoicePreviewRow, InvoiceRow, IssuedRow, MilestoneInput,
+    PaymentInput, ProfileInput, ProfileRow, ProjectDetail, ProjectInput, ProjectRow, TimeInput,
 };
 
 /// The open database and the services over it. Dart opens one at start-up and keeps it for the
@@ -26,6 +29,7 @@ use super::{
 pub struct CompterApp {
     projects: ProjectService<RedbRepository>,
     invoices: InvoiceService<RedbRepository>,
+    expenses: ExpenseService<RedbRepository>,
     /// Kept so the database stays open as long as the services use it
     _store: Store,
 }
@@ -49,6 +53,7 @@ impl CompterApp {
         Self {
             projects: ProjectService::new(store.repository()),
             invoices: InvoiceService::new(store.repository(), Some(dir)),
+            expenses: ExpenseService::new(store.repository()),
             _store: store,
         }
     }
@@ -315,6 +320,34 @@ impl CompterApp {
             .ensure_credit_pdf(&InvoiceNumber::from_stored(&number))?;
         Ok(path.to_string_lossy().into_owned())
     }
+
+    /// The expenses of the financial year starting in April of `year`, by date
+    pub fn expenses(&self, year: i32) -> Result<ExpenseList, ApiError> {
+        let year = fiscal_year(year);
+        Ok(ExpenseList::new(year, &self.expenses.list(year)?))
+    }
+
+    /// Record an expense paid from the bank
+    pub fn add_expense(&mut self, input: ExpenseInput) -> Result<ExpenseRow, ApiError> {
+        Ok(ExpenseRow::from(&self.expenses.add(expense_draft(input)?)?))
+    }
+
+    /// Correct an expense; its ledger posting is replaced with it
+    pub fn edit_expense(
+        &mut self,
+        id: String,
+        input: ExpenseInput,
+    ) -> Result<ExpenseRow, ApiError> {
+        let id = expense_id(&id)?;
+        Ok(ExpenseRow::from(
+            &self.expenses.edit(id, expense_draft(input)?)?,
+        ))
+    }
+
+    /// Remove an expense and its ledger posting
+    pub fn delete_expense(&mut self, id: String) -> Result<(), ApiError> {
+        Ok(self.expenses.delete(expense_id(&id)?)?)
+    }
 }
 
 fn today() -> NaiveDate {
@@ -351,5 +384,26 @@ fn credit_draft(input: CreditInput) -> Result<CreditDraft, ApiError> {
         date: date(&input.date, "date")?,
         taxable_value: input::money(&input.amount).map_err(|e| ApiError::invalid("amount", e))?,
         reason: input.reason.trim().to_owned(),
+    })
+}
+
+fn expense_id(id: &str) -> Result<ExpenseId, ApiError> {
+    id.parse()
+        .map_err(|_| ApiError::invalid("expense_id", "not an expense id"))
+}
+
+fn expense_draft(input: ExpenseInput) -> Result<ExpenseDraft, ApiError> {
+    Ok(ExpenseDraft {
+        date: date(&input.date, "date")?,
+        category: category(&input.category)
+            .ok_or_else(|| ApiError::invalid("category", "choose a category"))?,
+        description: input.description.trim().to_owned(),
+        amount: input::money(&input.amount).map_err(|e| ApiError::invalid("amount", e))?,
+        gst_credit: match input::optional(&input.gst_credit) {
+            Some(credit) => {
+                input::money(&credit).map_err(|e| ApiError::invalid("gst_credit", e))?
+            }
+            None => BigDecimal::zero(),
+        },
     })
 }

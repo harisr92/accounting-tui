@@ -1,4 +1,5 @@
-//! Helpers shared by the API test files
+//! Helpers shared by the API test files. Each file is its own crate and uses only some of them.
+#![allow(dead_code)]
 
 use compter_mobile::api::{CompterApp, MilestoneInput, ProjectInput};
 use tempfile::TempDir;
