@@ -177,3 +177,65 @@ fn the_demo_has_nothing_to_hand_off() {
     assert!(app.receive_snapshot(path(&inbox)).is_err());
     assert!(!names(&app).is_empty(), "the demo is untouched");
 }
+
+#[test]
+fn the_phone_writes_a_lease_the_computer_honours() {
+    let (folder_dir, folder) = folder();
+    let laptop = Laptop::new();
+    laptop.run(&folder, Some("Site"));
+    let phone_dir = tempfile::tempdir().unwrap();
+    let phone = CompterApp::open(path(&phone_dir)).unwrap();
+
+    let lease = phone.lease_json("iPhone".to_owned()).unwrap();
+    // Its own lease, read back from the folder, never blocks the phone
+    assert_eq!(phone.lease_holder(lease.clone()).unwrap(), None);
+    fs::write(folder_dir.path().join("lease.json"), &lease).unwrap();
+
+    let refused = SyncSession::begin(&laptop.data, folder.clone(), "laptop");
+    assert!(
+        refused.is_err(),
+        "the laptop must not open while the phone holds the lease"
+    );
+}
+
+#[test]
+fn the_phone_sees_who_has_compter_open() {
+    let (folder_dir, folder) = folder();
+    let laptop = Laptop::new();
+    let phone_dir = tempfile::tempdir().unwrap();
+    let phone = CompterApp::open(path(&phone_dir)).unwrap();
+    let session = SyncSession::begin(&laptop.data, folder.clone(), "laptop").unwrap();
+
+    let lease = fs::read_to_string(folder_dir.path().join("lease.json")).unwrap();
+    let holder = phone.lease_holder(lease).unwrap().unwrap();
+
+    assert!(
+        holder.starts_with("compter is open on laptop (last seen "),
+        "{holder}"
+    );
+    assert_eq!(
+        phone.lease_holder("{ half synced".to_owned()).unwrap(),
+        None
+    );
+    session.finish(Store::open(&laptop.data).unwrap()).unwrap();
+}
+
+#[test]
+fn the_status_names_the_snapshot_last_synced() {
+    let (folder_dir, folder) = folder();
+    let laptop = Laptop::new();
+    laptop.run(&folder, Some("Site"));
+    let phone_dir = tempfile::tempdir().unwrap();
+    let mut phone = CompterApp::open(path(&phone_dir)).unwrap();
+    assert_eq!(phone.sync_status().unwrap().sha256, None);
+
+    phone.receive_snapshot(path(&folder_dir)).unwrap();
+
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&fs::read(folder_dir.path().join("manifest.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        phone.sync_status().unwrap().sha256.as_deref(),
+        manifest["sha256"].as_str()
+    );
+}

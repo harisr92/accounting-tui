@@ -11,6 +11,9 @@ pub struct SyncStatusRow {
     pub summary: String,
     /// Something changed here since the last hand-off: worth sending
     pub changed: bool,
+    /// The SHA-256 of the snapshot last synced; a manifest recording the same hash needs no
+    /// download
+    pub sha256: Option<String>,
 }
 
 impl From<SyncState> for SyncStatusRow {
@@ -23,6 +26,7 @@ impl From<SyncState> for SyncStatusRow {
         Self {
             summary,
             changed: state.changed,
+            sha256: state.sha256,
         }
     }
 }

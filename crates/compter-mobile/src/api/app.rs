@@ -13,7 +13,7 @@ use compter_core::services::{
     CreditDraft, ExpenseDraft, ExpenseService, InvoiceService, MilestoneDraft, ProjectDraft,
     ProjectService, ReportService, ServiceError,
 };
-use compter_core::storage::sync::{self, Resolution, SyncDir, SyncError};
+use compter_core::storage::sync::{self, Lease, Resolution, SyncDir, SyncError};
 use compter_core::storage::{DataDir, RedbRepository, Store};
 
 use super::expenses::{category, fiscal_year};
@@ -453,6 +453,39 @@ impl CompterApp {
         }
         let state = sync::state(&self.dir, &self.store).map_err(ServiceError::from)?;
         Ok(SyncStatusRow::from(state))
+    }
+
+    /// This phone's lease, as the JSON compter on the computer reads from `lease.json`: write
+    /// it to the sync folder while the app is in use, and refresh it every minute
+    pub fn lease_json(&self, device_name: String) -> Result<String, ApiError> {
+        if self.demo {
+            return Err(ServiceError::NoSyncInDemo.into());
+        }
+        let lease = sync::lease_for(&self.dir, &device_name).map_err(ServiceError::from)?;
+        serde_json::to_string_pretty(&lease).map_err(|e| ApiError {
+            field: None,
+            message: e.to_string(),
+        })
+    }
+
+    /// Who has compter open, from the `lease.json` found in the sync folder: `compter is open
+    /// on laptop (last seen 14:05)`, or `None` when it is this phone's lease or a stale one
+    pub fn lease_holder(&self, lease_json: String) -> Result<Option<String>, ApiError> {
+        if self.demo {
+            return Err(ServiceError::NoSyncInDemo.into());
+        }
+        let Ok(lease) = serde_json::from_str::<Lease>(&lease_json) else {
+            // Half-synced or garbled: nobody can be said to hold it
+            return Ok(None);
+        };
+        let held = sync::held_by_other(&self.dir, &lease).map_err(ServiceError::from)?;
+        Ok(held.map(|lease| {
+            format!(
+                "compter is open on {} (last seen {})",
+                lease.device_name,
+                lease.heartbeat.with_timezone(&Local).format("%H:%M")
+            )
+        }))
     }
 
     /// Take the snapshot in `folder`, where Dart copied `compter.redb` and `manifest.json` from

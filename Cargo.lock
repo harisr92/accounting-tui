@@ -428,6 +428,7 @@ dependencies = [
  "chrono",
  "compter-core",
  "flutter_rust_bridge",
+ "serde_json",
  "tempfile",
  "thiserror",
 ]
