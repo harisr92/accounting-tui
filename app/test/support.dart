@@ -102,3 +102,22 @@ Future<void> pumpUntil(
   }
   await settle(tester);
 }
+
+/// Pick [date] in the form's date field called [label], typing it into the picker's input mode
+Future<void> pickDate(WidgetTester tester, String label, DateTime date) async {
+  await tester.tap(find.widgetWithText(TextField, label));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byIcon(Icons.edit_outlined).last);
+  await tester.pumpAndSettle();
+  final mm = date.month.toString().padLeft(2, '0');
+  final dd = date.day.toString().padLeft(2, '0');
+  await tester.enterText(
+    find.descendant(
+      of: find.byType(DatePickerDialog),
+      matching: find.byType(TextField),
+    ),
+    '$mm/$dd/${date.year}',
+  );
+  await tester.tap(find.text('OK'));
+  await tester.pumpAndSettle();
+}

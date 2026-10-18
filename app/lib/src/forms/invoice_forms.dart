@@ -8,12 +8,7 @@ import '../rust/api/rows.dart';
 import 'form_dialog.dart';
 
 const _amount = TextInputType.numberWithOptions(decimal: true);
-const _date = FieldSpec(
-  'date',
-  'Date',
-  hint: 'YYYY-MM-DD, blank for today',
-  keyboardType: TextInputType.datetime,
-);
+const _date = FieldSpec('date', 'Date', date: true);
 
 /// Show the invoice [milestone] would get today and issue it on a yes, like `i` in the
 /// terminal. A project billed in a foreign currency first asks for today's exchange rate.

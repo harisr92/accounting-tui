@@ -59,7 +59,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Add expense'));
     await settle(tester);
-    await fill(tester, 'Date', '2026-10-02');
+    await pickDate(tester, 'Date', DateTime(2026, 10, 2));
     await fill(tester, 'Description', 'GitHub');
     await fill(tester, 'Amount', '21,240');
     await fill(tester, 'GST credit', '3,240');
