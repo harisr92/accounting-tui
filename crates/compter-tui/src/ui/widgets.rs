@@ -8,7 +8,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Row};
 
 use super::theme::{Theme, Tone};
-use compter_core::domain::{Currency, InvoiceStatus, MilestoneStatus, ProjectStatus};
+use compter_core::domain::{
+    Currency, InvoiceStatus, MilestoneStatus, ProjectStatus, format_duration,
+};
 
 /// Bordered block whose border lights up when the pane has focus
 pub fn panel<'a>(title: &'a str, focused: bool, theme: &Theme) -> Block<'a> {
@@ -29,17 +31,12 @@ pub fn money(amount: &BigDecimal) -> String {
 
 /// Amount with its currency's symbol and grouping: `₹1,50,000.00`, `$150,000.00`
 pub fn money_in(amount: &BigDecimal, currency: Currency) -> String {
-    let formatted = currency.format(amount);
-    let symbol = currency.symbol();
-    match formatted.strip_prefix('-') {
-        Some(magnitude) => format!("-{symbol}{magnitude}"),
-        None => format!("{symbol}{formatted}"),
-    }
+    currency.display(amount)
 }
 
 /// Logged time as `6h 30m`
 pub fn duration(minutes: u32) -> String {
-    format!("{}h {:02}m", minutes / 60, minutes % 60)
+    format_duration(minutes)
 }
 
 /// A `width` x `height` rect centred in `area`, clamped to fit

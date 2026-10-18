@@ -114,7 +114,7 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - Archived projects (`Project::archive`, finished only) stay in storage and reports; only the Projects list hides them.
 - Key hints are defined once as `&'static [KeyHint]`. The footer and the help popup both render from that one slice. The footer always shows `FOOTER_HINTS` (`? help · q quit`) on the right; view hints fill the left and may be cut off on narrow screens.
 - All input goes through `ui::form`: build a `Form` from `Field::text` / `Field::choice`, use `Confirm` before anything irreversible, and `FolderPicker` (run with `step`, like a form) to choose a folder. Don't write another text-input widget.
-- Parse what the user typed only in `ui/form/parse.rs` (money, dates, durations, optional text). Give a field a live `with_preview` when its input could be misread (durations).
+- Parse what the user typed only in `compter_core::input` (money, dates, durations, optional text), re-exported by `ui/form/parse.rs`, which adds only paths. Give a field a live `with_preview` when its input could be misread (durations).
 - Modals belong to the view that opened them. While one is open the view takes **every** key, so typing never triggers shortcuts. Only `Ctrl-c` is handled by `App` first.
 - Run forms through `Form::step(key, submit)`: it handles cancel, submit, and keeping the form open with the error on a failed submit. Errors outside forms go to the footer as `Notice::error`.
 - A form shared by two tabs (payment) lives in `ui/views/payment.rs`; don't copy form builders between views.
@@ -157,9 +157,9 @@ compter-tui/src/app.rs (crate root) → compter-tui/src/tests/app_tests.rs
 ## Before you call a change done
 
 ```bash
-cargo fmt
-cargo clippy --all-targets -- -D warnings
-cargo test
+cargo fmt --all
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 ```
 
 UI changes also need a manual `cargo run` check: tabs, focus, help popup, resizing, and a clean exit with `q`. Add or extend the `TestBackend` render test in `crates/compter-tui/src/ui/tests/draw_tests.rs` for new chrome.
