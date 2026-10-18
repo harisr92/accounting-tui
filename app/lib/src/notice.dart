@@ -68,15 +68,18 @@ Future<void> sharePdf(BuildContext context, String path) =>
     shareFile(context, path, 'application/pdf');
 
 /// Send a file Rust just wrote (a PDF, a return's JSON) to another app
-Future<void> shareFile(
+Future<void> shareFile(BuildContext context, String path, String mimeType) =>
+    shareFiles(context, [(path, mimeType)]);
+
+/// Send files Rust just wrote, as (path, MIME type), to another app in one go
+Future<void> shareFiles(
   BuildContext context,
-  String path,
-  String mimeType,
+  List<(String, String)> files,
 ) async {
   final box = context.findRenderObject() as RenderBox?;
   await SharePlus.instance.share(
     ShareParams(
-      files: [XFile(path, mimeType: mimeType)],
+      files: [for (final (path, type) in files) XFile(path, mimeType: type)],
       // iPad shows the share sheet as a popover pointing at what was tapped
       sharePositionOrigin: box == null
           ? null

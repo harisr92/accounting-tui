@@ -5,6 +5,7 @@ import '../compter.dart';
 import '../forms/profile_form.dart';
 import '../notice.dart';
 import '../rust/api/profile.dart';
+import 'sync_section.dart';
 
 /// The business profile printed on invoices, like the terminal's Settings tab
 class SettingsScreen extends ConsumerWidget {
@@ -54,6 +55,8 @@ class SettingsScreen extends ConsumerWidget {
                 },
               ),
             ),
+            const SizedBox(height: 32),
+            const SyncSection(),
           ],
         ),
       ),

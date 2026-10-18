@@ -6,6 +6,7 @@
 import 'api/app.dart';
 import 'api/error.dart';
 import 'api/expenses.dart';
+import 'api/handoff.dart';
 import 'api/invoicing.dart';
 import 'api/profile.dart';
 import 'api/reports.dart';
@@ -197,7 +198,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   QuarterGstRow dco_decode_quarter_gst_row(dynamic raw);
 
   @protected
+  ReceivedRow dco_decode_received_row(dynamic raw);
+
+  @protected
   ReportRow dco_decode_report_row(dynamic raw);
+
+  @protected
+  SentRow dco_decode_sent_row(dynamic raw);
+
+  @protected
+  SyncStatusRow dco_decode_sync_status_row(dynamic raw);
 
   @protected
   TimeInput dco_decode_time_input(dynamic raw);
@@ -404,7 +414,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   QuarterGstRow sse_decode_quarter_gst_row(SseDeserializer deserializer);
 
   @protected
+  ReceivedRow sse_decode_received_row(SseDeserializer deserializer);
+
+  @protected
   ReportRow sse_decode_report_row(SseDeserializer deserializer);
+
+  @protected
+  SentRow sse_decode_sent_row(SseDeserializer deserializer);
+
+  @protected
+  SyncStatusRow sse_decode_sync_status_row(SseDeserializer deserializer);
 
   @protected
   TimeInput sse_decode_time_input(SseDeserializer deserializer);
@@ -660,7 +679,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_quarter_gst_row(QuarterGstRow self, SseSerializer serializer);
 
   @protected
+  void sse_encode_received_row(ReceivedRow self, SseSerializer serializer);
+
+  @protected
   void sse_encode_report_row(ReportRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_sent_row(SentRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_sync_status_row(SyncStatusRow self, SseSerializer serializer);
 
   @protected
   void sse_encode_time_input(TimeInput self, SseSerializer serializer);

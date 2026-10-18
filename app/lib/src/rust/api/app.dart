@@ -6,13 +6,14 @@
 import '../frb_generated.dart';
 import 'error.dart';
 import 'expenses.dart';
+import 'handoff.dart';
 import 'invoicing.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'profile.dart';
 import 'reports.dart';
 import 'rows.dart';
 
-// These functions are ignored because they are not marked as `pub`: `credit_draft`, `date`, `exchange_rate`, `expense_draft`, `expense_id`, `milestone_id`, `over`, `project_id`, `today`
+// These functions are ignored because they are not marked as `pub`: `closed`, `credit_draft`, `date`, `exchange_rate`, `expense_draft`, `expense_id`, `milestone_id`, `over`, `project_id`, `today`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>>
 abstract class CompterApp implements RustOpaqueInterface {
@@ -116,6 +117,10 @@ abstract class CompterApp implements RustOpaqueInterface {
   /// The project list, from summaries; archived projects only when asked for
   Future<List<ProjectRow>> projects({required bool includeArchived});
 
+  /// Take the snapshot in `folder`, where Dart copied `compter.redb` and `manifest.json` from
+  /// the computer's sync folder. A new install's empty database is simply replaced.
+  Future<ReceivedRow> receiveSnapshot({required String folder});
+
   /// Record all or part of a payment. On a rupee invoice `tds_or_banked` is the TDS withheld;
   /// on a foreign one it is the rupees that reached the bank.
   Future<InvoiceDetail> recordPayment({
@@ -128,4 +133,22 @@ abstract class CompterApp implements RustOpaqueInterface {
 
   /// Save the business profile; the logo, set elsewhere, is kept
   Future<ProfileRow> saveProfile({required ProfileInput input});
+
+  /// Write this phone's database to `folder` as `compter.redb` and `manifest.json`, for the
+  /// user to save into the computer's sync folder
+  Future<SentRow> sendSnapshot({
+    required String folder,
+    required String deviceName,
+  });
+
+  /// Settle what `receive_snapshot` couldn't: keep this phone's data (send it next), or take
+  /// the snapshot in `folder`, keeping this phone's database beside it as a backup
+  Future<String> settleSnapshot({
+    required String folder,
+    required bool keepThisPhone,
+    required String deviceName,
+  });
+
+  /// Where this phone's data stands against the computer's sync folder
+  Future<SyncStatusRow> syncStatus();
 }

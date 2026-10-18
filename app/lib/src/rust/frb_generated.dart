@@ -6,6 +6,7 @@
 import 'api/app.dart';
 import 'api/error.dart';
 import 'api/expenses.dart';
+import 'api/handoff.dart';
 import 'api/invoicing.dart';
 import 'api/profile.dart';
 import 'api/reports.dart';
@@ -70,7 +71,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 511344433;
+  int get rustContentHash => -1142258416;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -198,6 +199,11 @@ abstract class RustLibApi extends BaseApi {
     required bool includeArchived,
   });
 
+  Future<ReceivedRow> crateApiAppCompterAppReceiveSnapshot({
+    required CompterApp that,
+    required String folder,
+  });
+
   Future<InvoiceDetail> crateApiAppCompterAppRecordPayment({
     required CompterApp that,
     required String number,
@@ -212,6 +218,23 @@ abstract class RustLibApi extends BaseApi {
   Future<ProfileRow> crateApiAppCompterAppSaveProfile({
     required CompterApp that,
     required ProfileInput input,
+  });
+
+  Future<SentRow> crateApiAppCompterAppSendSnapshot({
+    required CompterApp that,
+    required String folder,
+    required String deviceName,
+  });
+
+  Future<String> crateApiAppCompterAppSettleSnapshot({
+    required CompterApp that,
+    required String folder,
+    required bool keepThisPhone,
+    required String deviceName,
+  });
+
+  Future<SyncStatusRow> crateApiAppCompterAppSyncStatus({
+    required CompterApp that,
   });
 
   int crateApiExpensesCurrentYear();
@@ -1114,6 +1137,44 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ReceivedRow> crateApiAppCompterAppReceiveSnapshot({
+    required CompterApp that,
+    required String folder,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(folder, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 24,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_received_row,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppReceiveSnapshotConstMeta,
+        argValues: [that, folder],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppReceiveSnapshotConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_receive_snapshot",
+        argNames: ["that", "folder"],
+      );
+
+  @override
   Future<InvoiceDetail> crateApiAppCompterAppRecordPayment({
     required CompterApp that,
     required String number,
@@ -1132,7 +1193,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 25,
             port: port_,
           );
         },
@@ -1170,7 +1231,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 26,
             port: port_,
           );
         },
@@ -1208,7 +1269,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 27,
             port: port_,
           );
         },
@@ -1230,12 +1291,130 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<SentRow> crateApiAppCompterAppSendSnapshot({
+    required CompterApp that,
+    required String folder,
+    required String deviceName,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(folder, serializer);
+          sse_encode_String(deviceName, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 28,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_sent_row,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppSendSnapshotConstMeta,
+        argValues: [that, folder, deviceName],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppSendSnapshotConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_send_snapshot",
+        argNames: ["that", "folder", "deviceName"],
+      );
+
+  @override
+  Future<String> crateApiAppCompterAppSettleSnapshot({
+    required CompterApp that,
+    required String folder,
+    required bool keepThisPhone,
+    required String deviceName,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(folder, serializer);
+          sse_encode_bool(keepThisPhone, serializer);
+          sse_encode_String(deviceName, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 29,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppSettleSnapshotConstMeta,
+        argValues: [that, folder, keepThisPhone, deviceName],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppSettleSnapshotConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_settle_snapshot",
+        argNames: ["that", "folder", "keepThisPhone", "deviceName"],
+      );
+
+  @override
+  Future<SyncStatusRow> crateApiAppCompterAppSyncStatus({
+    required CompterApp that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 30,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_sync_status_row,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppSyncStatusConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppSyncStatusConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_sync_status",
+        argNames: ["that"],
+      );
+
+  @override
   int crateApiExpensesCurrentYear() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_i_32,
@@ -1257,7 +1436,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
@@ -1851,6 +2030,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ReceivedRow dco_decode_received_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return ReceivedRow(
+      message: dco_decode_String(arr[0]),
+      conflict: dco_decode_bool(arr[1]),
+    );
+  }
+
+  @protected
   ReportRow dco_decode_report_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1868,6 +2059,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       quarterToFile: dco_decode_u_32(arr[8]),
       iffMonths: dco_decode_list_String(arr[9]),
       iffMonthToFile: dco_decode_u_32(arr[10]),
+    );
+  }
+
+  @protected
+  SentRow dco_decode_sent_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return SentRow(
+      snapshot: dco_decode_String(arr[0]),
+      manifest: dco_decode_String(arr[1]),
+      message: dco_decode_String(arr[2]),
+    );
+  }
+
+  @protected
+  SyncStatusRow dco_decode_sync_status_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return SyncStatusRow(
+      summary: dco_decode_String(arr[0]),
+      changed: dco_decode_bool(arr[1]),
     );
   }
 
@@ -2632,6 +2848,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ReceivedRow sse_decode_received_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_message = sse_decode_String(deserializer);
+    var var_conflict = sse_decode_bool(deserializer);
+    return ReceivedRow(message: var_message, conflict: var_conflict);
+  }
+
+  @protected
   ReportRow sse_decode_report_row(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_year = sse_decode_String(deserializer);
@@ -2658,6 +2882,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       iffMonths: var_iffMonths,
       iffMonthToFile: var_iffMonthToFile,
     );
+  }
+
+  @protected
+  SentRow sse_decode_sent_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_snapshot = sse_decode_String(deserializer);
+    var var_manifest = sse_decode_String(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    return SentRow(
+      snapshot: var_snapshot,
+      manifest: var_manifest,
+      message: var_message,
+    );
+  }
+
+  @protected
+  SyncStatusRow sse_decode_sync_status_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_summary = sse_decode_String(deserializer);
+    var var_changed = sse_decode_bool(deserializer);
+    return SyncStatusRow(summary: var_summary, changed: var_changed);
   }
 
   @protected
@@ -3262,6 +3507,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_received_row(ReceivedRow self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.message, serializer);
+    sse_encode_bool(self.conflict, serializer);
+  }
+
+  @protected
   void sse_encode_report_row(ReportRow self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.year, serializer);
@@ -3275,6 +3527,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.quarterToFile, serializer);
     sse_encode_list_String(self.iffMonths, serializer);
     sse_encode_u_32(self.iffMonthToFile, serializer);
+  }
+
+  @protected
+  void sse_encode_sent_row(SentRow self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.snapshot, serializer);
+    sse_encode_String(self.manifest, serializer);
+    sse_encode_String(self.message, serializer);
+  }
+
+  @protected
+  void sse_encode_sync_status_row(
+    SyncStatusRow self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.summary, serializer);
+    sse_encode_bool(self.changed, serializer);
   }
 
   @protected
@@ -3487,6 +3757,13 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
         includeArchived: includeArchived,
       );
 
+  /// Take the snapshot in `folder`, where Dart copied `compter.redb` and `manifest.json` from
+  /// the computer's sync folder. A new install's empty database is simply replaced.
+  Future<ReceivedRow> receiveSnapshot({required String folder}) => RustLib
+      .instance
+      .api
+      .crateApiAppCompterAppReceiveSnapshot(that: this, folder: folder);
+
   /// Record all or part of a payment. On a rupee invoice `tds_or_banked` is the TDS withheld;
   /// on a foreign one it is the rupees that reached the bank.
   Future<InvoiceDetail> recordPayment({
@@ -3507,4 +3784,32 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
       .instance
       .api
       .crateApiAppCompterAppSaveProfile(that: this, input: input);
+
+  /// Write this phone's database to `folder` as `compter.redb` and `manifest.json`, for the
+  /// user to save into the computer's sync folder
+  Future<SentRow> sendSnapshot({
+    required String folder,
+    required String deviceName,
+  }) => RustLib.instance.api.crateApiAppCompterAppSendSnapshot(
+    that: this,
+    folder: folder,
+    deviceName: deviceName,
+  );
+
+  /// Settle what `receive_snapshot` couldn't: keep this phone's data (send it next), or take
+  /// the snapshot in `folder`, keeping this phone's database beside it as a backup
+  Future<String> settleSnapshot({
+    required String folder,
+    required bool keepThisPhone,
+    required String deviceName,
+  }) => RustLib.instance.api.crateApiAppCompterAppSettleSnapshot(
+    that: this,
+    folder: folder,
+    keepThisPhone: keepThisPhone,
+    deviceName: deviceName,
+  );
+
+  /// Where this phone's data stands against the computer's sync folder
+  Future<SyncStatusRow> syncStatus() =>
+      RustLib.instance.api.crateApiAppCompterAppSyncStatus(that: this);
 }

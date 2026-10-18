@@ -3,6 +3,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'rust/api/app.dart';
 import 'rust/api/expenses.dart';
+import 'rust/api/error.dart';
 import 'rust/api/invoicing.dart';
 import 'rust/api/profile.dart';
 import 'rust/api/reports.dart';
@@ -100,3 +101,30 @@ final reportYearProvider = NotifierProvider<YearNotifier, int>(
 final reportProvider = FutureProvider.family<ReportRow, int>(
   (ref, year) => ref.watch(compterProvider).report(year: year),
 );
+
+/// Where this phone's data stands against the computer's sync folder, and whether it can sync
+/// at all (the demo can't). A refusal is a status, not an error: Riverpod would keep retrying
+/// an error.
+typedef SyncAvailability = ({String summary, bool available});
+
+final syncStatusProvider = FutureProvider<SyncAvailability>((ref) async {
+  try {
+    final status = await ref.watch(compterProvider).syncStatus();
+    return (summary: status.summary, available: true);
+  } on ApiError catch (error) {
+    return (summary: error.message, available: false);
+  }
+});
+
+/// Drop every loaded record: the database itself was replaced, so all of them may have changed
+void reloadEverything(WidgetRef ref) {
+  ref
+    ..invalidate(projectsProvider)
+    ..invalidate(projectProvider)
+    ..invalidate(invoicesProvider)
+    ..invalidate(invoiceProvider)
+    ..invalidate(expensesProvider)
+    ..invalidate(reportProvider)
+    ..invalidate(profileProvider)
+    ..invalidate(syncStatusProvider);
+}
