@@ -9,6 +9,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 /// The host build of compter-mobile, which the build hook (hook/build.dart) makes and
 /// `flutter test` stages under build/native_assets before the tests run
@@ -22,6 +24,13 @@ ExternalLibrary hostLibrary() {
 }
 
 Future<void> initRust() => RustLib.init(externalLibrary: hostLibrary());
+
+/// Fresh, empty preferences for each test: the host has no shared_preferences plugin, and
+/// a saved sync method mustn't leak from one test into the next
+void useMemoryPreferences() {
+  SharedPreferencesAsyncPlatform.instance =
+      InMemorySharedPreferencesAsync.empty();
+}
 
 /// The app on the demo business, in memory, writing its PDFs to a scratch folder.
 /// [overrides] replace providers, e.g. to pin a tab's year.
@@ -42,6 +51,7 @@ Future<void> launchWith(
   CompterApp compter, {
   List<Override> overrides = const [],
 }) async {
+  useMemoryPreferences();
   await tester.pumpWidget(
     ProviderScope(
       overrides: [compterProvider.overrideWithValue(compter), ...overrides],

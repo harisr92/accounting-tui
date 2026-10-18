@@ -183,12 +183,11 @@ void main() {
 
   testWidgets('the demo has nothing to sync', (tester) async {
     await launchDemo(tester);
-    await openSync(tester);
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await settle(tester);
+    await tester.scrollUntilVisible(find.text('sync is off in demo mode'), 200);
 
-    expect(find.text('sync is off in demo mode'), findsOneWidget);
-    final get = tester.widget<ListTile>(
-      find.widgetWithText(ListTile, 'Get from computer'),
-    );
-    expect(get.enabled, isFalse);
+    expect(find.text('Sync method'), findsNothing);
+    expect(find.text('Get from computer'), findsNothing);
   });
 }
