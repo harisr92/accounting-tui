@@ -169,6 +169,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+Changes to `crates/compter-mobile` or `app/` also need, in `app/`: `cargo build -p compter-mobile && flutter analyze && flutter test`, and bindings regenerated as above (CI fails on stale ones, `.github/workflows/mobile.yml`).
+
 UI changes also need a manual `cargo run` check: tabs, focus, help popup, resizing, and a clean exit with `q`. Add or extend the `TestBackend` render test in `crates/compter-tui/src/ui/tests/draw_tests.rs` for new chrome.
 
 Shell commands are proxied through RTK (`rtk ...`) automatically. See `~/.claude/RTK.md`.

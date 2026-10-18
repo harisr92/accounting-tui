@@ -17,6 +17,7 @@ lib/src/handoff.dart       picking and staging the snapshot and manifest carried
 lib/src/year_picker.dart   the financial year a tab shows, stepped like [ and ] in the terminal
 lib/src/rust/              generated bindings: never edit, re-run codegen
 rust_builder/              cargokit plugin that builds the Rust crate in Xcode and Gradle
+ios/fastlane, android/fastlane   store uploads, run by the release workflow (see Releasing)
 test/                      widget tests on the host, loading ../target/debug's library
 integration_test/          smoke test on a simulator or emulator, on the demo business
 ```
@@ -59,3 +60,66 @@ of `compter-mobile` `libcompter_mobile.a` (`CrateInfo.libraryName` turns the hyp
 underscore). Without the patch iOS builds fail with "Unable to find bundle for dynamic
 library". To take a new template, delete `rust_builder/` and run `tool/bootstrap.sh`, which
 re-applies the patch and stops if it no longer matches.
+
+## Releasing
+
+CI (`.github/workflows/mobile.yml`) checks the bindings are current, runs `flutter analyze` and
+the widget tests, and builds both apps on every push to `trunk` that touches `app/` or
+`crates/`.
+
+A tag `mobile-v<version>` (matching `version:` in `pubspec.yaml`) runs
+`.github/workflows/mobile-release.yml`: fastlane builds a signed app bundle for Google Play's
+internal track and a signed IPA for TestFlight. The build number is the workflow's run number.
+Desktop releases keep their own `v<version>` tags.
+
+```bash
+# bump version: in pubspec.yaml first
+git tag mobile-v0.3.0 && git push origin mobile-v0.3.0
+```
+
+### One-time setup
+
+**Google Play** (developer account, $25 once)
+
+1. Create the app `dev.compter.compter` in Play Console.
+2. Make an upload key and keep it safe; losing it means asking Google to reset it:
+   `keytool -genkeypair -keystore upload.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000`
+3. Upload the first app bundle by hand (Play requires it): put the key in
+   `android/key.properties` (never committed), then `flutter build appbundle`.
+   ```properties
+   storeFile=/absolute/path/to/upload.jks
+   storePassword=...
+   keyAlias=upload
+   keyPassword=...
+   ```
+4. In Google Cloud, make a service account with a JSON key, and in Play Console under
+   Users and permissions give it release rights for the app.
+
+**App Store** (Apple Developer Program, $99 a year)
+
+1. Register the bundle ID `dev.compter.compter` and create the app in App Store Connect.
+2. Create an Apple Distribution certificate (export it as a `.p12` with a password) and an
+   App Store provisioning profile for the bundle ID.
+3. In App Store Connect, under Users and Access, Integrations, create an API key with the
+   App Manager role.
+
+### Repository secrets
+
+| Secret | What |
+|---|---|
+| `COMPTER_UPLOAD_KEYSTORE_BASE64` | `base64 -i upload.jks` |
+| `COMPTER_UPLOAD_STORE_PASSWORD`, `COMPTER_UPLOAD_KEY_ALIAS`, `COMPTER_UPLOAD_KEY_PASSWORD` | the upload key's passwords and alias |
+| `COMPTER_PLAY_SERVICE_ACCOUNT_JSON` | the service account's JSON key |
+| `COMPTER_IOS_TEAM_ID` | the 10-character team ID |
+| `COMPTER_IOS_CERTIFICATE_BASE64`, `COMPTER_IOS_CERTIFICATE_PASSWORD` | `base64 -i distribution.p12`, and its password |
+| `COMPTER_IOS_PROFILE_BASE64`, `COMPTER_IOS_PROFILE_NAME` | `base64 -i compter.mobileprovision`, and the profile's name |
+| `COMPTER_ASC_KEY_ID`, `COMPTER_ASC_ISSUER_ID`, `COMPTER_ASC_KEY` | the API key's ID, issuer ID and `.p8` contents |
+
+Play uploads stay drafts until the app has been published once; then set the repository
+variable `COMPTER_PLAY_RELEASE_STATUS` to `completed`.
+
+To run a lane yourself, export the same `COMPTER_*` variables, then from `ios/` or `android/`:
+`BUNDLE_GEMFILE=../Gemfile bundle exec fastlane beta` (or `internal`).
+
+Before the first store submission the app still needs its own launcher icon and store
+listing (screenshots, description, privacy policy); the icon is Flutter's default.
