@@ -369,13 +369,9 @@ fn a_phone_takes_the_snapshot_and_hands_its_changes_back() {
     assert_eq!(sync::receive(&phone.data, &inbox, true).unwrap(), Some(1));
     assert_eq!(phone.project_names(), ["Site"]);
     assert_eq!(sync::receive(&phone.data, &inbox, false).unwrap(), None);
-    assert_eq!(
-        phone.sync_state(),
-        SyncState {
-            generation: 1,
-            changed: false
-        }
-    );
+    let synced = phone.sync_state();
+    assert_eq!((synced.generation, synced.changed), (1, false));
+    assert_eq!(synced.sha256, Some(manifest(&folder).sha256));
 
     phone_adds(&phone, "App");
     assert!(phone.sync_state().changed);
@@ -507,4 +503,47 @@ fn the_snapshot_a_phone_sent_counts_as_synced_once_it_arrives() {
     carry(&outbox, &folder);
 
     assert_eq!(sync::receive(&phone.data, &folder, false).unwrap(), None);
+}
+
+#[test]
+fn a_phone_writes_its_own_lease_and_sees_a_computers() {
+    let (_dir, folder) = sync_dir();
+    let laptop = Device::new("laptop");
+    let phone = phone();
+
+    // The phone's own lease, which it uploads itself, never counts against it
+    let own = sync::lease_for(&phone.data, "iPhone").unwrap();
+    assert_eq!(own.device_name, "iPhone");
+    assert_eq!(sync::held_by_other(&phone.data, &own).unwrap(), None);
+    assert_eq!(
+        sync::lease_for(&phone.data, "iPhone").unwrap().device_id,
+        own.device_id
+    );
+
+    // compter open on the laptop: its lease is fresh, so it counts
+    let (session, store) = laptop.begin(&folder).unwrap();
+    let theirs: Lease = serde_json::from_slice(&fs::read(folder.lease_path()).unwrap()).unwrap();
+    let held = sync::held_by_other(&phone.data, &theirs).unwrap().unwrap();
+    assert_eq!(held.device_name, "laptop");
+    session.finish(store).unwrap();
+
+    // A lease a crashed laptop left behind goes stale
+    let stale = Lease {
+        heartbeat: Utc::now() - Duration::minutes(10),
+        ..theirs
+    };
+    assert_eq!(sync::held_by_other(&phone.data, &stale).unwrap(), None);
+}
+
+#[test]
+fn a_computer_wont_open_while_the_phone_holds_the_lease() {
+    let (_dir, folder) = sync_dir();
+    let laptop = Device::new("laptop");
+    let phone = phone();
+    let lease = sync::lease_for(&phone.data, "iPhone").unwrap();
+    fs::write(folder.lease_path(), serde_json::to_vec(&lease).unwrap()).unwrap();
+
+    let refused = laptop.begin(&folder);
+
+    assert!(matches!(refused, Err(SyncError::Leased { device, .. }) if device == "iPhone"));
 }

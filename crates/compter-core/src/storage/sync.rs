@@ -379,12 +379,15 @@ impl Drop for SyncSession {
 }
 
 /// Where this device's database stands against the sync folder
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyncState {
     /// The snapshot generation it last synced from or to; 0 before any sync
     pub generation: u64,
     /// It changed since then
     pub changed: bool,
+    /// The SHA-256 of that snapshot, as its manifest records it; a manifest with the same hash
+    /// is a snapshot this device already has
+    pub sha256: Option<String>,
 }
 
 /// Where this device's database, open as `store`, stands; the sync folder isn't touched
@@ -397,7 +400,26 @@ pub fn state(data: &DataDir, store: &Store) -> Result<SyncState, SyncError> {
     Ok(SyncState {
         generation: state.base_generation,
         changed,
+        sha256: state.base_sha256,
     })
+}
+
+/// This device's lease, heartbeat now, for a device that writes the lease to the sync folder
+/// itself (a phone, through a cloud API)
+pub fn lease_for(data: &DataDir, device_name: &str) -> Result<Lease, SyncError> {
+    let state = load_state(data)?;
+    Ok(Lease {
+        device_id: state.device_id,
+        device_name: device_name.to_owned(),
+        heartbeat: Utc::now(),
+    })
+}
+
+/// `lease`, found in the sync folder, when another device holds it and it isn't stale: that
+/// device has compter open
+pub fn held_by_other(data: &DataDir, lease: &Lease) -> Result<Option<Lease>, SyncError> {
+    let state = load_state(data)?;
+    Ok((lease.device_id != state.device_id && is_fresh(lease)).then(|| lease.clone()))
 }
 
 // Hand-off for a device that can't see the sync folder, like a phone. The user carries the
@@ -523,18 +545,22 @@ fn catch_up(data: &DataDir, sync: &SyncDir, state: &mut LocalState) -> Result<()
 }
 
 fn take_lease(sync: &SyncDir, state: &LocalState, device_name: &str) -> Result<(), SyncError> {
-    if let Some(lease) = read_json::<Lease>(&sync.lease_path())? {
-        let age = Utc::now().signed_duration_since(lease.heartbeat);
-        // A heartbeat in the future (clocks disagree) counts as fresh
-        let fresh = !matches!(age.to_std(), Ok(age) if age >= LEASE_TTL);
-        if lease.device_id != state.device_id && fresh {
-            return Err(SyncError::Leased {
-                device: lease.device_name,
-                seen: lease.heartbeat,
-            });
-        }
+    if let Some(lease) = read_json::<Lease>(&sync.lease_path())?
+        && lease.device_id != state.device_id
+        && is_fresh(&lease)
+    {
+        return Err(SyncError::Leased {
+            device: lease.device_name,
+            seen: lease.heartbeat,
+        });
     }
     write_lease(&sync.lease_path(), state.device_id, device_name)
+}
+
+/// Refreshed within [`LEASE_TTL`]; a heartbeat in the future (clocks disagree) counts as fresh
+fn is_fresh(lease: &Lease) -> bool {
+    let age = Utc::now().signed_duration_since(lease.heartbeat);
+    !matches!(age.to_std(), Ok(age) if age >= LEASE_TTL)
 }
 
 fn write_lease(path: &Path, device_id: Uuid, device_name: &str) -> Result<(), SyncError> {
