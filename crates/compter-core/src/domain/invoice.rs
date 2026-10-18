@@ -10,6 +10,9 @@ use super::{
     CreditNote, Currency, DomainError, ExchangeRate, FiscalYear, LogoId, MilestoneId, ProjectId,
 };
 
+/// TDS on professional fees under section 194J
+const TDS_PERCENT: u32 = 10;
+
 /// `INV/26-27/004`: prefix, financial year and a sequence that restarts every year
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -87,6 +90,25 @@ impl InvoiceAmounts {
 
     pub fn total_tax(&self) -> BigDecimal {
         &self.cgst + &self.sgst + &self.igst
+    }
+
+    /// How the total is made up, for confirming an invoice: `50,000.00 + IGST 9,000.00`, or
+    /// why there is no GST
+    pub fn breakdown(&self, kind: InvoiceKind, currency: Currency) -> String {
+        let format = |amount| currency.format(amount);
+        let base = format(&self.taxable_value);
+        match kind {
+            InvoiceKind::Export => format!("{base}, zero-rated export under LUT"),
+            InvoiceKind::Plain => format!("{base}, no GST"),
+            InvoiceKind::Tax if !self.igst.is_zero() => {
+                format!("{base} + IGST {}", format(&self.igst))
+            }
+            InvoiceKind::Tax => format!(
+                "{base} + CGST {} + SGST {}",
+                format(&self.cgst),
+                format(&self.sgst)
+            ),
+        }
     }
 
     /// Every amount in rupees at `rate`
@@ -437,6 +459,12 @@ impl Invoice {
     /// What the client still owes
     pub fn balance(&self) -> BigDecimal {
         &self.amounts.total - self.settled() - self.credited()
+    }
+
+    /// TDS a client usually withholds on professional fees (section 194J): 10% of the taxable
+    /// value. Only a suggestion; what was actually withheld is entered with the payment.
+    pub fn usual_tds(&self) -> BigDecimal {
+        &self.amounts.taxable_value * BigDecimal::from(TDS_PERCENT) / BigDecimal::from(100)
     }
 
     pub fn status(&self) -> InvoiceStatus {

@@ -1,0 +1,22 @@
+# The Rust the app's build hook (app/hook/build.dart, native_toolchain_rust) compiles this crate
+# with. It must be an exact version, for reproducible app builds, and list every target the app
+# is built for, the host included (`flutter test` builds for it). rustup installs both on first
+# use. Commands run from this folder use it too; the rest of the workspace uses your default.
+[toolchain]
+channel = "1.97.1"
+targets = [
+  # Android
+  "armv7-linux-androideabi",
+  "aarch64-linux-android",
+  "x86_64-linux-android",
+  # iOS: devices, Apple-silicon and Intel simulators
+  "aarch64-apple-ios",
+  "aarch64-apple-ios-sim",
+  "x86_64-apple-ios",
+  # Hosts, for `flutter test`
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-pc-windows-msvc",
+]

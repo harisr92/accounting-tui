@@ -4,6 +4,7 @@ use chrono::NaiveDate;
 use crate::demo;
 use crate::domain::{ExpenseCategory, FiscalYear};
 use crate::services::ReportService;
+use crate::services::reports::PresumptiveCheck;
 
 fn rupees(amount: i64) -> BigDecimal {
     BigDecimal::from(amount)
@@ -101,4 +102,18 @@ fn credit_notes_come_off_the_year_they_are_dated_in() {
     assert_eq!(q4.output(), -tax);
     // The next year is untouched
     assert_eq!(reports.year(fy(2027)).unwrap().credited, rupees(0));
+}
+
+#[test]
+fn the_44ada_check_warns_when_the_books_show_less() {
+    let store = demo::store().unwrap();
+    let reports = ReportService::new(store.repository(), None);
+
+    // Books profit ₹89,200 against ₹1,25,375 deemed under 44ADA
+    let this_year = reports.year(fy(2026)).unwrap();
+    assert_eq!(this_year.presumptive_check(), PresumptiveCheck::BooksBelow);
+    assert!(this_year.presumptive_check().message().contains("44AB"));
+    // A plain invoice and no expenses: the books show all of it
+    let last_year = reports.year(fy(2025)).unwrap();
+    assert_eq!(last_year.presumptive_check(), PresumptiveCheck::Within);
 }

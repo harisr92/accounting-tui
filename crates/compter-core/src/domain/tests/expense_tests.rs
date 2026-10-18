@@ -1,7 +1,7 @@
 use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 
-use crate::domain::{DomainError, Expense, ExpenseCategory};
+use crate::domain::{DomainError, Expense, ExpenseCategory, ExpenseId};
 
 fn date() -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, 10, 1).unwrap()
@@ -41,4 +41,11 @@ fn stored_expenses_are_validated() {
     assert_eq!(serde_json::from_value::<Expense>(json.clone()).unwrap(), e);
     json["gst_credit"] = "5000".into();
     assert!(serde_json::from_value::<Expense>(json).is_err());
+}
+
+#[test]
+fn expense_ids_round_trip_through_text() {
+    let id = ExpenseId::generate();
+    assert_eq!(id.to_string().parse::<ExpenseId>().unwrap(), id);
+    assert!("not-an-id".parse::<ExpenseId>().is_err());
 }

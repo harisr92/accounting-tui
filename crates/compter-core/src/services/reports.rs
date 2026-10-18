@@ -104,6 +104,43 @@ impl YearReport {
     pub fn within_presumptive_limit(&self) -> bool {
         self.gross_receipts <= PRESUMPTIVE_LIMIT_RUPEES
     }
+
+    /// Whether 44ADA can be used for the year, and what to watch for
+    pub fn presumptive_check(&self) -> PresumptiveCheck {
+        if !self.within_presumptive_limit() {
+            PresumptiveCheck::OverLimit
+        } else if self.books_profit() < self.presumptive_income() {
+            PresumptiveCheck::BooksBelow
+        } else {
+            PresumptiveCheck::Within
+        }
+    }
+}
+
+/// How a year stands against section 44ADA
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresumptiveCheck {
+    /// Gross receipts over the limit: 44ADA is not available
+    OverLimit,
+    /// Books show less profit than 44ADA deems
+    BooksBelow,
+    Within,
+}
+
+impl PresumptiveCheck {
+    pub const fn message(self) -> &'static str {
+        match self {
+            Self::OverLimit => {
+                "Gross receipts are over ₹75 lakh: 44ADA is not available, use your books"
+            }
+            Self::BooksBelow => {
+                "Books profit is below 44ADA income: declaring the lower figure needs a tax audit (44AB) if income is over the basic exemption"
+            }
+            Self::Within => {
+                "Within the 44ADA limit. Gross receipts are invoices dated in the year, excl. GST"
+            }
+        }
+    }
 }
 
 /// Accumulates a [`YearReport`] one invoice at a time

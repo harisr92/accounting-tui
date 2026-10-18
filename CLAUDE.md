@@ -12,7 +12,7 @@ Engineering rules for `compter-tui`. Follow them for every change. See `README.m
 
 ## Module boundaries
 
-A Cargo workspace of two crates. `crates/compter-core` (`compter_core`) is the product with no UI, so every front end (the terminal app now, a mobile app later) shares it. `crates/compter-tui` (`compter_tui`) is the terminal app: a library plus a thin binary (`src/main.rs`). Public APIs live in the libraries, so items a UI doesn't use yet aren't dead code.
+A Cargo workspace of three crates, plus the Flutter app in `app/`. `crates/compter-core` (`compter_core`) is the product with no UI, so every front end (the terminal app now, a mobile app later) shares it. `crates/compter-tui` (`compter_tui`) is the terminal app: a library plus a thin binary (`src/main.rs`). Public APIs live in the libraries, so items a UI doesn't use yet aren't dead code.
 
 ```
 compter-core/src/
@@ -26,7 +26,12 @@ compter-tui/src/
   cli.rs     non-interactive commands (import-merges reads git here)
   viewer.rs  opens a written PDF in the desktop's default app
   ui/        rendering and key handling; changes data only by calling services
+compter-mobile/src/
+  api/       what the Flutter app calls (flutter_rust_bridge): CompterApp over the services,
+             plain rows of strings, ApiError { field, message }
 ```
+
+`compter-mobile` follows the view rules: it calls services only and hands Dart plain rows (formatted money, `YYYY-MM-DD` dates), never domain types. Typed text goes to Rust unparsed and is parsed by `compter_core::input`, the parsers the terminal's `ui/form/parse.rs` re-exports. No data-carrying enums under `api` (Dart would need freezed). After changing `api`, run `flutter_rust_bridge_codegen generate && cargo fmt --all` in `app/` (see `app/README.md`). It is not a default workspace member, because flutter_rust_bridge compiles C that desktop cross-builds can't.
 
 Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain`. `domain` depends on nothing in this workspace. `compter-core` never depends on ratatui, crossterm, color-eyre, or anything that assumes a desktop: no spawning processes, and env vars are read only by the `from_env` helpers (`DataDir::from_env`, `SyncDir::from_env`, `sync::device_name_from_env`), which only a desktop binary calls; other front ends inject the values (`DataDir::new`). Services return file paths; showing a file is the front end's job (`viewer::open`).
 
@@ -59,6 +64,8 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - A logical write that touches several tables (a project + its summary) happens in **one** write transaction. Return before `commit()` to abort.
 - redb's per-operation errors convert into `StorageError` via `?`. Map `StorageError` to accounting-core errors with `LedgerError::from`.
 - accounting-core's store traits are async; we implement them with sync redb calls and drive them with `pollster::block_on`. Don't add an async runtime.
+- Sync decides "changed since the last sync" from `Store::content_hash` (every record), never the file's bytes: redb rewrites its header on every open. The manifest's SHA-256 stays a file hash, to spot a half-synced snapshot.
+- Phones hand the database over with `sync::receive`, `send`, `settle_received` (store closed): by hand, or automatically through Google Drive (`app/lib/src/sync/`), where Dart only moves the files and writes the lease from `sync::lease_for`. The engine always takes the folder's snapshot before sending (never sends over one it couldn't take), uploads snapshot before manifest, and sends nothing while `sync::held_by_other` says compter is open elsewhere. `receive` takes only a snapshot newer than, or the very one, it last synced; anything else is `SyncError::Undelivered`, since a hand-off may never arrive or arrive as a copy.
 - Settings that belong to one device (the sync folder) live in `device.json` in the data dir, not in redb: sync runs before the store opens, and the database travels between devices. Read and write them only through `storage::sync` (`SyncDir::saved` / `save`), via `PreferencesService`. `$COMPTER_SYNC_DIR` overrides the saved folder; it is read only in `main.rs` and injected.
 - Tests use `Store::in_memory()`. Tests that reopen the file use `tempfile` and go in `crates/compter-core/tests/`.
 
@@ -161,6 +168,8 @@ cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
+
+Changes to `crates/compter-mobile` or `app/` also need, in `app/`: `flutter analyze && flutter test` (the build hook rebuilds the Rust library), and bindings regenerated as above (CI fails on stale ones, `.github/workflows/mobile.yml`).
 
 UI changes also need a manual `cargo run` check: tabs, focus, help popup, resizing, and a clean exit with `q`. Add or extend the `TestBackend` render test in `crates/compter-tui/src/ui/tests/draw_tests.rs` for new chrome.
 

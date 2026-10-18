@@ -9,7 +9,6 @@ use ratatui::layout::{Constraint, Layout, Rect};
 
 use std::collections::BTreeSet;
 
-use bigdecimal::Zero;
 use chrono::Local;
 
 use crate::ui::filter::Filter;
@@ -19,8 +18,8 @@ use crate::ui::theme::Theme;
 use crate::ui::view::{Action, KeyHint, Notice, View};
 use crate::ui::views::payment::payment_form;
 use compter_core::domain::{
-    Currency, ExchangeRate, InvoiceAmounts, InvoiceKind, InvoiceNumber, Milestone, MilestoneId,
-    MilestoneStatus, Project, ProjectId, ProjectSummary,
+    Currency, ExchangeRate, InvoiceNumber, Milestone, MilestoneId, MilestoneStatus, Project,
+    ProjectId, ProjectSummary,
 };
 use compter_core::services::{
     InvoicePreview, InvoiceService, Issued, ProjectService, ServiceError,
@@ -625,27 +624,12 @@ fn issue_question(preview: &InvoicePreview) -> String {
         preview.number,
         preview.client_name,
         money_in(&a.total, preview.currency),
-        tax_breakdown(preview.kind, preview.currency, a)
+        a.breakdown(preview.kind, preview.currency)
     );
     for warning in &preview.warnings {
         question.push_str(&format!(" Note: {warning}."));
     }
     question
-}
-
-fn tax_breakdown(kind: InvoiceKind, currency: Currency, a: &InvoiceAmounts) -> String {
-    let format = |amount| currency.format(amount);
-    let base = format(&a.taxable_value);
-    match kind {
-        InvoiceKind::Export => format!("{base}, zero-rated export under LUT"),
-        InvoiceKind::Plain => format!("{base}, no GST"),
-        InvoiceKind::Tax if !a.igst.is_zero() => format!("{base} + IGST {}", format(&a.igst)),
-        InvoiceKind::Tax => format!(
-            "{base} + CGST {} + SGST {}",
-            format(&a.cgst),
-            format(&a.sgst)
-        ),
-    }
 }
 
 fn issued_notice(issued: &Issued) -> Notice {

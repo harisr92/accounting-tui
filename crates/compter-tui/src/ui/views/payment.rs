@@ -1,6 +1,5 @@
 //! The "record payment" form, shared by the Projects and Invoices tabs
 
-use bigdecimal::BigDecimal;
 use chrono::{Local, NaiveDate};
 
 use crate::ui::form::{Field, Form, parse};
@@ -15,13 +14,9 @@ const RECEIVED: usize = 1;
 /// TDS on an invoice in rupees; the rupees banked on one in a foreign currency
 const THIRD: usize = 2;
 
-/// TDS on professional fees under section 194J
-const TDS_PERCENT: u32 = 10;
-
 /// Prefilled with the whole balance received and no TDS; a smaller amount is a part payment.
 /// An invoice in a foreign currency asks for the rupees that reached the bank instead of TDS.
 pub fn payment_form(invoice: &Invoice) -> Form {
-    let amounts = invoice.amounts();
     let currency = invoice.currency();
     let balance = invoice.balance();
     let received_hint = format!(
@@ -31,9 +26,7 @@ pub fn payment_form(invoice: &Invoice) -> Form {
     let third = if currency.is_inr() {
         let tds_hint = format!(
             "withheld by the client; 10% of taxable is {}",
-            money(
-                &(&amounts.taxable_value * BigDecimal::from(TDS_PERCENT) / BigDecimal::from(100))
-            )
+            money(&invoice.usual_tds())
         );
         Field::text("TDS", tds_hint).with_value("0")
     } else {

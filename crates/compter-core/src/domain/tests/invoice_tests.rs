@@ -276,3 +276,38 @@ fn the_logo_is_kept_with_the_invoice_and_older_records_have_none() {
         None
     );
 }
+
+#[test]
+fn the_breakdown_names_the_gst_or_why_there_is_none() {
+    let amount = |s: &str| s.parse::<BigDecimal>().unwrap();
+    let mut a = InvoiceAmounts::untaxed(amount("50000"));
+    assert_eq!(
+        a.breakdown(InvoiceKind::Plain, Currency::Inr),
+        "50,000.00, no GST"
+    );
+    assert_eq!(
+        a.breakdown(InvoiceKind::Export, Currency::Usd),
+        "50,000.00, zero-rated export under LUT"
+    );
+    a.cgst = amount("4500");
+    a.sgst = amount("4500");
+    assert_eq!(
+        a.breakdown(InvoiceKind::Tax, Currency::Inr),
+        "50,000.00 + CGST 4,500.00 + SGST 4,500.00"
+    );
+    a.cgst = amount("0");
+    a.sgst = amount("0");
+    a.igst = amount("9000");
+    assert_eq!(
+        a.breakdown(InvoiceKind::Tax, Currency::Inr),
+        "50,000.00 + IGST 9,000.00"
+    );
+}
+
+#[test]
+fn the_usual_tds_is_ten_percent_of_the_taxable_value() {
+    assert_eq!(
+        invoice().usual_tds(),
+        &invoice().amounts().taxable_value / BigDecimal::from(10)
+    );
+}

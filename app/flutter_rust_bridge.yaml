@@ -1,0 +1,4 @@
+# flutter_rust_bridge_codegen generate: Dart bindings for everything under crate::api
+rust_input: crate::api
+rust_root: ../crates/compter-mobile/
+dart_output: lib/src/rust

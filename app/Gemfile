@@ -1,0 +1,5 @@
+# fastlane, for the store uploads in .github/workflows/mobile-release.yml. Run lanes from
+# app/ios or app/android with BUNDLE_GEMFILE=../Gemfile (see README.md, "Releasing").
+source "https://rubygems.org"
+
+gem "fastlane", "~> 2.228"

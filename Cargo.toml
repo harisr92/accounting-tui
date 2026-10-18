@@ -1,5 +1,9 @@
 [workspace]
-members = ["crates/compter-core", "crates/compter-tui"]
+members = ["crates/compter-core", "crates/compter-mobile", "crates/compter-tui"]
+# What a plain `cargo build` / `cargo test` at the root covers. compter-mobile is left out: its
+# flutter_rust_bridge dependency compiles C, which the desktop cross-builds (musl, Windows arm64)
+# have no compiler for. Build or test it with `-p compter-mobile`.
+default-members = ["crates/compter-core", "crates/compter-tui"]
 resolver = "3"
 
 [workspace.package]

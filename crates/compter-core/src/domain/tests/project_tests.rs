@@ -2,8 +2,8 @@ use bigdecimal::{BigDecimal, Zero};
 use chrono::NaiveDate;
 
 use crate::domain::{
-    Billing, ClientDetails, ClientRegion, Currency, DomainError, MilestoneStatus, Project,
-    ProjectId, ProjectStatus, ProjectSummary, TimeEntry,
+    Billing, ClientDetails, ClientRegion, Currency, DomainError, MilestoneId, MilestoneStatus,
+    Project, ProjectId, ProjectStatus, ProjectSummary, TimeEntry,
 };
 
 const GSTIN: &str = "29AAPFU0939F1ZR";
@@ -533,4 +533,11 @@ fn project_ids_round_trip_through_text() {
     let id = fixed().id();
     assert_eq!(id.to_string().parse::<ProjectId>().unwrap(), id);
     assert!("not-an-id".parse::<ProjectId>().is_err());
+}
+
+#[test]
+fn milestone_ids_round_trip_through_text() {
+    let id = MilestoneId::generate();
+    assert_eq!(id.to_string().parse::<MilestoneId>().unwrap(), id);
+    assert!("not-an-id".parse::<MilestoneId>().is_err());
 }

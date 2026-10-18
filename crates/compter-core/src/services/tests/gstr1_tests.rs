@@ -157,6 +157,7 @@ fn iff_holds_a_months_b2b_and_the_quarter_leaves_it_out() {
     let reports = ReportService::new(store.repository(), None);
     let iff = reports.iff((2026, 8)).unwrap();
     assert_eq!((iff.invoices, iff.credit_notes), (1, 1));
+    assert_eq!(iff.summary(), "1 B2B invoice(s), 1 credit note(s)");
     assert_eq!(iff.json["fp"], "082026");
     assert_eq!(iff.json["b2b"][0]["inv"].as_array().unwrap().len(), 1);
     assert_eq!(iff.json["cdnr"][0]["nt"][0]["nt_num"], "CN/26-27/001");
@@ -164,6 +165,10 @@ fn iff_holds_a_months_b2b_and_the_quarter_leaves_it_out() {
 
     let gstr1 = reports.gstr1(quarter(2026, 7), &[(2026, 8)]).unwrap();
     assert_eq!((gstr1.tax_invoices, gstr1.credit_notes), (1, 0));
+    assert_eq!(
+        gstr1.summary(),
+        "1 tax invoice(s), 0 export(s), 0 credit note(s)"
+    );
     let b2b = &gstr1.json["b2b"][0]["inv"];
     assert_eq!(b2b.as_array().unwrap().len(), 1);
     assert_eq!(b2b[0]["idt"], "10-07-2026");
