@@ -10,7 +10,6 @@ import 'project_forms.dart';
 Future<ProfileRow?> profileForm(BuildContext context, CompterApp app) async {
   final input = await app.profileInput();
   if (!context.mounted) return null;
-  String line(List<String> lines, int i) => i < lines.length ? lines[i] : '';
   return FormDialog.show(
     context,
     title: 'Business details',
@@ -22,17 +21,11 @@ Future<ProfileRow?> profileForm(BuildContext context, CompterApp app) async {
         initial: input.name,
       ),
       FieldSpec(
-        'address_1',
+        'address',
         'Address',
-        hint: 'street',
-        initial: line(input.address, 0),
-      ),
-      FieldSpec('address_2', '', hint: 'area', initial: line(input.address, 1)),
-      FieldSpec(
-        'address_3',
-        '',
-        hint: 'city, PIN',
-        initial: line(input.address, 2),
+        hint: 'one line each: street, area, city and PIN',
+        initial: input.address.join('\n'),
+        multiline: true,
       ),
       FieldSpec(
         'gstin',
@@ -60,16 +53,11 @@ Future<ProfileRow?> profileForm(BuildContext context, CompterApp app) async {
         initial: input.lutArn,
       ),
       FieldSpec(
-        'terms_1',
+        'terms',
         'Terms',
-        hint: 'e.g. Bank: HDFC 0001234, IFSC HDFC0000001',
-        initial: line(input.terms, 0),
-      ),
-      FieldSpec(
-        'terms_2',
-        '',
-        hint: 'e.g. Payment due in 15 days',
-        initial: line(input.terms, 1),
+        hint: 'one per line, e.g. Bank: HDFC 0001234, IFSC HDFC0000001',
+        initial: input.terms.join('\n'),
+        multiline: true,
       ),
       FieldSpec(
         'currency',
@@ -82,16 +70,12 @@ Future<ProfileRow?> profileForm(BuildContext context, CompterApp app) async {
     submit: (values) => app.saveProfile(
       input: ProfileInput(
         name: values['name']!,
-        address: [
-          values['address_1']!,
-          values['address_2']!,
-          values['address_3']!,
-        ],
+        address: values['address']!.split('\n'),
         gstin: values['gstin']!,
         sacCode: values['sac_code']!,
         invoicePrefix: values['invoice_prefix']!,
         lutArn: values['lut_arn']!,
-        terms: [values['terms_1']!, values['terms_2']!],
+        terms: values['terms']!.split('\n'),
         currency: values['currency']!,
       ),
     ),
