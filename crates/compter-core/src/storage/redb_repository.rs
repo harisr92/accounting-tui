@@ -254,6 +254,9 @@ impl InvoiceRepository for RedbRepository {
         put_project(&txn, record.project)?;
         put_missing_accounts(&txn, record.accounts)?;
         put_transaction(&txn, record.transaction)?;
+        if let Some(returned) = record.returned {
+            put_transaction(&txn, returned)?;
+        }
         txn.commit()?;
         Ok(())
     }
