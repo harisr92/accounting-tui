@@ -542,7 +542,7 @@ impl Project {
         Ok(())
     }
 
-    /// Record a credit note taking `amount` (before GST) off an invoiced milestone
+    /// Record a credit note taking `amount` (before GST) off an invoiced or paid milestone
     pub fn credit_milestone(
         &mut self,
         index: usize,

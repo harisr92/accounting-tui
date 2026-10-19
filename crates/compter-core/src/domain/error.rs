@@ -53,14 +53,30 @@ pub enum DomainError {
     #[error("nothing is due on this invoice")]
     InvoiceAlreadyPaid,
     #[error(
-        "credit note total is {got}, more than the {balance} still due; it can't refund what was paid"
+        "credit note total is {got}, but credit notes can take off only {remaining} more of this invoice"
     )]
-    CreditExceedsBalance { balance: String, got: String },
+    CreditExceedsInvoice { remaining: String, got: String },
+    #[error("a credit note can give back at most what the client paid")]
+    ReturnExceedsPaid,
+    #[error("TDS reversed is {got}, more than the {withheld} the client withheld")]
+    TdsReversedExceedsWithheld { withheld: String, got: String },
+    #[error(
+        "{got} would go back to the client, more than the {received} received; enter the TDS the client reverses"
+    )]
+    ReturnExceedsReceived { received: String, got: String },
+    #[error(
+        "TDS reversed must be more than zero and part of what is given back, on an invoice in INR"
+    )]
+    UnexpectedTdsReversed,
+    #[error("enter the rupees refunded from your bank")]
+    MissingRefundedAmount,
+    #[error("rupees refunded are only recorded for refunds on invoices in a foreign currency")]
+    UnexpectedRefundedAmount,
     #[error("credit note date is before the invoice date")]
     CreditBeforeInvoice,
     #[error("this credit note is for another invoice")]
     CreditForAnotherInvoice,
-    #[error("only an invoiced milestone can be credited")]
+    #[error("only an invoiced or paid milestone can be credited")]
     NotInvoiced,
     #[error("credit notes can take back at most what the milestone billed")]
     CreditExceedsMilestone,

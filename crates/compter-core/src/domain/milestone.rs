@@ -233,9 +233,13 @@ impl Milestone {
         Ok(())
     }
 
-    /// Record a credit note taking `amount` (before GST) off an invoiced milestone's billing
+    /// Record a credit note taking `amount` (before GST) off an invoiced or paid milestone's
+    /// billing
     pub(super) fn credit(&mut self, amount: &BigDecimal) -> Result<(), DomainError> {
-        if self.status != MilestoneStatus::Invoiced {
+        if !matches!(
+            self.status,
+            MilestoneStatus::Invoiced | MilestoneStatus::Paid
+        ) {
             return Err(DomainError::NotInvoiced);
         }
         let credited = &self.credited + amount;

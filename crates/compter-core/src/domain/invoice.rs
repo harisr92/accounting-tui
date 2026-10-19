@@ -157,6 +157,67 @@ pub struct Credit {
     pub date: NaiveDate,
     /// Taken off what the client owes, tax included, in the invoice's currency
     pub amount: BigDecimal,
+    /// The part of `amount` the client had already paid, given back; `None` when the note took
+    /// off only what was still due
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub returned: Option<Returned>,
+}
+
+/// Money already received that a credit note gives back to the client
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Returned {
+    /// In the invoice's currency
+    pub amount: BigDecimal,
+    pub kind: ReturnKind,
+    /// Rupees that left the bank, for a refund on an invoice in a foreign currency
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refunded_inr: Option<BigDecimal>,
+    /// Part of `amount` that is TDS the client withheld and is cancelling in its TDS return, so
+    /// it comes off your TDS credit rather than going back as cash. Rupee invoices only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tds_reversed: Option<BigDecimal>,
+}
+
+impl Returned {
+    /// What actually goes back to the client as money: refunded from the bank or held as an
+    /// advance. `amount` less the TDS reversed.
+    pub fn cash(&self) -> BigDecimal {
+        match &self.tds_reversed {
+            Some(tds) => &self.amount - tds,
+            None => self.amount.clone(),
+        }
+    }
+}
+
+/// How a credit note gives back money already paid, as entered; used only when the note takes
+/// off more than is due
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReturnTerms {
+    pub kind: ReturnKind,
+    /// Rupees refunded from the bank, for a refund on an invoice in a foreign currency
+    pub refunded_inr: Option<BigDecimal>,
+    /// TDS the client is reversing in its return, on a rupee invoice
+    pub tds_reversed: Option<BigDecimal>,
+}
+
+/// How money a credit note gives back reaches the client
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReturnKind {
+    /// Paid back from the bank
+    #[default]
+    Refunded,
+    /// Held for the client against a future invoice
+    Advance,
+}
+
+impl ReturnKind {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Refunded => "refunded",
+            Self::Advance => "advance",
+        }
+    }
 }
 
 /// How far an invoice has been settled, derived from its payments and credit notes
@@ -260,11 +321,13 @@ impl TryFrom<RawInvoice> for Invoice {
             return Err(DomainError::OutdatedInvoiceFormat);
         }
         check_currency(raw.currency, raw.exchange_rate.as_ref(), raw.kind)?;
-        let mut settled = BigDecimal::zero();
+        let mut paid = BigDecimal::zero();
         for payment in &raw.payments {
             check_payment(raw.date, raw.currency, payment)?;
-            settled += payment.settled();
+            paid += payment.settled();
         }
+        let mut credited = BigDecimal::zero();
+        let mut returned = BigDecimal::zero();
         for credit in &raw.credits {
             if credit.date < raw.date {
                 return Err(DomainError::CreditBeforeInvoice);
@@ -272,12 +335,29 @@ impl TryFrom<RawInvoice> for Invoice {
             if credit.amount <= BigDecimal::zero() {
                 return Err(DomainError::NonPositiveAmount);
             }
-            settled += &credit.amount;
+            credited += &credit.amount;
+            if let Some(back) = &credit.returned {
+                if back.amount <= BigDecimal::zero() || back.amount > credit.amount {
+                    return Err(DomainError::ReturnExceedsPaid);
+                }
+                returned += &back.amount;
+            }
         }
-        if settled > raw.amounts.total {
+        check_returns(raw.currency, &raw.payments, &raw.credits)?;
+        if credited > raw.amounts.total {
+            return Err(DomainError::CreditExceedsInvoice {
+                remaining: raw.amounts.total.to_string(),
+                got: credited.to_string(),
+            });
+        }
+        if returned > paid {
+            return Err(DomainError::ReturnExceedsPaid);
+        }
+        let owed = &paid + &credited - &returned;
+        if owed > raw.amounts.total {
             return Err(DomainError::PaymentExceedsBalance {
                 balance: raw.amounts.total.to_string(),
-                got: settled.to_string(),
+                got: owed.to_string(),
             });
         }
         Ok(Self {
@@ -446,6 +526,30 @@ impl Invoice {
         self.credits.iter().map(|c| self.to_inr(&c.amount)).sum()
     }
 
+    /// Money already received that credit notes gave back, in the invoice's currency
+    pub fn returned(&self) -> BigDecimal {
+        self.credits
+            .iter()
+            .filter_map(|c| c.returned.as_ref())
+            .map(|r| &r.amount)
+            .sum()
+    }
+
+    /// What credit notes can still take off: the total less what they already took
+    pub fn creditable(&self) -> BigDecimal {
+        &self.amounts.total - self.credited()
+    }
+
+    /// Kept for the client as an advance by credit notes, in rupees at the invoice's rate
+    pub fn advance_inr(&self) -> BigDecimal {
+        self.credits
+            .iter()
+            .filter_map(|c| c.returned.as_ref())
+            .filter(|r| r.kind == ReturnKind::Advance)
+            .map(|r| self.to_inr(&r.amount))
+            .sum()
+    }
+
     /// The receivable still on the books for this invoice, in rupees at its rate
     pub fn receivable_inr(&self) -> BigDecimal {
         let paid: BigDecimal = self
@@ -453,12 +557,12 @@ impl Invoice {
             .iter()
             .map(|p| self.to_inr(&p.settled()))
             .sum();
-        self.inr_amounts().total - paid - self.credited_inr()
+        self.inr_amounts().total - paid - self.credited_inr() + self.to_inr(&self.returned())
     }
 
     /// What the client still owes
     pub fn balance(&self) -> BigDecimal {
-        &self.amounts.total - self.settled() - self.credited()
+        &self.amounts.total - self.settled() - self.credited() + self.returned()
     }
 
     /// TDS a client usually withholds on professional fees (section 194J): 10% of the taxable
@@ -488,9 +592,17 @@ impl Invoice {
         self.status().is_settled()
     }
 
-    /// Take a credit note against this invoice off what the client owes. A note credits only
-    /// what is still due; money already received isn't refunded by one.
-    pub fn apply_credit(&mut self, note: &CreditNote) -> Result<(), DomainError> {
+    /// Take a credit note against this invoice off what the client owes. The part of the note
+    /// beyond what is still due was already paid, so it goes back to the client as `terms` say:
+    /// a refund on a foreign invoice says the rupees that left the bank, and TDS the client
+    /// reverses comes off your TDS credit instead of going back as cash. Cash given back never
+    /// exceeds cash received, and all notes on an invoice together take off at most its total.
+    /// Returns the credit as recorded.
+    pub fn apply_credit(
+        &mut self,
+        note: &CreditNote,
+        terms: ReturnTerms,
+    ) -> Result<Credit, DomainError> {
         if note.invoice() != &self.number || note.currency() != self.currency {
             return Err(DomainError::CreditForAnotherInvoice);
         }
@@ -498,19 +610,35 @@ impl Invoice {
             return Err(DomainError::CreditBeforeInvoice);
         }
         let amount = note.amounts().total.clone();
-        let balance = self.balance();
-        if amount > balance {
-            return Err(DomainError::CreditExceedsBalance {
-                balance: balance.to_string(),
+        let remaining = self.creditable();
+        if amount > remaining {
+            return Err(DomainError::CreditExceedsInvoice {
+                remaining: remaining.to_string(),
                 got: amount.to_string(),
             });
         }
-        self.credits.push(Credit {
+        let excess = &amount - self.balance();
+        let returned = (excess > BigDecimal::zero()).then(|| Returned {
+            amount: excess,
+            kind: terms.kind,
+            refunded_inr: match terms.kind {
+                ReturnKind::Refunded => terms.refunded_inr.map(round),
+                ReturnKind::Advance => None,
+            },
+            tds_reversed: terms.tds_reversed.map(round),
+        });
+        let credit = Credit {
             number: note.number().clone(),
             date: note.date(),
             amount,
-        });
-        Ok(())
+            returned,
+        };
+        self.credits.push(credit.clone());
+        if let Err(error) = check_returns(self.currency, &self.payments, &self.credits) {
+            self.credits.pop();
+            return Err(error);
+        }
+        Ok(credit)
     }
 
     /// Record a payment of all or part of the balance of an invoice in rupees; `received`
@@ -578,6 +706,60 @@ pub(super) fn check_currency(
         (false, None) => Err(DomainError::MissingExchangeRate(currency.code())),
         (false, Some(_)) if kind == InvoiceKind::Tax => Err(DomainError::ForeignTaxInvoice),
         (false, Some(_)) => Ok(()),
+    }
+}
+
+/// Everything credit notes gave back on one invoice: each return on its own, TDS reversed no more
+/// than was withheld, and cash given back no more than was received
+fn check_returns(
+    currency: Currency,
+    payments: &[Payment],
+    credits: &[Credit],
+) -> Result<(), DomainError> {
+    let returns = credits.iter().filter_map(|c| c.returned.as_ref());
+    let mut reversed = BigDecimal::zero();
+    let mut cash = BigDecimal::zero();
+    for returned in returns {
+        check_return(currency, returned)?;
+        if let Some(tds) = &returned.tds_reversed {
+            reversed += tds;
+        }
+        cash += returned.cash();
+    }
+    let withheld: BigDecimal = payments.iter().map(|p| &p.tds).sum();
+    if reversed > withheld {
+        return Err(DomainError::TdsReversedExceedsWithheld {
+            withheld: withheld.to_string(),
+            got: reversed.to_string(),
+        });
+    }
+    let received: BigDecimal = payments.iter().map(|p| &p.received).sum();
+    if cash > received {
+        return Err(DomainError::ReturnExceedsReceived {
+            received: received.to_string(),
+            got: cash.to_string(),
+        });
+    }
+    Ok(())
+}
+
+/// A refund on a foreign invoice says the rupees that left the bank; nothing else carries them.
+/// TDS reversed is a positive part of a rupee invoice's return.
+fn check_return(currency: Currency, returned: &Returned) -> Result<(), DomainError> {
+    if let Some(tds) = &returned.tds_reversed
+        && (!currency.is_inr() || *tds <= BigDecimal::zero() || *tds > returned.amount)
+    {
+        return Err(DomainError::UnexpectedTdsReversed);
+    }
+    match (returned.kind, currency.is_inr(), &returned.refunded_inr) {
+        (ReturnKind::Refunded, false, None) => Err(DomainError::MissingRefundedAmount),
+        (ReturnKind::Refunded, false, Some(inr)) if *inr <= BigDecimal::zero() => {
+            Err(DomainError::MissingRefundedAmount)
+        }
+        (ReturnKind::Refunded, true, Some(_)) | (ReturnKind::Advance, _, Some(_)) => {
+            Err(DomainError::UnexpectedRefundedAmount)
+        }
+        _ => Ok(()),
     }
 }
 

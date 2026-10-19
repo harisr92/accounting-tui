@@ -23,7 +23,7 @@ pub use expense::{Expense, ExpenseCategory, ExpenseId};
 pub use fiscal_year::{FiscalYear, Quarter};
 pub use invoice::{
     Credit, Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber, InvoiceParts, InvoiceStatus,
-    InvoiceSummary, Payment,
+    InvoiceSummary, Payment, ReturnKind, ReturnTerms, Returned,
 };
 pub use logo::{Logo, LogoFormat, LogoId, MAX_LOGO_BYTES};
 pub use milestone::{Milestone, MilestoneId, MilestoneStatus};
