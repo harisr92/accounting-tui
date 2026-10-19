@@ -516,7 +516,7 @@ fn load_state(data: &DataDir) -> Result<LocalState, SyncError> {
         return Ok(state);
     }
     let state = LocalState {
-        device_id: Uuid::new_v4(),
+        device_id: Uuid::now_v7(),
         base_generation: 0,
         // A database that predates syncing counts as changed, so it is never silently replaced
         base_sha256: None,

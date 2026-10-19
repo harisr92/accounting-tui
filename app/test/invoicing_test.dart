@@ -144,8 +144,10 @@ void main() {
     await settle(tester);
     expect(find.textContaining('₹5,000.00 TDS reversed'), findsOneWidget);
     await tester.tap(find.text('Issue'));
-    await pumpUntil(tester, find.textContaining('₹54,000.00 cash'));
+    // Not the cash split: the closing confirm dialog shows it too, before the note is saved
+    await pumpUntil(tester, find.textContaining('Issued CN/'));
 
+    expect(find.textContaining('₹54,000.00 cash'), findsOneWidget);
     expect(find.byTooltip('Credit note'), findsNothing);
   });
 

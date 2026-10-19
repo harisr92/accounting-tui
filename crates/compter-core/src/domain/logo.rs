@@ -19,7 +19,7 @@ pub struct LogoId(Uuid);
 
 impl LogoId {
     pub fn generate() -> Self {
-        Self(Uuid::new_v4())
+        Self(Uuid::now_v7())
     }
 
     pub fn from_uuid(id: Uuid) -> Self {

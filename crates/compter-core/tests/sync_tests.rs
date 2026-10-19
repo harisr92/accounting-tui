@@ -180,7 +180,7 @@ fn a_fresh_lease_from_another_device_blocks_start() {
 fn a_stale_lease_is_taken_over() {
     let (_dir, sync) = sync_dir();
     let stale = Lease {
-        device_id: uuid::Uuid::new_v4(),
+        device_id: uuid::Uuid::now_v7(),
         device_name: "crashed".to_owned(),
         heartbeat: Utc::now() - Duration::minutes(30),
     };
