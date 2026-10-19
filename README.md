@@ -68,6 +68,7 @@ Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Un
 | project list | `A` | archive a finished project (nothing pending), or restore an archived one |
 | project list | `H` | show or hide archived projects (hidden by default; their names are dimmed) |
 | project list | `/` | search projects by name or client; `Esc` clears the search |
+| milestones | `s` | sort by due date (the default), name or amount; ties keep the order added, and the cursor stays on its milestone |
 | milestones | `a` | add a milestone |
 | milestones | `e` / `x` | edit / delete a pending milestone (delete asks first) |
 | milestones | `t` | log time on an hourly milestone |
