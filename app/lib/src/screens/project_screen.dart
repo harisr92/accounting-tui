@@ -34,6 +34,16 @@ class ProjectScreen extends ConsumerWidget {
             title: project.value?.name ?? 'Project',
             actions: [
               if (project.value case final detail?) ...[
+                PopupMenuButton<MilestoneOrder>(
+                  tooltip: 'Sort milestones',
+                  icon: const Icon(Icons.sort),
+                  initialValue: ref.watch(milestoneOrderProvider),
+                  onSelected: ref.read(milestoneOrderProvider.notifier).choose,
+                  itemBuilder: (_) => [
+                    for (final order in MilestoneOrder.values)
+                      PopupMenuItem(value: order, child: Text(order.label)),
+                  ],
+                ),
                 IconButton(
                   tooltip: 'Edit project',
                   icon: const Icon(Icons.edit_outlined),
@@ -60,6 +70,7 @@ class ProjectScreen extends ConsumerWidget {
             error: (error, _) => Center(child: Text('$error')),
             data: (detail) => _ProjectBody(
               detail,
+              order: ref.watch(milestoneOrderProvider),
               onMilestone: (m) => _milestoneActions(context, ref, detail, m),
             ),
           ),
@@ -236,9 +247,14 @@ class ProjectScreen extends ConsumerWidget {
 enum _Action { issue, logTime, undoTime, edit, remove, openInvoice }
 
 class _ProjectBody extends StatelessWidget {
-  const _ProjectBody(this.project, {required this.onMilestone});
+  const _ProjectBody(
+    this.project, {
+    required this.order,
+    required this.onMilestone,
+  });
 
   final ProjectDetail project;
+  final MilestoneOrder order;
   final void Function(MilestoneRow) onMilestone;
 
   @override
@@ -265,10 +281,11 @@ class _ProjectBody extends StatelessWidget {
           if (credited != null) ('Credited', credited),
           ('Outstanding', project.outstanding),
         ]),
-        const SectionHeader('Milestones'),
+        SectionHeader('Milestones · by ${order.label.toLowerCase()}'),
         if (project.milestones.isEmpty)
           const SectionNote('No milestones yet. Add one to invoice it.'),
-        for (final m in project.milestones)
+        // Each tile carries its own milestone, so a tap acts on the one shown
+        for (final m in order.of(project).map((i) => project.milestones[i]))
           RecordTile(
             title: m.name,
             supporting: [

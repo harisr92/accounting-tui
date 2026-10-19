@@ -19,7 +19,7 @@ void main() {
     await tester.tap(find.text('Data Pipeline'));
     await settle(tester);
 
-    expect(find.text('Milestones'), findsOneWidget);
+    expect(find.text('Milestones · by due date'), findsOneWidget);
     expect(find.text('Outstanding'), findsOneWidget);
     expect(find.textContaining('₹'), findsWidgets);
   });
@@ -30,7 +30,7 @@ void main() {
     await launchDemo(tester);
     await tester.tap(find.text('Data Pipeline'));
     await settle(tester);
-    expect(find.text('Milestones'), findsOneWidget);
+    expect(find.text('Milestones · by due date'), findsOneWidget);
 
     final size = tester.getSize(find.byType(Scaffold).last);
     await tester.timedDragFrom(
@@ -40,9 +40,36 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Milestones'), findsNothing);
+    expect(find.text('Milestones · by due date'), findsNothing);
     expect(find.byTooltip('New project'), findsOneWidget);
   }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+  testWidgets('milestones sort by amount and a tap opens the one shown', (
+    tester,
+  ) async {
+    await launchDemo(tester);
+    await tester.tap(find.text('Website Revamp'));
+    await settle(tester);
+    double top(String name) => tester.getTopLeft(find.text(name).last).dy;
+    // By due date: Design (1 Sep), Frontend (20 Oct), Launch (15 Nov)
+    expect(top('Design'), lessThan(top('Frontend')));
+
+    await tester.tap(find.byTooltip('Sort milestones'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Amount'));
+    await tester.pumpAndSettle();
+    expect(find.text('Milestones · by amount'), findsOneWidget);
+    // Frontend ₹60,000, Design ₹50,000, Launch ₹40,000
+    expect(top('Frontend'), lessThan(top('Design')));
+    expect(top('Design'), lessThan(top('Launch')));
+
+    await tester.ensureVisible(find.text('Launch'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Launch'));
+    await settle(tester);
+    expect(find.text('Issue invoice'), findsOneWidget);
+    expect(find.text('₹40,000.00'), findsWidgets);
+  });
 
   testWidgets('a refused rate stays in the form under its field', (
     tester,
