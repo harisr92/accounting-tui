@@ -7,6 +7,7 @@ import '../notice.dart';
 import '../rust/api/error.dart';
 import '../rust/api/expenses.dart';
 import '../ui/action_sheet.dart';
+import '../ui/collapsing_fab.dart';
 import '../ui/empty_state.dart';
 import '../ui/figures.dart';
 import '../ui/record_tile.dart';
@@ -29,58 +30,62 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
   Widget build(BuildContext context) {
     final year = ref.watch(expenseYearProvider);
     final expenses = ref.watch(expensesProvider(year));
-    return Scaffold(
-      appBar: searchAppBar(title: 'Expenses', hint: 'Description or category'),
-      body: expenses.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('$error')),
-        data: (list) {
-          final matches = query.apply(
-            list.expenses,
-            (expense) => [expense.description, expense.category],
-          );
-          return ListView(
-            padding: const EdgeInsets.only(bottom: 96),
-            children: [
-              FiscalYearPicker(expenseYearProvider, label: list.year),
-              if (list.expenses.isEmpty)
-                const EmptyState(
-                  icon: Icons.account_balance_wallet_outlined,
-                  message: 'No expenses this year',
-                )
-              else ...[
-                FigureGrid([('After GST credit', list.cost)]),
-                if (matches.isEmpty)
-                  noMatches(query)
-                else
-                  const SectionHeader('By date'),
+    return FabScrollScope(
+      child: Scaffold(
+        appBar: searchAppBar(
+          title: 'Expenses',
+          hint: 'Description or category',
+        ),
+        body: expenses.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => Center(child: Text('$error')),
+          data: (list) {
+            final matches = query.apply(
+              list.expenses,
+              (expense) => [expense.description, expense.category],
+            );
+            return ListView(
+              padding: const EdgeInsets.only(bottom: 96),
+              children: [
+                FiscalYearPicker(expenseYearProvider, label: list.year),
+                if (list.expenses.isEmpty)
+                  const EmptyState(
+                    icon: Icons.account_balance_wallet_outlined,
+                    message: 'No expenses this year',
+                  )
+                else ...[
+                  FigureGrid([('After GST credit', list.cost)]),
+                  if (matches.isEmpty)
+                    noMatches(query)
+                  else
+                    const SectionHeader('By date'),
+                ],
+                for (final expense in matches)
+                  RecordTile(
+                    title: expense.description,
+                    supporting: [expense.date, expense.category].join(' · '),
+                    amount: expense.amount,
+                    detail: expense.gstCredit == null
+                        ? null
+                        : 'GST ${expense.gstCredit}',
+                    onTap: () => _actions(expense),
+                  ),
               ],
-              for (final expense in matches)
-                RecordTile(
-                  title: expense.description,
-                  supporting: [expense.date, expense.category].join(' · '),
-                  amount: expense.amount,
-                  detail: expense.gstCredit == null
-                      ? null
-                      : 'GST ${expense.gstCredit}',
-                  onTap: () => _actions(expense),
-                ),
-            ],
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        // Every tab stays mounted in one route, so their buttons would share the default hero tag
-        heroTag: null,
-        tooltip: 'Add expense',
-        icon: const Icon(Icons.add),
-        label: const Text('Add expense'),
-        onPressed: () async {
-          final added = await expenseForm(context, ref.read(compterProvider));
-          if (added == null || !context.mounted) return;
-          _changed();
-          notify(context, 'Added ${added.description} for ${added.amount}');
-        },
+            );
+          },
+        ),
+        floatingActionButton: CollapsingFab(
+          // Every tab stays mounted in one route, so their buttons would share the default hero tag
+          heroTag: null,
+          icon: Icons.add,
+          label: 'Add expense',
+          onPressed: () async {
+            final added = await expenseForm(context, ref.read(compterProvider));
+            if (added == null || !context.mounted) return;
+            _changed();
+            notify(context, 'Added ${added.description} for ${added.amount}');
+          },
+        ),
       ),
     );
   }

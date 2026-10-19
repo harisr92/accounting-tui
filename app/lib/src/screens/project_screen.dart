@@ -10,6 +10,7 @@ import '../router.dart';
 import '../rust/api/error.dart';
 import '../rust/api/rows.dart';
 import '../ui/action_sheet.dart';
+import '../ui/collapsing_fab.dart';
 import '../ui/figures.dart';
 import '../ui/record_tile.dart';
 import '../ui/section.dart';
@@ -26,54 +27,56 @@ class ProjectScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final project = ref.watch(projectProvider(id));
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(project.value?.name ?? 'Project'),
-        actions: [
-          if (project.value case final detail?) ...[
-            IconButton(
-              tooltip: 'Edit project',
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () async {
-                final updated = await projectForm(
-                  context,
-                  ref.read(compterProvider),
-                  existing: detail,
-                );
-                if (updated != null) _show(ref, updated);
-              },
-            ),
-            if (detail.deletable)
+    return FabScrollScope(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(project.value?.name ?? 'Project'),
+          actions: [
+            if (project.value case final detail?) ...[
               IconButton(
-                tooltip: 'Delete project',
-                icon: const Icon(Icons.delete_outline),
-                onPressed: () => _delete(context, ref, detail),
+                tooltip: 'Edit project',
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () async {
+                  final updated = await projectForm(
+                    context,
+                    ref.read(compterProvider),
+                    existing: detail,
+                  );
+                  if (updated != null) _show(ref, updated);
+                },
               ),
+              if (detail.deletable)
+                IconButton(
+                  tooltip: 'Delete project',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () => _delete(context, ref, detail),
+                ),
+            ],
           ],
-        ],
-      ),
-      body: project.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('$error')),
-        data: (detail) => _ProjectBody(
-          detail,
-          onMilestone: (m) => _milestoneActions(context, ref, detail, m),
         ),
+        body: project.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => Center(child: Text('$error')),
+          data: (detail) => _ProjectBody(
+            detail,
+            onMilestone: (m) => _milestoneActions(context, ref, detail, m),
+          ),
+        ),
+        floatingActionButton: project.value == null
+            ? null
+            : CollapsingFab(
+                icon: Icons.add,
+                label: 'Add milestone',
+                onPressed: () async {
+                  final updated = await milestoneForm(
+                    context,
+                    ref.read(compterProvider),
+                    project.value!,
+                  );
+                  if (updated != null) _show(ref, updated);
+                },
+              ),
       ),
-      floatingActionButton: project.value == null
-          ? null
-          : FloatingActionButton.extended(
-              icon: const Icon(Icons.add),
-              label: const Text('Add milestone'),
-              onPressed: () async {
-                final updated = await milestoneForm(
-                  context,
-                  ref.read(compterProvider),
-                  project.value!,
-                );
-                if (updated != null) _show(ref, updated);
-              },
-            ),
     );
   }
 
