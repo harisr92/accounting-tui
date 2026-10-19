@@ -8,9 +8,9 @@ import '../rust/api/error.dart';
 import '../rust/api/invoicing.dart';
 import '../ui/collapsing_fab.dart';
 import '../ui/figures.dart';
+import '../ui/large_title.dart';
 import '../ui/record_tile.dart';
 import '../ui/section.dart';
-import '../ui/status_chip.dart';
 import '../ui/theme.dart';
 
 /// One invoice: its amounts, payments and credit notes. Its PDF can be opened or shared, and
@@ -25,55 +25,58 @@ class InvoiceScreen extends ConsumerWidget {
     final invoice = ref.watch(invoiceProvider(number));
     final detail = invoice.value;
     final due = detail != null && !detail.settled;
-    return FabScrollScope(
-      child: Scaffold(
-        appBar: AppBar(title: Text(number)),
-        body: invoice.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('$error')),
-          data: (detail) => _InvoiceBody(
-            detail,
-            creditNotePdf: (row, note) =>
-                _pdf(row, ref, creditNote: note, share: true),
+    return LargeTitleScope(
+      child: FabScrollScope(
+        child: Scaffold(
+          appBar: TitleBar(title: number),
+          body: invoice.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => Center(child: Text('$error')),
+            data: (detail) => _InvoiceBody(
+              detail,
+              creditNotePdf: (row, note) =>
+                  _pdf(row, ref, creditNote: note, share: true),
+            ),
           ),
-        ),
-        // Every action within thumb's reach: the documents on the bar, the payment as the one
-        // filled button
-        bottomNavigationBar: detail == null
-            ? null
-            : BottomAppBar(
-                child: Row(
-                  children: [
-                    Builder(
-                      // Its own context, so the iPad share popover points at it
-                      builder: (button) => IconButton(
-                        tooltip: 'Share PDF',
-                        icon: const Icon(Icons.ios_share),
-                        onPressed: () => _pdf(button, ref, share: true),
+          // Every action within thumb's reach: the documents on the bar, the payment as the one
+          // filled button
+          bottomNavigationBar: detail == null
+              ? null
+              : BottomAppBar(
+                  child: Row(
+                    children: [
+                      Builder(
+                        // Its own context, so the iPad share popover points at it
+                        builder: (button) => IconButton(
+                          tooltip: 'Share PDF',
+                          icon: const Icon(Icons.ios_share),
+                          onPressed: () => _pdf(button, ref, share: true),
+                        ),
                       ),
-                    ),
-                    IconButton(
-                      tooltip: 'Open PDF',
-                      icon: const Icon(Icons.picture_as_pdf_outlined),
-                      onPressed: () => _pdf(context, ref, share: false),
-                    ),
-                    if (due)
                       IconButton(
-                        tooltip: 'Credit note',
-                        icon: const Icon(Icons.remove_circle_outline),
-                        onPressed: () => _credit(context, ref, detail),
+                        tooltip: 'Open PDF',
+                        icon: const Icon(Icons.picture_as_pdf_outlined),
+                        onPressed: () => _pdf(context, ref, share: false),
                       ),
-                  ],
+                      if (due)
+                        IconButton(
+                          tooltip: 'Credit note',
+                          icon: const Icon(Icons.remove_circle_outline),
+                          onPressed: () => _credit(context, ref, detail),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-        floatingActionButton: due
-            ? CollapsingFab(
-                icon: Icons.payments_outlined,
-                label: 'Record payment',
-                onPressed: () => _pay(context, ref, detail),
-              )
-            : null,
-        floatingActionButtonLocation: FloatingActionButtonLocation.endContained,
+          floatingActionButton: due
+              ? CollapsingFab(
+                  icon: Icons.payments_outlined,
+                  label: 'Record payment',
+                  onPressed: () => _pay(context, ref, detail),
+                )
+              : null,
+          floatingActionButtonLocation:
+              FloatingActionButtonLocation.endContained,
+        ),
       ),
     );
   }
@@ -159,24 +162,22 @@ class _InvoiceBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final totalInr = invoice.totalInr;
     return ListView(
       padding: const EdgeInsets.only(bottom: gutter),
       children: [
-        ListTile(
-          title: Text(invoice.clientName, style: theme.textTheme.titleMedium),
-          subtitle: Text(
-            [
-              invoice.milestoneName,
-              invoice.date,
-              invoice.kind,
-              ?invoice.exchangeRate,
-            ].join(' · '),
-          ),
-          trailing: StatusChip(invoice.status),
+        LargeTitle(
+          icon: Icons.receipt_long,
+          title: invoice.number,
+          description: invoice.clientName,
+          status: invoice.status,
+          details: [
+            invoice.milestoneName,
+            invoice.date,
+            invoice.kind,
+            ?invoice.exchangeRate,
+          ].join(' · '),
         ),
-        const SizedBox(height: 8),
         FigureGrid([
           ('Total', invoice.total),
           ('Due', invoice.balance),

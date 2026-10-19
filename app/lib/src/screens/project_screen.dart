@@ -12,9 +12,9 @@ import '../rust/api/rows.dart';
 import '../ui/action_sheet.dart';
 import '../ui/collapsing_fab.dart';
 import '../ui/figures.dart';
+import '../ui/large_title.dart';
 import '../ui/record_tile.dart';
 import '../ui/section.dart';
-import '../ui/status_chip.dart';
 import '../ui/theme.dart';
 
 /// One project: its totals and milestones. The app bar edits or deletes the project; tapping a
@@ -27,55 +27,57 @@ class ProjectScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final project = ref.watch(projectProvider(id));
-    return FabScrollScope(
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(project.value?.name ?? 'Project'),
-          actions: [
-            if (project.value case final detail?) ...[
-              IconButton(
-                tooltip: 'Edit project',
-                icon: const Icon(Icons.edit_outlined),
-                onPressed: () async {
-                  final updated = await projectForm(
-                    context,
-                    ref.read(compterProvider),
-                    existing: detail,
-                  );
-                  if (updated != null) _show(ref, updated);
-                },
-              ),
-              if (detail.deletable)
+    return LargeTitleScope(
+      child: FabScrollScope(
+        child: Scaffold(
+          appBar: TitleBar(
+            title: project.value?.name ?? 'Project',
+            actions: [
+              if (project.value case final detail?) ...[
                 IconButton(
-                  tooltip: 'Delete project',
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => _delete(context, ref, detail),
+                  tooltip: 'Edit project',
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () async {
+                    final updated = await projectForm(
+                      context,
+                      ref.read(compterProvider),
+                      existing: detail,
+                    );
+                    if (updated != null) _show(ref, updated);
+                  },
                 ),
+                if (detail.deletable)
+                  IconButton(
+                    tooltip: 'Delete project',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => _delete(context, ref, detail),
+                  ),
+              ],
             ],
-          ],
-        ),
-        body: project.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('$error')),
-          data: (detail) => _ProjectBody(
-            detail,
-            onMilestone: (m) => _milestoneActions(context, ref, detail, m),
           ),
+          body: project.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => Center(child: Text('$error')),
+            data: (detail) => _ProjectBody(
+              detail,
+              onMilestone: (m) => _milestoneActions(context, ref, detail, m),
+            ),
+          ),
+          floatingActionButton: project.value == null
+              ? null
+              : CollapsingFab(
+                  icon: Icons.add,
+                  label: 'Add milestone',
+                  onPressed: () async {
+                    final updated = await milestoneForm(
+                      context,
+                      ref.read(compterProvider),
+                      project.value!,
+                    );
+                    if (updated != null) _show(ref, updated);
+                  },
+                ),
         ),
-        floatingActionButton: project.value == null
-            ? null
-            : CollapsingFab(
-                icon: Icons.add,
-                label: 'Add milestone',
-                onPressed: () async {
-                  final updated = await milestoneForm(
-                    context,
-                    ref.read(compterProvider),
-                    project.value!,
-                  );
-                  if (updated != null) _show(ref, updated);
-                },
-              ),
       ),
     );
   }
@@ -241,24 +243,22 @@ class _ProjectBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final credited = project.credited;
     return ListView(
       padding: const EdgeInsets.only(bottom: 96),
       children: [
-        ListTile(
-          title: Text(project.clientName, style: theme.textTheme.titleMedium),
-          subtitle: Text(
-            [
-              ?project.clientGstin,
-              project.billing,
-              ?project.clientLocation,
-              project.currency,
-            ].join(' · '),
-          ),
-          trailing: StatusChip(project.status),
+        LargeTitle(
+          icon: Icons.work,
+          title: project.name,
+          description: project.clientName,
+          status: project.status,
+          details: [
+            ?project.clientGstin,
+            project.billing,
+            ?project.clientLocation,
+            project.currency,
+          ].join(' · '),
         ),
-        const SizedBox(height: 8),
         FigureGrid([
           ('Total', project.total),
           ('Paid', project.paid),

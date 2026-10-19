@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -100,7 +101,8 @@ GoRouter buildRouter() {
   );
 }
 
-/// The tab bar. It also starts automatic sync once the app is up, and badges Settings when
+/// The tab bar, iOS style: small labels under the icons, the current tab in the theme's colour,
+/// a hairline above. It also starts automatic sync once the app is up, and badges Settings when
 /// sync needs the user (sign in, choose a folder, settle a conflict).
 class _Tabs extends ConsumerStatefulWidget {
   const _Tabs(this.shell);
@@ -126,40 +128,47 @@ class _TabsState extends ConsumerState<_Tabs> {
     final attention = ref.watch(
       syncControllerProvider.select((report) => report.needsAttention),
     );
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       body: shell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: shell.currentIndex,
+      bottomNavigationBar: CupertinoTabBar(
+        currentIndex: shell.currentIndex,
         // A second tap on the current tab goes back to its list
-        onDestinationSelected: (i) =>
+        onTap: (i) =>
             shell.goBranch(i, initialLocation: i == shell.currentIndex),
-        destinations: [
-          const NavigationDestination(
+        backgroundColor: scheme.surface,
+        activeColor: scheme.primary,
+        inactiveColor: scheme.onSurfaceVariant,
+        border: Border(
+          top: BorderSide(color: scheme.outlineVariant, width: 0.5),
+        ),
+        items: [
+          const BottomNavigationBarItem(
             icon: Icon(Icons.work_outline),
-            selectedIcon: Icon(Icons.work),
+            activeIcon: Icon(Icons.work),
             label: 'Projects',
           ),
-          const NavigationDestination(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
+            activeIcon: Icon(Icons.receipt_long),
             label: 'Invoices',
           ),
-          const NavigationDestination(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.account_balance_wallet_outlined),
-            selectedIcon: Icon(Icons.account_balance_wallet),
+            activeIcon: Icon(Icons.account_balance_wallet),
             label: 'Expenses',
           ),
-          const NavigationDestination(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.insights_outlined),
-            selectedIcon: Icon(Icons.insights),
+            activeIcon: Icon(Icons.insights),
             label: 'Reports',
           ),
-          NavigationDestination(
+          BottomNavigationBarItem(
             icon: Badge(
               isLabelVisible: attention,
               child: const Icon(Icons.settings_outlined),
             ),
-            selectedIcon: Badge(
+            activeIcon: Badge(
               isLabelVisible: attention,
               child: const Icon(Icons.settings),
             ),
