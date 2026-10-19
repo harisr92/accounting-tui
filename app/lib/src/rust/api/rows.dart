@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `new`
+// These functions are ignored because they are not marked as `pub`: `new`, `order`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`
 
 /// A milestone as typed
@@ -127,7 +127,19 @@ class ProjectDetail {
   /// `None` when nothing was credited, as the terminal hides that tile
   final String? credited;
   final String outstanding;
+
+  /// In the order they were added. Listed through one of the orders below, never sorted in
+  /// Dart.
   final List<MilestoneRow> milestones;
+
+  /// Positions in `milestones` by due date, earliest first: the default order
+  final Uint32List byDue;
+
+  /// Positions in `milestones` by name, A to Z
+  final Uint32List byName;
+
+  /// Positions in `milestones` by amount, largest first
+  final Uint32List byAmount;
 
   /// Nothing in it was invoiced, so it may be deleted
   final bool deletable;
@@ -151,6 +163,9 @@ class ProjectDetail {
     this.credited,
     required this.outstanding,
     required this.milestones,
+    required this.byDue,
+    required this.byName,
+    required this.byAmount,
     required this.deletable,
     required this.edit,
   });
@@ -172,6 +187,9 @@ class ProjectDetail {
       credited.hashCode ^
       outstanding.hashCode ^
       milestones.hashCode ^
+      byDue.hashCode ^
+      byName.hashCode ^
+      byAmount.hashCode ^
       deletable.hashCode ^
       edit.hashCode;
 
@@ -195,6 +213,9 @@ class ProjectDetail {
           credited == other.credited &&
           outstanding == other.outstanding &&
           milestones == other.milestones &&
+          byDue == other.byDue &&
+          byName == other.byName &&
+          byAmount == other.byAmount &&
           deletable == other.deletable &&
           edit == other.edit;
 }

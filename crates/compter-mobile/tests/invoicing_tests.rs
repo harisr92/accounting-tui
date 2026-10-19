@@ -273,3 +273,18 @@ fn time_is_logged_on_hourly_milestones() {
     assert_eq!(beta.logged.as_deref(), Some("3h 30m"));
     assert_eq!(beta.amount, "₹5,250.00");
 }
+
+#[test]
+fn a_project_lists_its_milestones_in_every_order() {
+    let (_scratch, app) = demo();
+    let website = open(&app, "Website Revamp");
+    let names = |order: &[u32]| -> Vec<String> {
+        order
+            .iter()
+            .map(|&i| website.milestones[i as usize].name.clone())
+            .collect()
+    };
+    assert_eq!(names(&website.by_due), ["Design", "Frontend", "Launch"]);
+    assert_eq!(names(&website.by_name), ["Design", "Frontend", "Launch"]);
+    assert_eq!(names(&website.by_amount), ["Frontend", "Design", "Launch"]);
+}
