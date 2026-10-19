@@ -12,7 +12,7 @@ use super::chart;
 use super::invoice_builder::InvoicingError;
 use crate::domain::{
     CreditNote, CreditNoteParts, Currency, DomainError, Invoice, InvoiceAmounts, InvoiceKind,
-    InvoiceNumber,
+    InvoiceNumber, ReturnTerms,
 };
 
 const TITLE: &str = "Credit Note";
@@ -35,6 +35,10 @@ pub struct CreditDraft {
     /// invoice's rate
     pub taxable_value: BigDecimal,
     pub reason: String,
+    /// What happens to the part of the note the client already paid: refunded or kept as an
+    /// advance, less any TDS the client reverses. Ignored when the note takes off only what is
+    /// due.
+    pub returned: ReturnTerms,
 }
 
 /// Build credit note `number` against `invoice`. Notes on GST tax invoices go through

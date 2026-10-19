@@ -13,6 +13,9 @@ pub const INPUT_GST: &str = "1300";
 pub const CGST_OUTPUT: &str = "2300";
 pub const SGST_OUTPUT: &str = "2310";
 pub const IGST_OUTPUT: &str = "2320";
+/// Money from clients held against their future invoices: credit notes on paid invoices that
+/// weren't refunded
+pub const CUSTOMER_ADVANCES: &str = "2400";
 pub const SERVICE_REVENUE: &str = "4100";
 /// Services to clients abroad, kept apart for export reporting
 pub const EXPORT_REVENUE: &str = "4110";
@@ -43,6 +46,11 @@ const CHART: &[(&str, &str, AccountType)] = &[
     (CGST_OUTPUT, "CGST Output", AccountType::Liability),
     (SGST_OUTPUT, "SGST Output", AccountType::Liability),
     (IGST_OUTPUT, "IGST Output", AccountType::Liability),
+    (
+        CUSTOMER_ADVANCES,
+        "Customer Advances",
+        AccountType::Liability,
+    ),
     (SERVICE_REVENUE, "Service Revenue", AccountType::Income),
     (EXPORT_REVENUE, "Export Revenue", AccountType::Income),
     (CREDIT_NOTES, "Credit Notes", AccountType::Income),
