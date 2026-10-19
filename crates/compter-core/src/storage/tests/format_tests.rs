@@ -5,7 +5,7 @@ use bigdecimal::BigDecimal;
 
 use crate::domain::{
     Billing, BusinessProfile, ClientRegion, CreditNote, Currency, Expense, ExpenseCategory,
-    Invoice, InvoiceKind, InvoiceStatus, MilestoneStatus, Project, ProjectStatus,
+    Invoice, InvoiceKind, InvoiceStatus, MilestoneStatus, Project, ProjectStatus, ReturnKind,
 };
 use crate::storage::codec::decode;
 use crate::storage::migrations::invoice_v1_to_v2;
@@ -24,6 +24,9 @@ const EUR_PROJECT_V2: &str = include_str!("fixtures/project_eur_v2.json");
 const CREDITED_PROJECT_V3: &str = include_str!("fixtures/project_credited_v3.json");
 const CREDIT_NOTE_V3: &str = include_str!("fixtures/credit_note_v3.json");
 const CREDITED_INVOICE_V3: &str = include_str!("fixtures/invoice_credited_v3.json");
+const RETURNED_INVOICE_V4: &str = include_str!("fixtures/invoice_returned_v4.json");
+const REFUNDED_EUR_INVOICE_V4: &str = include_str!("fixtures/invoice_refunded_eur_v4.json");
+const TDS_REVERSED_INVOICE_V4: &str = include_str!("fixtures/invoice_tds_reversed_v4.json");
 
 #[test]
 fn hourly_project_v1_still_loads() {
@@ -182,4 +185,40 @@ fn credited_project_v3_still_loads() {
     assert_eq!(milestone.credited(), &BigDecimal::from(50_000));
     assert_eq!(project.paid_amount(), BigDecimal::from(0));
     assert_eq!(project.outstanding_amount(), BigDecimal::from(0));
+}
+
+#[test]
+fn credits_given_back_on_a_paid_invoice_v4_still_load() {
+    let invoice: Invoice = decode("invoices", "fixture", RETURNED_INVOICE_V4.as_bytes()).unwrap();
+    assert_eq!(invoice.credited(), BigDecimal::from(35_400));
+    assert_eq!(invoice.returned(), BigDecimal::from(35_400));
+    assert_eq!(invoice.balance(), BigDecimal::from(0));
+    assert_eq!(invoice.status(), InvoiceStatus::Paid);
+    assert_eq!(invoice.advance_inr(), BigDecimal::from(23_600));
+    let kinds: Vec<_> = invoice
+        .credits()
+        .iter()
+        .filter_map(|c| c.returned.as_ref().map(|r| r.kind))
+        .collect();
+    assert_eq!(kinds, [ReturnKind::Refunded, ReturnKind::Advance]);
+}
+
+#[test]
+fn a_foreign_refund_v4_still_loads() {
+    let invoice: Invoice =
+        decode("invoices", "fixture", REFUNDED_EUR_INVOICE_V4.as_bytes()).unwrap();
+    let returned = invoice.credits()[0].returned.as_ref().unwrap();
+    assert_eq!(returned.refunded_inr, Some(BigDecimal::from(9_200)));
+    assert_eq!(invoice.balance(), BigDecimal::from(0));
+    assert_eq!(invoice.creditable(), BigDecimal::from(900));
+}
+
+#[test]
+fn a_refund_with_tds_reversed_v4_still_loads() {
+    let invoice: Invoice =
+        decode("invoices", "fixture", TDS_REVERSED_INVOICE_V4.as_bytes()).unwrap();
+    let returned = invoice.credits()[0].returned.as_ref().unwrap();
+    assert_eq!(returned.tds_reversed, Some(BigDecimal::from(1_000)));
+    assert_eq!(returned.cash(), BigDecimal::from(10_800));
+    assert_eq!(invoice.balance(), BigDecimal::from(0));
 }

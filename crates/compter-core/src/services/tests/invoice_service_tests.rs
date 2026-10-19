@@ -7,7 +7,8 @@ use super::fixtures::{
     profile_draft,
 };
 use crate::domain::{
-    Currency, DomainError, ExchangeRate, InvoiceStatus, MilestoneStatus, ProjectStatus,
+    Currency, DomainError, ExchangeRate, InvoiceStatus, MilestoneStatus, ProjectStatus, ReturnKind,
+    ReturnTerms,
 };
 use crate::services::{InvoiceService, InvoicingError, ServiceError, chart};
 use crate::storage::{InvoiceRepository, ProjectRepository, RedbRepository, Store};
@@ -326,6 +327,7 @@ fn credit(taxable: i64, reason: &str) -> crate::services::CreditDraft {
         date: date(),
         taxable_value: rupees(taxable),
         reason: reason.to_owned(),
+        returned: crate::domain::ReturnTerms::default(),
     }
 }
 
@@ -406,8 +408,18 @@ fn a_full_credit_cancels_the_invoice_and_its_milestone() {
     );
 }
 
+fn credit_back(taxable: i64, kind: ReturnKind) -> crate::services::CreditDraft {
+    crate::services::CreditDraft {
+        returned: ReturnTerms {
+            kind,
+            ..ReturnTerms::default()
+        },
+        ..credit(taxable, "Discount")
+    }
+}
+
 #[test]
-fn a_credit_never_refunds_what_was_paid() {
+fn a_credit_beyond_what_is_due_refunds_the_rest() {
     let (store, mut service, project) = setup();
     let milestone = project.milestones()[0].id();
     let number = service
@@ -420,24 +432,209 @@ fn a_credit_never_refunds_what_was_paid() {
     service
         .record_payment(&number, date(), rupees(47_200), rupees(0))
         .unwrap();
-    assert!(matches!(
-        service.issue_credit(&number, credit(11_000, "Discount")),
-        Err(ServiceError::Domain(
-            DomainError::CreditExceedsBalance { .. }
-        ))
-    ));
-    // The rest can be credited, and that settles it
+    // ₹20,000 plus IGST is ₹23,600: ₹11,800 comes off what is due, ₹11,800 is refunded
+    let preview = service
+        .preview_credit(&number, credit_back(20_000, ReturnKind::Refunded))
+        .unwrap();
+    assert_eq!(preview.balance_after, rupees(0));
+    let returned = preview.returned.unwrap();
+    assert_eq!(
+        (returned.amount, returned.kind),
+        (rupees(11_800), ReturnKind::Refunded)
+    );
     let credited = service
-        .issue_credit(&number, credit(10_000, "Write off the rest"))
+        .issue_credit(&number, credit_back(20_000, ReturnKind::Refunded))
+        .unwrap();
+    assert_eq!(credited.invoice.status(), InvoiceStatus::Paid);
+    assert_eq!(credited.invoice.balance(), rupees(0));
+    assert_eq!(balance(&store, chart::RECEIVABLE), rupees(0));
+    assert_eq!(balance(&store, chart::BANK), rupees(35_400));
+    assert_eq!(balance(&store, chart::CREDIT_NOTES), rupees(20_000));
+    let stored = store.repository().load_invoice(&number).unwrap();
+    assert_eq!(stored.returned(), rupees(11_800));
+    let project = store.repository().load(project.id()).unwrap();
+    assert_eq!(project.milestones()[0].status(), MilestoneStatus::Paid);
+    // Paid counts only what was kept: ₹50,000 billed, ₹20,000 of it credited
+    assert_eq!(project.paid_amount(), rupees(30_000));
+    assert_eq!(project.outstanding_amount(), rupees(0));
+    // The refund comes back out of the year's receipts
+    let report = crate::services::ReportService::new(store.repository(), None)
+        .year(crate::domain::FiscalYear::containing(date()))
+        .unwrap();
+    assert_eq!(report.received, rupees(35_400));
+}
+
+#[test]
+fn credits_on_a_paid_invoice_can_be_kept_as_an_advance_up_to_its_total() {
+    let (store, mut service, project) = setup();
+    let number = service
+        .issue(project.id(), project.milestones()[0].id(), date(), None)
+        .unwrap()
+        .invoice
+        .number()
+        .clone();
+    service
+        .record_payment(&number, date(), rupees(59_000), rupees(0))
+        .unwrap();
+    let credited = service
+        .issue_credit(&number, credit_back(10_000, ReturnKind::Advance))
         .unwrap();
     assert_eq!(credited.invoice.status(), InvoiceStatus::Paid);
     assert_eq!(balance(&store, chart::RECEIVABLE), rupees(0));
+    assert_eq!(balance(&store, chart::BANK), rupees(59_000));
+    assert_eq!(balance(&store, chart::CUSTOMER_ADVANCES), rupees(11_800));
+    let client = credited.invoice.client_name().to_owned();
+    assert_eq!(service.client_advance(&client).unwrap(), rupees(11_800));
+    assert_eq!(service.client_advance("Someone else").unwrap(), rupees(0));
+
+    // Every note together takes off at most the invoice's ₹59,000
+    assert!(matches!(
+        service.issue_credit(&number, credit_back(40_001, ReturnKind::Advance)),
+        Err(ServiceError::Domain(
+            DomainError::CreditExceedsInvoice { .. }
+        ))
+    ));
+    service
+        .issue_credit(&number, credit_back(40_000, ReturnKind::Refunded))
+        .unwrap();
+    assert_eq!(balance(&store, chart::RECEIVABLE), rupees(0));
+    assert_eq!(balance(&store, chart::BANK), rupees(11_800));
+    assert!(service.issue_credit(&number, credit(1, "again")).is_err());
     let project = store.repository().load(project.id()).unwrap();
     assert_eq!(project.milestones()[0].status(), MilestoneStatus::Paid);
-    // Paid counts only what was received: ₹50,000 billed, ₹10,000 of it credited
-    assert_eq!(project.paid_amount(), rupees(40_000));
-    assert_eq!(project.credited_amount(), rupees(10_000));
-    assert_eq!(project.outstanding_amount(), rupees(0));
+    assert_eq!(project.milestones()[0].credited(), &rupees(50_000));
+}
+
+/// A refund of `taxable` plus GST, with `tds` of it reversed by the client
+fn refund_with_tds(taxable: i64, tds: Option<i64>) -> crate::services::CreditDraft {
+    crate::services::CreditDraft {
+        returned: ReturnTerms {
+            tds_reversed: tds.map(rupees),
+            ..ReturnTerms::default()
+        },
+        ..credit(taxable, "Cancelled")
+    }
+}
+
+#[test]
+fn a_refund_never_hands_back_tds_the_client_kept_unless_it_is_reversed() {
+    let (store, mut service, project) = setup();
+    let number = service
+        .issue(project.id(), project.milestones()[0].id(), date(), None)
+        .unwrap()
+        .invoice
+        .number()
+        .clone();
+    // ₹59,000: ₹54,000 banked, ₹5,000 TDS withheld
+    service
+        .record_payment(&number, date(), rupees(54_000), rupees(5_000))
+        .unwrap();
+
+    // Cancelling it all would hand back ₹59,000, but only ₹54,000 was received
+    assert!(matches!(
+        service.issue_credit(&number, refund_with_tds(50_000, None)),
+        Err(ServiceError::Domain(
+            DomainError::ReturnExceedsReceived { .. }
+        ))
+    ));
+    assert!(matches!(
+        service.issue_credit(&number, refund_with_tds(50_000, Some(6_000))),
+        Err(ServiceError::Domain(
+            DomainError::TdsReversedExceedsWithheld { .. }
+        ))
+    ));
+    // The client reverses its TDS: only the cash goes back
+    service
+        .issue_credit(&number, refund_with_tds(50_000, Some(5_000)))
+        .unwrap();
+    assert_eq!(balance(&store, chart::RECEIVABLE), rupees(0));
+    assert_eq!(balance(&store, chart::BANK), rupees(0));
+    assert_eq!(balance(&store, chart::TDS_RECEIVABLE), rupees(0));
+    let report = crate::services::ReportService::new(store.repository(), None)
+        .year(crate::domain::FiscalYear::containing(date()))
+        .unwrap();
+    assert_eq!(report.received, rupees(0));
+    assert_eq!(report.tds, rupees(0));
+}
+
+#[test]
+fn a_part_refund_can_reverse_part_of_the_tds() {
+    let (store, mut service, project) = setup();
+    let number = service
+        .issue(project.id(), project.milestones()[0].id(), date(), None)
+        .unwrap()
+        .invoice
+        .number()
+        .clone();
+    service
+        .record_payment(&number, date(), rupees(54_000), rupees(5_000))
+        .unwrap();
+    // ₹10,000 + IGST is ₹11,800 back: ₹1,000 of it TDS the client reverses, ₹10,800 refunded
+    let preview = service
+        .preview_credit(&number, refund_with_tds(10_000, Some(1_000)))
+        .unwrap();
+    assert_eq!(preview.returned.unwrap().cash(), rupees(10_800));
+    service
+        .issue_credit(&number, refund_with_tds(10_000, Some(1_000)))
+        .unwrap();
+    assert_eq!(balance(&store, chart::RECEIVABLE), rupees(0));
+    assert_eq!(balance(&store, chart::BANK), rupees(43_200));
+    assert_eq!(balance(&store, chart::TDS_RECEIVABLE), rupees(4_000));
+    let report = crate::services::ReportService::new(store.repository(), None)
+        .year(crate::domain::FiscalYear::containing(date()))
+        .unwrap();
+    assert_eq!(report.received, rupees(43_200));
+    assert_eq!(report.tds, rupees(4_000));
+    assert_eq!(report.clients[0].tds, rupees(4_000));
+}
+
+#[test]
+fn a_foreign_refund_books_the_rupees_that_left_the_bank() {
+    let store = Store::in_memory().unwrap();
+    let mut service = InvoiceService::new(store.repository(), None);
+    service
+        .save_profile(profile_draft(Some(SELLER_GSTIN), Some("AD2904260000001")))
+        .unwrap();
+    let project = fixed_project(foreign_client(Currency::Eur), 1_000);
+    store.repository().save(&project).unwrap();
+    let rate = ExchangeRate::new(BigDecimal::from(90)).unwrap();
+    let number = service
+        .issue(
+            project.id(),
+            project.milestones()[0].id(),
+            date(),
+            Some(rate),
+        )
+        .unwrap()
+        .invoice
+        .number()
+        .clone();
+    service
+        .record_foreign_payment(&number, date(), rupees(1_000), rupees(91_000))
+        .unwrap();
+
+    assert!(matches!(
+        service.issue_credit(&number, credit_back(100, ReturnKind::Refunded)),
+        Err(ServiceError::Domain(DomainError::MissingRefundedAmount))
+    ));
+    // €100 was booked at ₹9,000; refunding it cost ₹9,200
+    let refund = crate::services::CreditDraft {
+        returned: ReturnTerms {
+            refunded_inr: Some(rupees(9_200)),
+            ..ReturnTerms::default()
+        },
+        ..credit(100, "Discount")
+    };
+    service.issue_credit(&number, refund).unwrap();
+    assert_eq!(balance(&store, chart::RECEIVABLE), rupees(0));
+    assert_eq!(balance(&store, chart::BANK), rupees(81_800));
+    // ₹1,000 gained on the payment, ₹200 lost on the refund
+    assert_eq!(balance(&store, chart::EXCHANGE_DIFFERENCE), rupees(800));
+    let report = crate::services::ReportService::new(store.repository(), None)
+        .year(crate::domain::FiscalYear::containing(date()))
+        .unwrap();
+    assert_eq!(report.received, rupees(81_800));
+    assert_eq!(report.exchange_difference, rupees(800));
 }
 
 #[test]

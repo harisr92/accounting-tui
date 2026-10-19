@@ -126,6 +126,7 @@ fn store_with_credited_quarter() -> Store {
         date: NaiveDate::from_ymd_opt(2026, 8, 20).unwrap(),
         taxable_value: BigDecimal::from(1_000),
         reason: "Discount".to_owned(),
+        returned: crate::domain::ReturnTerms::default(),
     };
     invoices.issue_credit(&numbers[0], draft).unwrap();
     store
@@ -198,6 +199,7 @@ fn credit_notes_on_exports_are_cdnur_expwop() {
         date: day,
         taxable_value: BigDecimal::from(100),
         reason: "Discount".to_owned(),
+        returned: crate::domain::ReturnTerms::default(),
     };
     invoices.issue_credit(&number, draft).unwrap();
 

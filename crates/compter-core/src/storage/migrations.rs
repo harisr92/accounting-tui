@@ -19,7 +19,7 @@ use crate::domain::Invoice;
 pub(super) type Migration = fn(&WriteTransaction) -> Result<(), StorageError>;
 
 /// `MIGRATIONS[i]` upgrades schema version `i + 1` to `i + 2`
-pub(super) const MIGRATIONS: &[Migration] = &[payments_list, credit_notes];
+pub(super) const MIGRATIONS: &[Migration] = &[payments_list, credit_notes, credit_returns];
 
 /// Run every step from `from` up to the current version, inside the caller's transaction
 pub(super) fn upgrade(txn: &WriteTransaction, from: u32) -> Result<(), StorageError> {
@@ -60,6 +60,13 @@ fn payments_list(txn: &WriteTransaction) -> Result<(), StorageError> {
 /// fields and the CREDITED milestone status. The version moves so an older compter refuses the
 /// file instead of reading a credited invoice as still owed in full.
 fn credit_notes(_txn: &WriteTransaction) -> Result<(), StorageError> {
+    Ok(())
+}
+
+/// v3 → v4: nothing to rewrite. Credit notes on paid invoices record the money they give back
+/// (`returned`, defaulted). The version moves so an older compter refuses the file instead of
+/// reading a refunded invoice's credits as more than its total.
+fn credit_returns(_txn: &WriteTransaction) -> Result<(), StorageError> {
     Ok(())
 }
 

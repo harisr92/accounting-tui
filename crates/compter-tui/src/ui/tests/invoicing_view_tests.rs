@@ -370,13 +370,95 @@ fn a_credit_note_is_confirmed_then_cancels_the_invoice() {
 
     // Nothing is left to credit
     app.handle_key(Key::Char('c'));
-    assert!(screen(&app, W, H).contains("Nothing is due"));
+    assert!(screen(&app, W, H).contains("already take off this whole invoice"));
 
     // Projects shows it as credited, not paid
     app.handle_key(Key::Char('1'));
     let projects = screen(&app, W, H);
     assert!(projects.contains("CREDITED"), "{projects}");
     assert!(projects.contains("Credited"), "{projects}");
+}
+
+#[test]
+fn a_credit_note_on_a_paid_invoice_refunds_or_keeps_the_rest() {
+    let (store, project) = store_with_milestone(true);
+    let mut app = invoicing_app(&store);
+    type_keys(&mut app, "\tiy");
+    app.handle_key(Key::Char('2'));
+    // Paid in full: ₹59,000
+    app.handle_key(Key::Char('p'));
+    app.handle_key(Key::Enter);
+    assert!(store.repository().list_invoices().unwrap()[0].is_paid());
+
+    // ₹10,000 + IGST, refunded
+    app.handle_key(Key::Char('c'));
+    type_keys(&mut app, "\t10000\tDiscount\n");
+    let question = screen(&app, W, H);
+    assert!(
+        question.contains("₹11,800.00 already paid will be refunded"),
+        "{question}"
+    );
+    app.handle_key(Key::Char('y'));
+    let after = screen(&app, W, H);
+    assert!(after.contains("Issued credit note CN/"), "{after}");
+    assert!(after.contains("refunded"), "{after}");
+    assert!(after.contains("-₹11,800.00"), "{after}");
+
+    // ₹5,000 + IGST, kept as an advance for the client
+    app.handle_key(Key::Char('c'));
+    type_keys(&mut app, "\t5000\tGoodwill\t ");
+    app.handle_key(Key::Enter);
+    let question = screen(&app, W, H);
+    assert!(
+        question.contains("₹5,900.00 already paid will be kept as an advance for"),
+        "{question}"
+    );
+    app.handle_key(Key::Char('y'));
+    let after = screen(&app, W, H);
+    assert!(after.contains("advance    "), "{after}");
+    assert!(after.contains("advance held for Acme ₹5,900.00"), "{after}");
+    assert!(after.contains("PAID"), "{after}");
+    assert_eq!(milestone_status(&store, &project), MilestoneStatus::Paid);
+
+    // Notes together can't take off more than the invoice
+    app.handle_key(Key::Char('c'));
+    type_keys(&mut app, "\t40000\tMore\n");
+    let refused = screen(&app, W, H);
+    assert!(refused.contains("but credit notes can take"), "{refused}");
+}
+
+#[test]
+fn cancelling_after_a_tds_payment_asks_for_the_tds_reversed() {
+    let (store, _) = store_with_milestone(true);
+    let mut app = invoicing_app(&store);
+    type_keys(&mut app, "\tiy");
+    app.handle_key(Key::Char('2'));
+    // ₹59,000: ₹54,000 banked, ₹5,000 TDS
+    app.handle_key(Key::Char('p'));
+    app.handle_key(Key::Tab);
+    app.handle_key(Key::Ctrl('u'));
+    type_keys(&mut app, "54000\t");
+    app.handle_key(Key::Ctrl('u'));
+    type_keys(&mut app, "5000\n");
+    assert!(store.repository().list_invoices().unwrap()[0].is_paid());
+
+    // Refunding it all would hand back more cash than was received
+    app.handle_key(Key::Char('c'));
+    let form = screen(&app, W, H);
+    assert!(form.contains("TDS reversed"), "{form}");
+    type_keys(&mut app, "\t50000\tCancelled\n");
+    let refused = screen(&app, W, H);
+    assert!(refused.contains("would go back to the client"), "{refused}");
+    app.handle_key(Key::Esc);
+
+    app.handle_key(Key::Char('c'));
+    type_keys(&mut app, "\t50000\tCancelled\t\t5000\n");
+    let question = screen(&app, W, H);
+    assert!(question.contains("₹5,000.00 TDS reversed"), "{question}");
+    app.handle_key(Key::Char('y'));
+    let after = screen(&app, W, H);
+    assert!(after.contains("-₹54,000.00"), "{after}");
+    assert!(after.contains("-₹5,000.00"), "{after}");
 }
 
 #[test]

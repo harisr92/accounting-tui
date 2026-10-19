@@ -12,9 +12,10 @@ use super::credit_note_builder::{self, BuiltCreditNote, CreditDraft};
 use super::invoice_builder::{self, BuiltInvoice, InvoicingError};
 use super::{ServiceError, chart};
 use crate::domain::{
-    BusinessProfile, CREDIT_NOTE_PREFIX, CreditNote, Currency, DomainError, ExchangeRate,
+    BusinessProfile, CREDIT_NOTE_PREFIX, Credit, CreditNote, Currency, DomainError, ExchangeRate,
     FiscalYear, Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber, InvoiceStatus, InvoiceSummary,
-    Logo, LogoId, MilestoneId, Payment, ProfileDraft, Project, ProjectId,
+    Logo, LogoId, MilestoneId, MilestoneStatus, Payment, ProfileDraft, Project, ProjectId,
+    ReturnKind, Returned,
 };
 use crate::storage::{
     CreditRecord, DataDir, InvoiceRepository, IssueRecord, PaymentRecord, ProjectRepository,
@@ -53,6 +54,8 @@ pub struct CreditPreview {
     pub amounts: InvoiceAmounts,
     /// What the client still owes after the note
     pub balance_after: BigDecimal,
+    /// Money already paid that the note gives back, and how
+    pub returned: Option<Returned>,
     pub warnings: Vec<String>,
 }
 
@@ -302,8 +305,9 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         number: &InvoiceNumber,
         draft: CreditDraft,
     ) -> Result<CreditPreview, ServiceError> {
+        let terms = draft.returned.clone();
         let (mut invoice, built, _) = self.build_credit(number, draft)?;
-        invoice.apply_credit(&built.note)?;
+        let credit = invoice.apply_credit(&built.note, terms)?;
         let note = &built.note;
         Ok(CreditPreview {
             number: note.number().clone(),
@@ -311,31 +315,45 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
             currency: note.currency(),
             amounts: note.amounts().clone(),
             balance_after: invoice.balance(),
+            returned: credit.returned,
             warnings: built.warnings,
         })
     }
 
     /// Issue a credit note against invoice `number`, post it and write its PDF. A note that
-    /// leaves nothing due settles the invoice's milestone.
+    /// leaves nothing due settles the invoice's milestone. The part of a note the client already
+    /// paid is posted back to them: refunded from the bank, or held as an advance.
     pub fn issue_credit(
         &mut self,
         number: &InvoiceNumber,
         draft: CreditDraft,
     ) -> Result<Credited, ServiceError> {
+        let terms = draft.returned.clone();
         let (mut invoice, built, sequence) = self.build_credit(number, draft)?;
         let BuiltCreditNote { note, entries, .. } = built;
         // Render before saving: a document that can't be printed is never issued
         let pdf = self.render_document(note.print(), note.terms(), note.logo(), note.currency())?;
-        invoice.apply_credit(&note)?;
+        // A settled invoice's receivable is cleared to the paisa in the ledger
+        let receivable_before = if invoice.is_settled() {
+            BigDecimal::zero()
+        } else {
+            invoice.receivable_inr()
+        };
+        let credit = invoice.apply_credit(&note, terms)?;
         let mut project = self.repo.load(invoice.project_id())?;
         let index = project
             .milestone_index(invoice.milestone_id())
             .ok_or_else(|| ServiceError::MissingMilestone(number.to_string()))?;
+        let was_invoiced = project
+            .milestones()
+            .get(index)
+            .is_some_and(|m| m.status() == MilestoneStatus::Invoiced);
         project.credit_milestone(index, &note.amounts().taxable_value)?;
+        // A milestone already paid stays paid
         match invoice.status() {
-            InvoiceStatus::Credited => project.cancel_milestone(index)?,
-            InvoiceStatus::Paid => project.record_payment(index)?,
-            InvoiceStatus::Issued | InvoiceStatus::PartlyPaid => {}
+            InvoiceStatus::Credited if was_invoiced => project.cancel_milestone(index)?,
+            InvoiceStatus::Paid if was_invoiced => project.record_payment(index)?,
+            _ => {}
         }
         let transaction = entries
             .into_iter()
@@ -350,6 +368,16 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
             )
             .build()?;
         DefaultTransactionValidator.validate_transaction(&transaction)?;
+        let returned = credit
+            .returned
+            .as_ref()
+            .map(|returned| {
+                // The note took the whole receivable and more off; this puts back exactly the
+                // overshoot, so the receivable ends at zero
+                let overshoot = note.inr_amounts().total - &receivable_before;
+                return_posting(&invoice, &credit, returned, overshoot)
+            })
+            .transpose()?;
 
         self.repo.issue_credit_note(&CreditRecord {
             sequence,
@@ -357,10 +385,22 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
             invoice: &invoice,
             project: &project,
             transaction: &transaction,
+            returned: returned.as_ref(),
             accounts: &chart::accounts(),
         })?;
         let pdf = self.write_document(note.fiscal_year(), note.number(), &pdf);
         Ok(Credited { note, invoice, pdf })
+    }
+
+    /// Rupees held for `client` as an advance by credit notes on their paid invoices
+    pub fn client_advance(&self, client: &str) -> Result<BigDecimal, ServiceError> {
+        let mut held = BigDecimal::zero();
+        self.repo.scan_invoices(&mut |invoice| {
+            if invoice.client_name() == client {
+                held += invoice.advance_inr();
+            }
+        })?;
+        Ok(held)
     }
 
     pub fn load_credit_note(&self, number: &InvoiceNumber) -> Result<CreditNote, ServiceError> {
@@ -387,8 +427,12 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         draft: CreditDraft,
     ) -> Result<(Invoice, BuiltCreditNote, u32), ServiceError> {
         let invoice = self.repo.load_invoice(number)?;
-        if invoice.is_settled() {
-            return Err(DomainError::InvoiceAlreadyPaid.into());
+        if invoice.creditable() <= BigDecimal::zero() {
+            return Err(DomainError::CreditExceedsInvoice {
+                remaining: invoice.creditable().to_string(),
+                got: draft.taxable_value.to_string(),
+            }
+            .into());
         }
         let year = FiscalYear::containing(draft.date);
         let sequence = self.repo.next_credit_sequence(year)?;
@@ -507,6 +551,72 @@ fn receivable_cleared(invoice: &Invoice) -> BigDecimal {
     } else {
         invoice.to_inr(&latest.settled())
     }
+}
+
+/// Give back `returned`, the part of `credit` the client had paid. The posting puts `overshoot`
+/// rupees back on the receivable; TDS the client reverses comes off TDS Receivable, and the rest
+/// is taken from the bank (`refund-<note>`, with any difference from the invoice's rate as
+/// exchange gain or loss) or held as the client's advance (`adv-<note>`)
+fn return_posting(
+    invoice: &Invoice,
+    credit: &Credit,
+    returned: &Returned,
+    overshoot: BigDecimal,
+) -> Result<accounting_core::Transaction, ServiceError> {
+    let note = &credit.number;
+    let (id, what) = match returned.kind {
+        ReturnKind::Refunded => ("refund", "Refund"),
+        ReturnKind::Advance => ("adv", "Advance"),
+    };
+    let mut builder = TransactionBuilder::new(
+        format!("{id}-{note}"),
+        credit.date,
+        format!(
+            "{what} of {} on {note} for {}",
+            invoice.currency().format(&returned.amount),
+            invoice.client_name()
+        ),
+    )
+    .reference(note.as_str())
+    .debit(chart::RECEIVABLE, overshoot.clone(), None);
+    // TDS is only on rupee invoices, so it needs no rate
+    let cash = match &returned.tds_reversed {
+        Some(tds) => {
+            builder = builder.credit(
+                chart::TDS_RECEIVABLE,
+                tds.clone(),
+                Some("TDS reversed by the client".to_owned()),
+            );
+            &overshoot - tds
+        }
+        None => overshoot,
+    };
+    builder = match returned.kind {
+        ReturnKind::Advance => builder.credit(chart::CUSTOMER_ADVANCES, cash, None),
+        ReturnKind::Refunded => {
+            let refunded = returned.refunded_inr.clone().unwrap_or(cash.clone());
+            let difference = &cash - &refunded;
+            builder = builder.credit(chart::BANK, refunded, None);
+            if difference > BigDecimal::zero() {
+                builder.credit(
+                    chart::EXCHANGE_DIFFERENCE,
+                    difference,
+                    Some("Exchange gain".to_owned()),
+                )
+            } else if difference < BigDecimal::zero() {
+                builder.debit(
+                    chart::EXCHANGE_DIFFERENCE,
+                    -difference,
+                    Some("Exchange loss".to_owned()),
+                )
+            } else {
+                builder
+            }
+        }
+    };
+    let transaction = builder.build()?;
+    DefaultTransactionValidator.validate_transaction(&transaction)?;
+    Ok(transaction)
 }
 
 /// Draw `logo` on a sample page, so an image accounting-core can't read is refused in Settings

@@ -19,7 +19,7 @@ use crate::ui::view::{Action, KeyHint, Notice, View};
 use crate::ui::views::payment::{payment_form, submit_payment};
 use crate::ui::widgets::{header, money, money_in, panel, status_span};
 use crate::viewer;
-use compter_core::domain::{Invoice, InvoiceNumber, InvoiceSummary};
+use compter_core::domain::{Invoice, InvoiceNumber, InvoiceSummary, ReturnKind, ReturnTerms};
 use compter_core::services::{CreditDraft, CreditPreview, Credited, InvoiceService, ServiceError};
 use compter_core::storage::Repository;
 
@@ -36,6 +36,13 @@ const HINTS: &[KeyHint] = &[
 const CREDIT_DATE: usize = 0;
 const CREDIT_AMOUNT: usize = 1;
 const CREDIT_REASON: usize = 2;
+const CREDIT_RETURN: usize = 3;
+/// Last, and only on some invoices: the rupees refunded on a foreign invoice, or the TDS the
+/// client reverses on a rupee invoice that had TDS withheld
+const CREDIT_EXTRA: usize = 4;
+
+/// Options of the credit form's `CREDIT_RETURN` choice, in `ReturnKind` order
+const RETURN_OPTIONS: &[&str] = &["Refund", "Keep as advance"];
 
 /// What is open over the list; it takes every key
 enum Modal {
@@ -57,6 +64,9 @@ pub struct InvoicesView<R> {
     selection: Selection,
     /// The selected invoice in full, for its payment history; the only one held in memory
     current: Option<Invoice>,
+    /// Rupees credit notes hold as an advance for a client, kept while the cursor stays on that
+    /// client's invoices
+    advance: Option<(String, BigDecimal)>,
     modal: Option<Modal>,
 }
 
@@ -69,6 +79,7 @@ impl<R: Repository> InvoicesView<R> {
             filter: Filter::default(),
             selection: Selection::default(),
             current: None,
+            advance: None,
             modal: None,
         };
         view.reload()?;
@@ -77,6 +88,7 @@ impl<R: Repository> InvoicesView<R> {
 
     fn reload(&mut self) -> Result<(), ServiceError> {
         self.summaries = self.service.list()?;
+        self.advance = None;
         self.update_visible();
         self.selection.clamp(self.visible.len());
         self.load_current()
@@ -99,9 +111,28 @@ impl<R: Repository> InvoicesView<R> {
     fn load_current(&mut self) -> Result<(), ServiceError> {
         self.current = None;
         if let Some(number) = self.selected().map(|s| s.number().clone()) {
-            self.current = Some(self.service.load(&number)?);
+            let invoice = self.service.load(&number)?;
+            let client = invoice.client_name();
+            if self
+                .advance
+                .as_ref()
+                .is_none_or(|(held_for, _)| held_for != client)
+            {
+                let held = self.service.client_advance(client)?;
+                self.advance = Some((client.to_owned(), held));
+            }
+            self.current = Some(invoice);
         }
         Ok(())
+    }
+
+    /// Rupees held as an advance for the selected invoice's client
+    fn client_advance(&self) -> Option<&BigDecimal> {
+        let client = self.current.as_ref()?.client_name();
+        self.advance
+            .as_ref()
+            .filter(|(held_for, held)| held_for == client && !held.is_zero())
+            .map(|(_, held)| held)
     }
 
     fn selected(&self) -> Option<&InvoiceSummary> {
@@ -140,32 +171,42 @@ impl<R: Repository> InvoicesView<R> {
         }
     }
 
-    /// `c`: what to take off the selected invoice, and why
+    /// `c`: what to take off the selected invoice, and why. Paid invoices can be credited too,
+    /// until credit notes have taken off their whole total.
     fn open_credit(&mut self) -> Action {
-        match self.unsettled() {
-            Ok(invoice) => {
+        match &self.current {
+            None => Action::Notify(Notice::info("No invoice selected")),
+            Some(invoice) if invoice.creditable().is_zero() => Action::Notify(Notice::info(
+                "Credit notes already take off this whole invoice",
+            )),
+            Some(invoice) => {
                 self.modal = Some(Modal::Credit(credit_form(invoice)));
                 Action::Handled
             }
-            Err(notice) => Action::Notify(notice),
         }
     }
 
     /// Read the credit form and show the note it makes for confirmation
     fn preview_credit(&mut self, form: &Form) -> Result<Notice, String> {
         let number = self.current_number()?;
+        let foreign = self
+            .current
+            .as_ref()
+            .is_some_and(|i| !i.currency().is_inr());
         let draft = CreditDraft {
             date: parse::date_or(form.value(CREDIT_DATE), Local::now().date_naive())?,
             taxable_value: parse::money(form.value(CREDIT_AMOUNT))?,
             reason: form.value(CREDIT_REASON).trim().to_owned(),
+            returned: return_terms(form, foreign)?,
         };
         let preview = self
             .service
             .preview_credit(&number, draft.clone())
             .map_err(|e| e.to_string())?;
+        let client = self.current.as_ref().map_or("", Invoice::client_name);
         self.modal = Some(Modal::ConfirmCredit(
             draft,
-            Confirm::new(credit_question(&preview)),
+            Confirm::new(credit_question(&preview, client)),
         ));
         Ok(Notice::info("Check the credit note before issuing it"))
     }
@@ -301,15 +342,18 @@ impl<R: Repository> InvoicesView<R> {
 }
 
 /// Prefilled to cancel the whole invoice while nothing has been paid or credited; otherwise left
-/// for the amount, with what is due as a guide
+/// for the amount, with what is due as a guide. A note beyond what is due gives the rest back to
+/// the client: refunded (in rupees, on a foreign invoice) or kept as an advance.
 fn credit_form(invoice: &Invoice) -> Form {
+    let tds_withheld = invoice.payments().iter().any(|p| !p.tds.is_zero());
     let currency = invoice.currency();
     let untouched = invoice.payments().is_empty() && invoice.credits().is_empty();
     let amount = Field::text(
         "Amount",
         format!(
-            "before GST, in {currency}; {} due incl. GST",
-            money_in(&invoice.balance(), currency)
+            "before GST, in {currency}; {} due, up to {} incl. GST",
+            money_in(&invoice.balance(), currency),
+            money_in(&invoice.creditable(), currency)
         ),
     );
     let amount = if untouched {
@@ -317,18 +361,49 @@ fn credit_form(invoice: &Invoice) -> Form {
     } else {
         amount
     };
-    Form::new(
-        "Credit note",
-        vec![
-            Field::text("Date", "YYYY-MM-DD, blank for today"),
-            amount,
-            Field::text("Reason", "e.g. Discount agreed, billed in error"),
-        ],
-    )
+    let mut fields = vec![
+        Field::text("Date", "YYYY-MM-DD, blank for today"),
+        amount,
+        Field::text("Reason", "e.g. Discount agreed, billed in error"),
+        Field::choice("If already paid", RETURN_OPTIONS),
+    ];
+    if !currency.is_inr() {
+        fields.push(Field::text(
+            "Rupees refunded",
+            "from your bank, for a refund of what was paid",
+        ));
+    } else if tds_withheld {
+        fields.push(Field::text(
+            "TDS reversed",
+            "TDS the client cancels in its return; blank keeps it as your credit",
+        ));
+    }
+    Form::new("Credit note", fields)
+}
+
+/// What the credit form says to do with money already paid; its last field is the rupees
+/// refunded on a `foreign` invoice and the TDS reversed on a rupee one
+fn return_terms(form: &Form, foreign: bool) -> Result<ReturnTerms, String> {
+    let extra = parse::optional(form.value(CREDIT_EXTRA))
+        .map(|amount| parse::money(&amount))
+        .transpose()?;
+    let (refunded_inr, tds_reversed) = if foreign {
+        (extra, None)
+    } else {
+        (None, extra)
+    };
+    Ok(ReturnTerms {
+        kind: match form.choice(CREDIT_RETURN) {
+            0 => ReturnKind::Refunded,
+            _ => ReturnKind::Advance,
+        },
+        refunded_inr,
+        tds_reversed,
+    })
 }
 
 /// "Issue CN/26-27/001 against INV/26-27/004 for ₹11,800.00 (10,000.00 + IGST 1,800.00)? …"
-fn credit_question(preview: &CreditPreview) -> String {
+fn credit_question(preview: &CreditPreview, client: &str) -> String {
     let a = &preview.amounts;
     let tax = if a.total_tax().is_zero() {
         String::new()
@@ -342,6 +417,27 @@ fn credit_question(preview: &CreditPreview) -> String {
         money_in(&a.total, preview.currency),
         money_in(&preview.balance_after, preview.currency),
     );
+    if let Some(returned) = &preview.returned {
+        let amount = money_in(&returned.amount, preview.currency);
+        let split = returned
+            .tds_reversed
+            .as_ref()
+            .map_or_else(String::new, |tds| {
+                let cash = money_in(&returned.cash(), preview.currency);
+                match returned.kind {
+                    ReturnKind::Refunded => {
+                        format!(" ({cash} from your bank, {} TDS reversed)", money(tds))
+                    }
+                    ReturnKind::Advance => format!(" ({cash} of it, {} TDS reversed)", money(tds)),
+                }
+            });
+        question.push_str(&match returned.kind {
+            ReturnKind::Refunded => format!(" {amount} already paid will be refunded{split}."),
+            ReturnKind::Advance => {
+                format!(" {amount} already paid will be kept as an advance for {client}{split}.")
+            }
+        });
+    }
     for warning in &preview.warnings {
         question.push_str(&format!(" Note: {warning}."));
     }
@@ -382,7 +478,8 @@ impl<R: Repository> View for InvoicesView<R> {
             money(&self.outstanding())
         );
         let history_height = self.current.as_ref().map_or(0, |i| {
-            u16::try_from(i.payments().len() + i.credits().len())
+            let returns = i.credits().iter().filter(|c| c.returned.is_some()).count();
+            u16::try_from(i.payments().len() + i.credits().len() + returns)
                 .unwrap_or(u16::MAX)
                 .saturating_add(3)
         });
@@ -396,7 +493,7 @@ impl<R: Repository> View for InvoicesView<R> {
         ])
         .areas(area);
         if let Some(invoice) = &self.current {
-            render_payments(frame, history_area, invoice, theme);
+            render_payments(frame, history_area, invoice, self.client_advance(), theme);
         }
         let block = panel(&title, true, theme);
         if self.visible.is_empty() {
@@ -491,10 +588,23 @@ impl<R: Repository> View for InvoicesView<R> {
 }
 
 /// Every payment received and credit note issued against the selected invoice
-fn render_payments(frame: &mut Frame, area: Rect, invoice: &Invoice, theme: &Theme) {
+fn render_payments(
+    frame: &mut Frame,
+    area: Rect,
+    invoice: &Invoice,
+    advance: Option<&BigDecimal>,
+    theme: &Theme,
+) {
     let currency = invoice.currency();
+    let held = advance.map_or_else(String::new, |held| {
+        format!(
+            " · advance held for {} {}",
+            invoice.client_name(),
+            money(held)
+        )
+    });
     let title = format!(
-        "Payments for {} · {} due",
+        "Payments for {} · {} due{held}",
         invoice.number(),
         money_in(&invoice.balance(), currency)
     );
@@ -514,14 +624,35 @@ fn render_payments(frame: &mut Frame, area: Rect, invoice: &Invoice, theme: &The
             Line::raw(money_in(&p.settled(), currency)).right_aligned(),
         ])
     });
-    let credits = invoice.credits().iter().map(|c| {
-        Row::new(vec![
-            Line::raw(c.date.format("%d-%m-%Y").to_string()),
+    // A credit that gave back money already paid is followed by a row for it: negative, as it
+    // left the client's payments
+    let credits = invoice.credits().iter().flat_map(|c| {
+        let date = c.date.format("%d-%m-%Y").to_string();
+        let note = Row::new(vec![
+            Line::raw(date.clone()),
             Line::raw(c.number.as_str()),
             Line::default(),
             Line::default(),
             Line::raw(money_in(&c.amount, currency)).right_aligned(),
-        ])
+        ]);
+        let returned = c.returned.as_ref().map(|r| {
+            // The TDS (or, abroad, Banked) column: TDS reversed, or the rupees refunded
+            let third = r
+                .refunded_inr
+                .as_ref()
+                .or(r.tds_reversed.as_ref())
+                .map_or_else(Line::default, |inr| {
+                    Line::raw(money(&-inr.clone())).right_aligned()
+                });
+            Row::new(vec![
+                Line::raw(date),
+                Line::raw(r.kind.label()),
+                Line::raw(money_in(&-r.cash(), currency)).right_aligned(),
+                third,
+                Line::default(),
+            ])
+        });
+        std::iter::once(note).chain(returned)
     });
     let titles: &[&str] = if foreign {
         &["Date", "Document", "Received", "Banked", "Settled"]
