@@ -19,7 +19,7 @@ use crate::app::App;
 
 pub fn draw(frame: &mut Frame, app: &App) {
     let [header_area, body_area, footer_area] = Layout::vertical([
-        Constraint::Length(3),
+        Constraint::Length(1),
         Constraint::Min(0),
         Constraint::Length(1),
     ])
