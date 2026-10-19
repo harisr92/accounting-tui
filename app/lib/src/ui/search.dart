@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'empty_state.dart';
+import 'large_title.dart';
 
 /// Words a list is narrowed to, like the terminal's `/` search: a row matches when every word
 /// appears in one of its fields, ignoring case. Blank shows everything.
@@ -29,7 +30,7 @@ class SearchQuery {
       isEmpty ? rows : rows.where((row) => matches(fields(row))).toList();
 }
 
-/// An app bar with a search button that swaps the title for a search box. Closing the box
+/// A [TitleBar] with a search button that swaps the bar for a search box. Closing the box
 /// clears what was typed.
 class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
   const SearchAppBar({
@@ -57,8 +58,8 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     if (!searching) {
-      return AppBar(
-        title: Text(title),
+      return TitleBar(
+        title: title,
         actions: [
           IconButton(
             tooltip: 'Search',

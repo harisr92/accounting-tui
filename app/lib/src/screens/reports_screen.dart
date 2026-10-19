@@ -8,6 +8,7 @@ import '../rust/api/reports.dart';
 import '../ui/action_sheet.dart';
 import '../ui/collapsing_fab.dart';
 import '../ui/figures.dart';
+import '../ui/large_title.dart';
 import '../ui/record_tile.dart';
 import '../ui/section.dart';
 import '../ui/theme.dart';
@@ -22,29 +23,31 @@ class ReportsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final year = ref.watch(reportYearProvider);
     final report = ref.watch(reportProvider(year));
-    return FabScrollScope(
-      child: Scaffold(
-        appBar: AppBar(title: const Text('Reports')),
-        body: report.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('$error')),
-          data: (report) => RefreshIndicator(
-            onRefresh: () => ref.refresh(reportProvider(year).future),
-            child: _ReportBody(report),
+    return LargeTitleScope(
+      child: FabScrollScope(
+        child: Scaffold(
+          appBar: const TitleBar(title: 'Reports'),
+          body: report.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => Center(child: Text('$error')),
+            data: (report) => RefreshIndicator(
+              onRefresh: () => ref.refresh(reportProvider(year).future),
+              child: _ReportBody(report),
+            ),
           ),
-        ),
-        floatingActionButton: report.value == null
-            ? null
-            : Builder(
-                // Its own context, so the iPad share popover points at it
-                builder: (button) => CollapsingFab(
-                  // Every tab stays mounted in one route, so their buttons would share the default hero tag
-                  heroTag: null,
-                  icon: Icons.upload_file,
-                  label: 'Export return',
-                  onPressed: () => _export(button, ref, year, report.value!),
+          floatingActionButton: report.value == null
+              ? null
+              : Builder(
+                  // Its own context, so the iPad share popover points at it
+                  builder: (button) => CollapsingFab(
+                    // Every tab stays mounted in one route, so their buttons would share the default hero tag
+                    heroTag: null,
+                    icon: Icons.upload_file,
+                    label: 'Export return',
+                    onPressed: () => _export(button, ref, year, report.value!),
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }
@@ -103,6 +106,11 @@ class _ReportBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: 96),
       children: [
+        const LargeTitle(
+          icon: Icons.insights,
+          title: 'Reports',
+          description: 'Income, tax and GST for the year, and returns to file',
+        ),
         FiscalYearPicker(reportYearProvider, label: report.year),
         const SectionHeader('Income'),
         FigureGrid(figures(report.income)),

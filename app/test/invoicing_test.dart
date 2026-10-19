@@ -23,6 +23,9 @@ void main() {
     await launchDemo(tester);
     await tester.tap(find.text('Website Revamp'));
     await settle(tester);
+    // Below the project's large title on the test's short screen
+    await tester.ensureVisible(find.text('Launch'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Launch'));
     await settle(tester);
     await tester.tap(find.text('Issue invoice'));
@@ -137,7 +140,7 @@ void main() {
     await launchDemo(tester);
     await tester.tap(find.byIcon(Icons.receipt_long_outlined));
     await settle(tester);
-    expect(find.text('Initrode GmbH'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Initrode GmbH'), 200);
     await tester.tap(find.byTooltip('Search'));
     await tester.pumpAndSettle();
 

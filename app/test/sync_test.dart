@@ -185,6 +185,9 @@ void main() {
     await launchDemo(tester);
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await settle(tester);
+    // The sync section is built, and asks Rust for its state, only once scrolled near
+    await tester.drag(find.byType(ListView).last, const Offset(0, -600));
+    await settle(tester);
     await tester.scrollUntilVisible(find.text('sync is off in demo mode'), 200);
 
     expect(find.text('Sync method'), findsNothing);

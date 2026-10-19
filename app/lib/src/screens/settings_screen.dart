@@ -5,6 +5,7 @@ import '../compter.dart';
 import '../forms/profile_form.dart';
 import '../notice.dart';
 import '../rust/api/profile.dart';
+import '../ui/large_title.dart';
 import '../ui/section.dart';
 import '../ui/theme.dart';
 import 'sync_section.dart';
@@ -24,35 +25,42 @@ class SettingsScreen extends ConsumerWidget {
       notify(context, 'Business details saved');
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: profile.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('$error')),
-        data: (profile) => ListView(
-          padding: const EdgeInsets.only(bottom: gutter),
-          children: [
-            SectionHeader(
-              'Business profile',
-              trailing: profile == null
-                  ? null
-                  : IconButton(
-                      tooltip: 'Edit business details',
-                      icon: const Icon(Icons.edit_outlined),
-                      onPressed: edit,
-                    ),
-            ),
-            if (profile == null)
-              ListTile(
-                leading: const Icon(Icons.add_business_outlined),
-                title: const Text('Add business details'),
-                subtitle: const Text('Needed before you can invoice'),
-                onTap: edit,
-              )
-            else
-              ..._profileRows(profile),
-            const SyncSection(),
-          ],
+    return LargeTitleScope(
+      child: Scaffold(
+        appBar: const TitleBar(title: 'Settings'),
+        body: profile.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => Center(child: Text('$error')),
+          data: (profile) => ListView(
+            padding: const EdgeInsets.only(bottom: gutter),
+            children: [
+              const LargeTitle(
+                icon: Icons.settings,
+                title: 'Settings',
+                description: 'Your business as invoices print it, and syncing',
+              ),
+              SectionHeader(
+                'Business profile',
+                trailing: profile == null
+                    ? null
+                    : IconButton(
+                        tooltip: 'Edit business details',
+                        icon: const Icon(Icons.edit_outlined),
+                        onPressed: edit,
+                      ),
+              ),
+              if (profile == null)
+                ListTile(
+                  leading: const Icon(Icons.add_business_outlined),
+                  title: const Text('Add business details'),
+                  subtitle: const Text('Needed before you can invoice'),
+                  onTap: edit,
+                )
+              else
+                ..._profileRows(profile),
+              const SyncSection(),
+            ],
+          ),
         ),
       ),
     );

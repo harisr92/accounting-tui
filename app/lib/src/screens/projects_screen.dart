@@ -7,6 +7,7 @@ import '../forms/project_forms.dart';
 import '../rust/api/rows.dart';
 import '../ui/collapsing_fab.dart';
 import '../ui/empty_state.dart';
+import '../ui/large_title.dart';
 import '../ui/record_tile.dart';
 import '../ui/search.dart';
 
@@ -23,44 +24,50 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
   @override
   Widget build(BuildContext context) {
     final projects = ref.watch(projectsProvider);
-    return FabScrollScope(
-      child: Scaffold(
-        appBar: searchAppBar(
-          title: demoMode ? 'Projects (demo)' : 'Projects',
-          hint: 'Name or client',
-        ),
-        body: projects.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('$error')),
-          data: (rows) => RefreshIndicator(
-            onRefresh: () => ref.refresh(projectsProvider.future),
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: 96),
-              children: [
-                if (rows.isEmpty)
-                  const EmptyState(
-                    icon: Icons.work_outline,
-                    message: 'No projects yet. Add one to start billing.',
+    return LargeTitleScope(
+      child: FabScrollScope(
+        child: Scaffold(
+          appBar: searchAppBar(title: 'Projects', hint: 'Name or client'),
+          body: projects.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => Center(child: Text('$error')),
+            data: (rows) => RefreshIndicator(
+              onRefresh: () => ref.refresh(projectsProvider.future),
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 96),
+                children: [
+                  const LargeTitle(
+                    icon: Icons.work,
+                    title: 'Projects',
+                    description: demoMode
+                        ? 'The demo business: nothing here is saved'
+                        : 'Clients, milestones and the time you bill',
                   ),
-                ..._matching(query, rows),
-              ],
+                  if (rows.isEmpty)
+                    const EmptyState(
+                      icon: Icons.work_outline,
+                      message: 'No projects yet. Add one to start billing.',
+                    ),
+                  ..._matching(query, rows),
+                ],
+              ),
             ),
           ),
-        ),
-        floatingActionButton: CollapsingFab(
-          // Every tab stays mounted in one route, so their buttons would share the default hero tag
-          heroTag: null,
-          icon: Icons.add,
-          label: 'New project',
-          onPressed: () async {
-            final created = await projectForm(
-              context,
-              ref.read(compterProvider),
-            );
-            if (created == null || !context.mounted) return;
-            ref.invalidate(projectsProvider);
-            context.go('/projects/${created.id}');
-          },
+          floatingActionButton: CollapsingFab(
+            // Every tab stays mounted in one route, so their buttons would share the default hero tag
+            heroTag: null,
+            icon: Icons.add,
+            label: 'New project',
+            onPressed: () async {
+              final created = await projectForm(
+                context,
+                ref.read(compterProvider),
+              );
+              if (created == null || !context.mounted) return;
+              ref.invalidate(projectsProvider);
+              context.go('/projects/${created.id}');
+            },
+          ),
         ),
       ),
     );
