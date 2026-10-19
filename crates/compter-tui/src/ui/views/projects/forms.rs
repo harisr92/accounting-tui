@@ -97,6 +97,8 @@ impl<R: Repository> ProjectsView<R> {
             .is_some_and(|p| p.billing().rate().is_some());
         let no_project = || "No project is selected".to_owned();
 
+        // A new milestone is selected wherever the sort lists it
+        let mut added = None;
         let (project, notice) = match kind.clone() {
             FormKind::NewProject => {
                 let project = self.service.create(project_draft(form)?).map_err(fail)?;
@@ -114,8 +116,7 @@ impl<R: Repository> ProjectsView<R> {
                 let id = id.ok_or_else(no_project)?;
                 let draft = milestone_draft(form, hourly, today)?;
                 let project = self.service.add_milestone(id, draft).map_err(fail)?;
-                self.milestone_sel
-                    .select(project.milestones().len().saturating_sub(1));
+                added = project.milestones().last().map(Milestone::id);
                 (project, Notice::success("Milestone added"))
             }
             FormKind::EditMilestone(index) => {
@@ -150,6 +151,9 @@ impl<R: Repository> ProjectsView<R> {
             }
         };
         self.refresh(Some(project)).map_err(fail)?;
+        if let Some(added) = added {
+            self.select_milestone(added);
+        }
         Ok(notice)
     }
 }

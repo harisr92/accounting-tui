@@ -2,8 +2,12 @@ use crate::ui::key::Key;
 use bigdecimal::BigDecimal;
 
 use crate::ui::tests::support::{projects_app, screen, type_keys};
+use chrono::NaiveDate;
 use compter_core::demo;
-use compter_core::storage::{ProjectRepository, Store};
+use compter_core::domain::{
+    Billing, BusinessProfile, ClientDetails, MilestoneStatus, ProfileDraft, Project,
+};
+use compter_core::storage::{ProjectRepository, SettingsRepository, Store};
 
 const W: u16 = 110;
 const H: u16 = 30;
@@ -332,4 +336,136 @@ fn search_narrows_the_list_by_name_or_client() {
     assert!(screen(&app, W, H).contains("Search cleared"));
     let list = listed(&app);
     assert!(list.contains("Website") && list.contains("Audit"), "{list}");
+}
+
+/// A registered seller and one fixed project whose milestones were added in this order:
+/// "launch" due 20 Oct ₹500, "Design" due 5 Oct ₹900, "build" due 12 Oct ₹700. Listed by due
+/// date that is Design, build, launch; by name build, Design, launch; by amount Design, build,
+/// launch.
+fn store_with_three_milestones() -> (Store, Project) {
+    let store = Store::in_memory().unwrap();
+    let mut repo = store.repository();
+    let profile = BusinessProfile::try_from(ProfileDraft {
+        name: "Studio".to_owned(),
+        address: vec!["Pune".to_owned()],
+        gstin: Some("27AAPFU0939F1ZV".to_owned()),
+        sac_code: "998314".to_owned(),
+        invoice_prefix: "INV".to_owned(),
+        ..Default::default()
+    })
+    .unwrap();
+    repo.save_profile(&profile).unwrap();
+    let client = ClientDetails::named("Acme", Some("29AAPFU0939F1ZR"));
+    let mut project = Project::for_client("Site", client, Billing::Fixed).unwrap();
+    for (name, day, amount) in [("launch", 20, 500), ("Design", 5, 900), ("build", 12, 700)] {
+        let due = NaiveDate::from_ymd_opt(2026, 10, day).unwrap();
+        project
+            .add_milestone(name, due, Some(BigDecimal::from(amount)))
+            .unwrap();
+    }
+    repo.save(&project).unwrap();
+    (store, project)
+}
+
+/// Stored milestones of `project` as (name, status)
+fn milestones(store: &Store, project: &Project) -> Vec<(String, MilestoneStatus)> {
+    let project = store.repository().load(project.id()).unwrap();
+    project
+        .milestones()
+        .iter()
+        .map(|m| (m.name().to_owned(), m.status()))
+        .collect()
+}
+
+#[test]
+fn milestones_list_by_due_date_and_s_changes_the_order() {
+    let (store, _) = store_with_three_milestones();
+    let mut app = projects_app(&store);
+    app.handle_key(Key::Tab);
+    let by_due = screen(&app, W, H);
+    assert!(by_due.contains("Milestones · by due date"), "{by_due}");
+    let at = |text: &str, name: &str| text.find(name).unwrap();
+    assert!(at(&by_due, "Design") < at(&by_due, "build"));
+    assert!(at(&by_due, "build") < at(&by_due, "launch"));
+
+    app.handle_key(Key::Char('s'));
+    let by_name = screen(&app, W, H);
+    assert!(by_name.contains("Milestones · by name"), "{by_name}");
+    assert!(at(&by_name, "build") < at(&by_name, "Design"));
+    app.handle_key(Key::Char('s'));
+    assert!(screen(&app, W, H).contains("Milestones · by amount"));
+    app.handle_key(Key::Char('s'));
+    assert!(screen(&app, W, H).contains("Milestones · by due date"));
+}
+
+#[test]
+fn invoicing_after_sorting_bills_the_highlighted_milestone() {
+    let (store, project) = store_with_three_milestones();
+    let mut app = projects_app(&store);
+    // By due date the second row is "build"; sorting by name keeps the cursor on it
+    type_keys(&mut app, "\tjs");
+    let sorted = screen(&app, W, H);
+    assert!(sorted.contains("> build"), "{sorted}");
+    type_keys(&mut app, "iy");
+    assert_eq!(
+        milestones(&store, &project),
+        [
+            ("launch".to_owned(), MilestoneStatus::Pending),
+            ("Design".to_owned(), MilestoneStatus::Pending),
+            ("build".to_owned(), MilestoneStatus::Invoiced),
+        ]
+    );
+}
+
+#[test]
+fn editing_and_deleting_after_sorting_change_the_highlighted_milestone() {
+    let (store, project) = store_with_three_milestones();
+    let mut app = projects_app(&store);
+    // By amount: Design, build, launch. The first row is Design.
+    type_keys(&mut app, "\tss");
+    app.handle_key(Key::Char('e'));
+    app.handle_key(Key::Ctrl('u'));
+    type_keys(&mut app, "Design v2\n");
+    let names: Vec<String> = milestones(&store, &project)
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
+    assert_eq!(names, ["launch", "Design v2", "build"]);
+
+    // The last row is launch
+    type_keys(&mut app, "jjxy");
+    let names: Vec<String> = milestones(&store, &project)
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
+    assert_eq!(names, ["Design v2", "build"]);
+}
+
+#[test]
+fn a_new_due_date_moves_the_milestone_and_the_cursor_with_it() {
+    let (store, project) = store_with_three_milestones();
+    let mut app = projects_app(&store);
+    // By due date the first row is Design; push it past launch
+    type_keys(&mut app, "\te\t");
+    app.handle_key(Key::Ctrl('u'));
+    type_keys(&mut app, "2026-10-25\n");
+    let moved = screen(&app, W, H);
+    assert!(moved.contains("> Design"), "{moved}");
+    // Deleting acts on it, not on what took its old row
+    type_keys(&mut app, "xy");
+    let names: Vec<String> = milestones(&store, &project)
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
+    assert_eq!(names, ["launch", "build"]);
+}
+
+#[test]
+fn a_new_milestone_is_selected_where_the_sort_lists_it() {
+    let (store, _) = store_with_three_milestones();
+    let mut app = projects_app(&store);
+    // Due before every other one, so it is listed first, not last
+    type_keys(&mut app, "\tjjaKickoff\t2026-10-01\t100\n");
+    let added = screen(&app, W, H);
+    assert!(added.contains("> Kickoff"), "{added}");
 }
