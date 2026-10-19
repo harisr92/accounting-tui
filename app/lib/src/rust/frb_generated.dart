@@ -1902,12 +1902,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   CreditInput dco_decode_credit_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return CreditInput(
       date: dco_decode_String(arr[0]),
       amount: dco_decode_String(arr[1]),
       reason: dco_decode_String(arr[2]),
+      keepAsAdvance: dco_decode_bool(arr[3]),
+      refundedInr: dco_decode_String(arr[4]),
+      tdsReversed: dco_decode_String(arr[5]),
     );
   }
 
@@ -1915,15 +1918,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   CreditPreviewRow dco_decode_credit_preview_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return CreditPreviewRow(
       number: dco_decode_String(arr[0]),
       invoice: dco_decode_String(arr[1]),
       total: dco_decode_String(arr[2]),
       gst: dco_decode_opt_String(arr[3]),
       balanceAfter: dco_decode_String(arr[4]),
-      warnings: dco_decode_list_String(arr[5]),
+      returned: dco_decode_opt_String(arr[5]),
+      warnings: dco_decode_list_String(arr[6]),
     );
   }
 
@@ -2013,8 +2017,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   HistoryRow dco_decode_history_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return HistoryRow(
       date: dco_decode_String(arr[0]),
       document: dco_decode_String(arr[1]),
@@ -2022,6 +2026,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       received: dco_decode_opt_String(arr[3]),
       tdsOrBanked: dco_decode_opt_String(arr[4]),
       settled: dco_decode_String(arr[5]),
+      returned: dco_decode_opt_String(arr[6]),
     );
   }
 
@@ -2035,8 +2040,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   InvoiceDetail dco_decode_invoice_detail(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 18)
-      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
+    if (arr.length != 21)
+      throw Exception('unexpected arr length: expect 21 but see ${arr.length}');
     return InvoiceDetail(
       number: dco_decode_String(arr[0]),
       date: dco_decode_String(arr[1]),
@@ -2051,11 +2056,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       balance: dco_decode_String(arr[10]),
       status: dco_decode_String(arr[11]),
       settled: dco_decode_bool(arr[12]),
-      foreign: dco_decode_bool(arr[13]),
-      history: dco_decode_list_history_row(arr[14]),
-      balanceValue: dco_decode_String(arr[15]),
-      usualTds: dco_decode_opt_String(arr[16]),
-      creditValue: dco_decode_opt_String(arr[17]),
+      creditable: dco_decode_bool(arr[13]),
+      clientAdvance: dco_decode_opt_String(arr[14]),
+      tdsWithheld: dco_decode_bool(arr[15]),
+      foreign: dco_decode_bool(arr[16]),
+      history: dco_decode_list_history_row(arr[17]),
+      balanceValue: dco_decode_String(arr[18]),
+      usualTds: dco_decode_opt_String(arr[19]),
+      creditValue: dco_decode_opt_String(arr[20]),
     );
   }
 
@@ -2610,7 +2618,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_date = sse_decode_String(deserializer);
     var var_amount = sse_decode_String(deserializer);
     var var_reason = sse_decode_String(deserializer);
-    return CreditInput(date: var_date, amount: var_amount, reason: var_reason);
+    var var_keepAsAdvance = sse_decode_bool(deserializer);
+    var var_refundedInr = sse_decode_String(deserializer);
+    var var_tdsReversed = sse_decode_String(deserializer);
+    return CreditInput(
+      date: var_date,
+      amount: var_amount,
+      reason: var_reason,
+      keepAsAdvance: var_keepAsAdvance,
+      refundedInr: var_refundedInr,
+      tdsReversed: var_tdsReversed,
+    );
   }
 
   @protected
@@ -2621,6 +2639,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_total = sse_decode_String(deserializer);
     var var_gst = sse_decode_opt_String(deserializer);
     var var_balanceAfter = sse_decode_String(deserializer);
+    var var_returned = sse_decode_opt_String(deserializer);
     var var_warnings = sse_decode_list_String(deserializer);
     return CreditPreviewRow(
       number: var_number,
@@ -2628,6 +2647,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       total: var_total,
       gst: var_gst,
       balanceAfter: var_balanceAfter,
+      returned: var_returned,
       warnings: var_warnings,
     );
   }
@@ -2717,6 +2737,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_received = sse_decode_opt_String(deserializer);
     var var_tdsOrBanked = sse_decode_opt_String(deserializer);
     var var_settled = sse_decode_String(deserializer);
+    var var_returned = sse_decode_opt_String(deserializer);
     return HistoryRow(
       date: var_date,
       document: var_document,
@@ -2724,6 +2745,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       received: var_received,
       tdsOrBanked: var_tdsOrBanked,
       settled: var_settled,
+      returned: var_returned,
     );
   }
 
@@ -2749,6 +2771,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_balance = sse_decode_String(deserializer);
     var var_status = sse_decode_String(deserializer);
     var var_settled = sse_decode_bool(deserializer);
+    var var_creditable = sse_decode_bool(deserializer);
+    var var_clientAdvance = sse_decode_opt_String(deserializer);
+    var var_tdsWithheld = sse_decode_bool(deserializer);
     var var_foreign = sse_decode_bool(deserializer);
     var var_history = sse_decode_list_history_row(deserializer);
     var var_balanceValue = sse_decode_String(deserializer);
@@ -2768,6 +2793,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       balance: var_balance,
       status: var_status,
       settled: var_settled,
+      creditable: var_creditable,
+      clientAdvance: var_clientAdvance,
+      tdsWithheld: var_tdsWithheld,
       foreign: var_foreign,
       history: var_history,
       balanceValue: var_balanceValue,
@@ -3458,6 +3486,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.date, serializer);
     sse_encode_String(self.amount, serializer);
     sse_encode_String(self.reason, serializer);
+    sse_encode_bool(self.keepAsAdvance, serializer);
+    sse_encode_String(self.refundedInr, serializer);
+    sse_encode_String(self.tdsReversed, serializer);
   }
 
   @protected
@@ -3471,6 +3502,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.total, serializer);
     sse_encode_opt_String(self.gst, serializer);
     sse_encode_String(self.balanceAfter, serializer);
+    sse_encode_opt_String(self.returned, serializer);
     sse_encode_list_String(self.warnings, serializer);
   }
 
@@ -3535,6 +3567,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.received, serializer);
     sse_encode_opt_String(self.tdsOrBanked, serializer);
     sse_encode_String(self.settled, serializer);
+    sse_encode_opt_String(self.returned, serializer);
   }
 
   @protected
@@ -3559,6 +3592,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.balance, serializer);
     sse_encode_String(self.status, serializer);
     sse_encode_bool(self.settled, serializer);
+    sse_encode_bool(self.creditable, serializer);
+    sse_encode_opt_String(self.clientAdvance, serializer);
+    sse_encode_bool(self.tdsWithheld, serializer);
     sse_encode_bool(self.foreign, serializer);
     sse_encode_list_history_row(self.history, serializer);
     sse_encode_String(self.balanceValue, serializer);

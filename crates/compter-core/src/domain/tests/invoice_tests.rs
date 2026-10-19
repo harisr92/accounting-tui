@@ -311,3 +311,45 @@ fn the_usual_tds_is_ten_percent_of_the_taxable_value() {
         &invoice().amounts().taxable_value / BigDecimal::from(10)
     );
 }
+
+#[test]
+fn a_stored_invoice_never_gives_back_more_than_was_paid() {
+    let json = include_str!("../../storage/tests/fixtures/invoice_returned_v4.json");
+    let mut stored: serde_json::Value = serde_json::from_str(json).unwrap();
+    assert!(serde_json::from_value::<Invoice>(stored.clone()).is_ok());
+    stored["payments"][0]["received"] = "20000.00".into();
+    assert!(serde_json::from_value::<Invoice>(stored.clone()).is_err());
+    // Nor credits beyond its total
+    stored["payments"][0]["received"] = "59000.00".into();
+    stored["credits"][1]["amount"] = "50000.00".into();
+    stored["credits"][1]["returned"]["amount"] = "50000.00".into();
+    assert!(serde_json::from_value::<Invoice>(stored).is_err());
+}
+
+#[test]
+fn a_stored_refund_reverses_no_more_tds_than_was_withheld_and_hands_back_no_more_cash() {
+    let json = include_str!("../../storage/tests/fixtures/invoice_tds_reversed_v4.json");
+    let stored: serde_json::Value = serde_json::from_str(json).unwrap();
+    assert!(serde_json::from_value::<Invoice>(stored.clone()).is_ok());
+
+    let mut too_much_tds = stored.clone();
+    too_much_tds["credits"][0]["returned"]["tds_reversed"] = "6000.00".into();
+    assert!(serde_json::from_value::<Invoice>(too_much_tds).is_err());
+
+    // ₹59,000 cancelled after ₹54,000 + ₹5,000 TDS: ₹59,000 cash would go back
+    let mut too_much_cash = stored;
+    too_much_cash["credits"][0]["amount"] = "59000.00".into();
+    too_much_cash["credits"][0]["returned"]["amount"] = "59000.00".into();
+    too_much_cash["credits"][0]["returned"]["tds_reversed"] = serde_json::Value::Null;
+    assert!(serde_json::from_value::<Invoice>(too_much_cash.clone()).is_err());
+    too_much_cash["credits"][0]["returned"]["tds_reversed"] = "5000.00".into();
+    assert!(serde_json::from_value::<Invoice>(too_much_cash).is_ok());
+}
+
+#[test]
+fn tds_is_never_reversed_on_a_foreign_invoice() {
+    let json = include_str!("../../storage/tests/fixtures/invoice_refunded_eur_v4.json");
+    let mut stored: serde_json::Value = serde_json::from_str(json).unwrap();
+    stored["credits"][0]["returned"]["tds_reversed"] = "10.00".into();
+    assert!(serde_json::from_value::<Invoice>(stored).is_err());
+}

@@ -1,5 +1,5 @@
-use bigdecimal::Zero;
-use compter_core::domain::{Currency, Invoice, InvoiceSummary};
+use bigdecimal::{BigDecimal, Zero};
+use compter_core::domain::{Currency, Invoice, InvoiceSummary, ReturnKind, Returned};
 use compter_core::services::{CreditPreview, InvoicePreview};
 
 use super::ProjectDetail;
@@ -64,8 +64,14 @@ pub struct InvoiceDetail {
     pub total_inr: Option<String>,
     pub balance: String,
     pub status: String,
-    /// Nothing is left to pay: no payment or credit note can be added
+    /// Nothing is left to pay: no payment can be added
     pub settled: bool,
+    /// Credit notes haven't yet taken off the whole total, so one can be added, even once paid
+    pub creditable: bool,
+    /// Rupees credit notes hold for this client as an advance, when there are any
+    pub client_advance: Option<String>,
+    /// A payment had TDS withheld, so a credit note can say how much of it the client reverses
+    pub tds_withheld: bool,
     /// Payments ask for the rupees banked instead of TDS
     pub foreign: bool,
     pub history: Vec<HistoryRow>,
@@ -95,6 +101,7 @@ impl From<&Invoice> for InvoiceDetail {
                 currency.display(&p.tds)
             }),
             settled: currency.display(&p.settled()),
+            returned: None,
         });
         let credits = invoice.credits().iter().map(|c| HistoryRow {
             date: c.date.to_string(),
@@ -103,6 +110,14 @@ impl From<&Invoice> for InvoiceDetail {
             received: None,
             tds_or_banked: None,
             settled: currency.display(&c.amount),
+            returned: c.returned.as_ref().map(|r| {
+                let amount = currency.display(&r.amount);
+                let detail = return_detail(r, currency);
+                match r.kind {
+                    ReturnKind::Refunded => format!("{amount} refunded{detail}"),
+                    ReturnKind::Advance => format!("{amount} kept as advance{detail}"),
+                }
+            }),
         });
         let untouched = invoice.payments().is_empty() && invoice.credits().is_empty();
         Self {
@@ -123,6 +138,9 @@ impl From<&Invoice> for InvoiceDetail {
             balance: currency.display(&invoice.balance()),
             status: invoice.status().label().to_owned(),
             settled: invoice.is_settled(),
+            creditable: invoice.creditable() > BigDecimal::zero(),
+            tds_withheld: invoice.payments().iter().any(|p| !p.tds.is_zero()),
+            client_advance: None,
             foreign,
             history: payments.chain(credits).collect(),
             balance_value: invoice.balance().to_string(),
@@ -146,6 +164,9 @@ pub struct HistoryRow {
     pub tds_or_banked: Option<String>,
     /// How much of the invoice this cleared
     pub settled: String,
+    /// Credit notes only: money already paid it gave back, `₹11,800.00 refunded` or
+    /// `₹5,900.00 kept as advance`
+    pub returned: Option<String>,
 }
 
 /// The invoice a milestone would get today, shown for confirmation before issuing
@@ -198,6 +219,8 @@ pub struct CreditPreviewRow {
     pub gst: Option<String>,
     /// What the client still owes after the note
     pub balance_after: String,
+    /// Money already paid the note gives back: `₹11,800.00 already paid will be refunded`
+    pub returned: Option<String>,
     pub warnings: Vec<String>,
 }
 
@@ -211,6 +234,18 @@ impl From<&CreditPreview> for CreditPreviewRow {
             total: currency.display(&preview.amounts.total),
             gst: (!tax.is_zero()).then(|| currency.display(&tax)),
             balance_after: currency.display(&preview.balance_after),
+            returned: preview.returned.as_ref().map(|r| {
+                let amount = currency.display(&r.amount);
+                let detail = return_detail(r, currency);
+                match r.kind {
+                    ReturnKind::Refunded => {
+                        format!("{amount} already paid will be refunded{detail}")
+                    }
+                    ReturnKind::Advance => {
+                        format!("{amount} already paid will be kept as an advance{detail}")
+                    }
+                }
+            }),
             warnings: preview.warnings.clone(),
         }
     }
@@ -243,6 +278,28 @@ pub struct CreditInput {
     /// Value taken back before GST, in the invoice's currency
     pub amount: String,
     pub reason: String,
+    /// What happens to the part already paid: kept as an advance for the client, or refunded
+    pub keep_as_advance: bool,
+    /// Rupees refunded from the bank, for a refund on an invoice in a foreign currency; blank
+    /// otherwise
+    pub refunded_inr: String,
+    /// TDS the client reverses in its return, on a rupee invoice that had TDS withheld; blank
+    /// keeps it as your credit
+    pub tds_reversed: String,
+}
+
+/// ` (₹10,800.00 cash, ₹1,000.00 TDS reversed)` or ` (₹9,200.00 from your bank)`; blank when
+/// all of it goes back as cash in the invoice's currency
+fn return_detail(returned: &Returned, currency: Currency) -> String {
+    match (&returned.tds_reversed, &returned.refunded_inr) {
+        (Some(tds), _) => format!(
+            " ({} cash, {} TDS reversed)",
+            currency.display(&returned.cash()),
+            Currency::Inr.display(tds)
+        ),
+        (None, Some(inr)) => format!(" ({} from your bank)", Currency::Inr.display(inr)),
+        (None, None) => String::new(),
+    }
 }
 
 /// Time worked on an hourly milestone, as typed

@@ -52,6 +52,9 @@ pub struct CreditRecord<'a> {
     /// The project, with the credit recorded on the invoice's milestone
     pub project: &'a Project,
     pub transaction: &'a Transaction,
+    /// The posting that gives back money already paid (a refund, or an advance), if the note
+    /// took off more than was due
+    pub returned: Option<&'a Transaction>,
     pub accounts: &'a [Account],
 }
 

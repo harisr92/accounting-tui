@@ -97,6 +97,58 @@ void main() {
     expect(find.textContaining('CN/'), findsWidgets);
   });
 
+  testWidgets('a credit note on a paid invoice refunds what was paid', (
+    tester,
+  ) async {
+    await launchDemo(tester);
+    await openInvoice(tester, 'Design');
+    expect(find.text('PAID'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Credit note'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextField, 'Amount'), '10000');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Reason'),
+      'Discount',
+    );
+    await tester.tap(find.text('Preview'));
+    await settle(tester);
+    expect(
+      find.text('₹11,800.00 already paid will be refunded.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Issue'));
+    await pumpUntil(tester, find.textContaining('₹11,800.00 refunded'));
+
+    expect(find.text('PAID'), findsOneWidget);
+    expect(find.byTooltip('Credit note'), findsOneWidget);
+  });
+
+  testWidgets('cancelling after a TDS payment asks for the TDS reversed', (
+    tester,
+  ) async {
+    await launchDemo(tester);
+    await openInvoice(tester, 'Design');
+    await tester.tap(find.byTooltip('Credit note'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextField, 'Amount'), '50000');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Reason'),
+      'Cancelled',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'TDS reversed'),
+      '5000',
+    );
+    await tester.tap(find.text('Preview'));
+    await settle(tester);
+    expect(find.textContaining('₹5,000.00 TDS reversed'), findsOneWidget);
+    await tester.tap(find.text('Issue'));
+    await pumpUntil(tester, find.textContaining('₹54,000.00 cash'));
+
+    expect(find.byTooltip('Credit note'), findsNothing);
+  });
+
   testWidgets('settings shows the business profile and saves edits', (
     tester,
   ) async {

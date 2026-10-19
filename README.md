@@ -180,6 +180,7 @@ The financial year is the Indian April–March year (`FY 2026-27`).
 | 1200 Accounts Receivable | asset | invoice totals, cleared by payments |
 | 1250 TDS Receivable | asset | TDS clients withheld (claim it in your ITR) |
 | 2300 / 2310 / 2320 CGST / SGST / IGST Output | liability | GST on tax invoices |
+| 2400 Customer Advances | liability | credit notes on paid invoices kept for the client's next invoice |
 | 4100 Service Revenue | income | invoices to Indian clients |
 | 4110 Export Revenue | income | invoices to clients abroad |
 | 4190 Credit Notes | income (contra) | value taken back by credit notes |
@@ -190,14 +191,18 @@ The financial year is the Indian April–March year (`FY 2026-27`).
 
 ## Credit notes
 
-An issued invoice is never edited. To correct one, issue a **credit note** against it: `c` in the Invoices tab, then the date, the amount to take back **before GST**, and the reason. compter shows the note, with its GST and what will still be due, and asks before issuing it.
+An issued invoice is never edited. To correct one, issue a **credit note** against it: `c` in the Invoices tab, then the date, the amount to take back **before GST**, the reason, and what happens to money the client already paid (refund it, or keep it as an advance). compter shows the note, with its GST, what will still be due and what will be given back, and asks before issuing it.
 
 - Notes are numbered in their own series, `CN/26-27/001`, which restarts every April.
 - On a tax invoice, accounting-core builds the note (`CreditNote`) at the invoice's GST rate and posts the invoice's legs reversed: Dr 4190 Credit Notes and the output GST, Cr Receivable. Notes on export and plain invoices carry no GST and post Dr 4190, Cr Receivable. A note on an invoice in a foreign currency is at the invoice's exchange rate.
-- A note takes back only what is still due. It can't refund money already received.
+- Paid and part-paid invoices can be credited too. The part of a note up to what is still due comes off the balance; the rest was already paid and is given back, posted after the note so the receivable ends at zero:
+  - **Refund**: Dr Receivable, Cr Bank (`refund-CN/26-27/001`). On a foreign invoice you enter the rupees that left your bank; the difference from the invoice's rate is an exchange gain or loss. Reports take refunds off the year's **received**.
+  - **Keep as advance**: Dr Receivable, Cr 2400 Customer Advances (`adv-CN/26-27/001`). The invoice shows the advance held for that client. Using it to pay a later invoice isn't supported yet.
+- **TDS**: money given back includes any TDS the client withheld. By default that TDS stays as your credit and the whole amount goes back as cash. If the client is cancelling the TDS in its TDS return, enter it as **TDS reversed** (rupee invoices that had TDS only): that part comes off 1250 TDS Receivable and the year's TDS, and only the rest goes back as cash. compter never gives back more cash than was received. Example: an invoice of ₹59,000 paid as ₹54,000 + ₹5,000 TDS can be cancelled with a refund only with ₹5,000 TDS reversed, so ₹54,000 leaves the bank.
+- All the notes on one invoice together take off at most its total. accounting-core checks each note on its own, so compter keeps the running total and refuses a note beyond it.
 - Under GST section 34(2), a note against a tax or export invoice must be issued by **30 November after the end of the invoice's financial year**: 30 November 2026 for invoices dated April 2025 to March 2026. Later notes are refused. If you file your annual return earlier, that date is the deadline instead, and compter can't know it.
 - Each note is recorded on the invoice's milestone (`credited`, before GST), so the project's **Paid** counts only money received and its **Outstanding** drops by the credit. The project summary shows a **Credited** tile once any credit exists.
-- A note that leaves nothing due settles the invoice and its milestone: CREDITED if nothing was paid, PAID otherwise.
+- A note that leaves nothing due settles the invoice and its milestone: CREDITED if nothing was paid, PAID otherwise. A milestone already PAID stays PAID.
 - The PDF is written to `<data dir>/invoices/2026-27/CN-26-27-001.pdf`, rendered before anything is saved, like an invoice's. It prints the original invoice's number and date and the reason.
 - Reports subtract a note in the year and quarter it is dated in: gross receipts, GST and the client's invoiced figure. GSTR-1 reports it in table 9B (`cdnr` for registered clients, `cdnur` against large B2CL invoices, `cdnur`/`EXPWOP` for exports) and in table 13.
 

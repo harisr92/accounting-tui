@@ -2112,10 +2112,16 @@ impl SseDecode for crate::api::invoicing::CreditInput {
         let mut var_date = <String>::sse_decode(deserializer);
         let mut var_amount = <String>::sse_decode(deserializer);
         let mut var_reason = <String>::sse_decode(deserializer);
+        let mut var_keepAsAdvance = <bool>::sse_decode(deserializer);
+        let mut var_refundedInr = <String>::sse_decode(deserializer);
+        let mut var_tdsReversed = <String>::sse_decode(deserializer);
         return crate::api::invoicing::CreditInput {
             date: var_date,
             amount: var_amount,
             reason: var_reason,
+            keep_as_advance: var_keepAsAdvance,
+            refunded_inr: var_refundedInr,
+            tds_reversed: var_tdsReversed,
         };
     }
 }
@@ -2128,6 +2134,7 @@ impl SseDecode for crate::api::invoicing::CreditPreviewRow {
         let mut var_total = <String>::sse_decode(deserializer);
         let mut var_gst = <Option<String>>::sse_decode(deserializer);
         let mut var_balanceAfter = <String>::sse_decode(deserializer);
+        let mut var_returned = <Option<String>>::sse_decode(deserializer);
         let mut var_warnings = <Vec<String>>::sse_decode(deserializer);
         return crate::api::invoicing::CreditPreviewRow {
             number: var_number,
@@ -2135,6 +2142,7 @@ impl SseDecode for crate::api::invoicing::CreditPreviewRow {
             total: var_total,
             gst: var_gst,
             balance_after: var_balanceAfter,
+            returned: var_returned,
             warnings: var_warnings,
         };
     }
@@ -2241,6 +2249,7 @@ impl SseDecode for crate::api::invoicing::HistoryRow {
         let mut var_received = <Option<String>>::sse_decode(deserializer);
         let mut var_tdsOrBanked = <Option<String>>::sse_decode(deserializer);
         let mut var_settled = <String>::sse_decode(deserializer);
+        let mut var_returned = <Option<String>>::sse_decode(deserializer);
         return crate::api::invoicing::HistoryRow {
             date: var_date,
             document: var_document,
@@ -2248,6 +2257,7 @@ impl SseDecode for crate::api::invoicing::HistoryRow {
             received: var_received,
             tds_or_banked: var_tdsOrBanked,
             settled: var_settled,
+            returned: var_returned,
         };
     }
 }
@@ -2275,6 +2285,9 @@ impl SseDecode for crate::api::invoicing::InvoiceDetail {
         let mut var_balance = <String>::sse_decode(deserializer);
         let mut var_status = <String>::sse_decode(deserializer);
         let mut var_settled = <bool>::sse_decode(deserializer);
+        let mut var_creditable = <bool>::sse_decode(deserializer);
+        let mut var_clientAdvance = <Option<String>>::sse_decode(deserializer);
+        let mut var_tdsWithheld = <bool>::sse_decode(deserializer);
         let mut var_foreign = <bool>::sse_decode(deserializer);
         let mut var_history = <Vec<crate::api::invoicing::HistoryRow>>::sse_decode(deserializer);
         let mut var_balanceValue = <String>::sse_decode(deserializer);
@@ -2294,6 +2307,9 @@ impl SseDecode for crate::api::invoicing::InvoiceDetail {
             balance: var_balance,
             status: var_status,
             settled: var_settled,
+            creditable: var_creditable,
+            client_advance: var_clientAdvance,
+            tds_withheld: var_tdsWithheld,
             foreign: var_foreign,
             history: var_history,
             balance_value: var_balanceValue,
@@ -3056,6 +3072,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::invoicing::CreditInput {
             self.date.into_into_dart().into_dart(),
             self.amount.into_into_dart().into_dart(),
             self.reason.into_into_dart().into_dart(),
+            self.keep_as_advance.into_into_dart().into_dart(),
+            self.refunded_inr.into_into_dart().into_dart(),
+            self.tds_reversed.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3080,6 +3099,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::invoicing::CreditPreviewRow {
             self.total.into_into_dart().into_dart(),
             self.gst.into_into_dart().into_dart(),
             self.balance_after.into_into_dart().into_dart(),
+            self.returned.into_into_dart().into_dart(),
             self.warnings.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -3242,6 +3262,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::invoicing::HistoryRow {
             self.received.into_into_dart().into_dart(),
             self.tds_or_banked.into_into_dart().into_dart(),
             self.settled.into_into_dart().into_dart(),
+            self.returned.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3274,6 +3295,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::invoicing::InvoiceDetail {
             self.balance.into_into_dart().into_dart(),
             self.status.into_into_dart().into_dart(),
             self.settled.into_into_dart().into_dart(),
+            self.creditable.into_into_dart().into_dart(),
+            self.client_advance.into_into_dart().into_dart(),
+            self.tds_withheld.into_into_dart().into_dart(),
             self.foreign.into_into_dart().into_dart(),
             self.history.into_into_dart().into_dart(),
             self.balance_value.into_into_dart().into_dart(),
@@ -3817,6 +3841,9 @@ impl SseEncode for crate::api::invoicing::CreditInput {
         <String>::sse_encode(self.date, serializer);
         <String>::sse_encode(self.amount, serializer);
         <String>::sse_encode(self.reason, serializer);
+        <bool>::sse_encode(self.keep_as_advance, serializer);
+        <String>::sse_encode(self.refunded_inr, serializer);
+        <String>::sse_encode(self.tds_reversed, serializer);
     }
 }
 
@@ -3828,6 +3855,7 @@ impl SseEncode for crate::api::invoicing::CreditPreviewRow {
         <String>::sse_encode(self.total, serializer);
         <Option<String>>::sse_encode(self.gst, serializer);
         <String>::sse_encode(self.balance_after, serializer);
+        <Option<String>>::sse_encode(self.returned, serializer);
         <Vec<String>>::sse_encode(self.warnings, serializer);
     }
 }
@@ -3899,6 +3927,7 @@ impl SseEncode for crate::api::invoicing::HistoryRow {
         <Option<String>>::sse_encode(self.received, serializer);
         <Option<String>>::sse_encode(self.tds_or_banked, serializer);
         <String>::sse_encode(self.settled, serializer);
+        <Option<String>>::sse_encode(self.returned, serializer);
     }
 }
 
@@ -3925,6 +3954,9 @@ impl SseEncode for crate::api::invoicing::InvoiceDetail {
         <String>::sse_encode(self.balance, serializer);
         <String>::sse_encode(self.status, serializer);
         <bool>::sse_encode(self.settled, serializer);
+        <bool>::sse_encode(self.creditable, serializer);
+        <Option<String>>::sse_encode(self.client_advance, serializer);
+        <bool>::sse_encode(self.tds_withheld, serializer);
         <bool>::sse_encode(self.foreign, serializer);
         <Vec<crate::api::invoicing::HistoryRow>>::sse_encode(self.history, serializer);
         <String>::sse_encode(self.balance_value, serializer);

@@ -52,6 +52,9 @@ fn credit(amount: &str) -> CreditInput {
         date: String::new(),
         amount: amount.to_owned(),
         reason: "Discount agreed".to_owned(),
+        keep_as_advance: false,
+        refunded_inr: String::new(),
+        tds_reversed: String::new(),
     }
 }
 
@@ -203,6 +206,99 @@ fn a_credit_note_for_the_whole_invoice_cancels_it() {
     assert!(credited.invoice.history[0].credit_note);
     let pdf = app.credit_note_pdf(credited.note_number).unwrap();
     assert!(Path::new(&pdf).exists(), "{pdf}");
+}
+
+#[test]
+fn a_paid_invoice_can_be_credited_with_a_refund_or_an_advance() {
+    let (_scratch, mut app) = demo();
+    let number = issue_launch(&mut app);
+    let paid = app
+        .record_payment(number.clone(), payment("47,200", "0"))
+        .unwrap();
+    assert!(paid.settled);
+    assert!(paid.creditable);
+    assert_eq!(paid.client_advance, None);
+
+    // ₹10,000 + 18% GST, all of it already paid
+    let preview = app.preview_credit(number.clone(), credit("10000")).unwrap();
+    assert_eq!(
+        preview.returned.as_deref(),
+        Some("₹11,800.00 already paid will be refunded")
+    );
+    let refunded = app.issue_credit(number.clone(), credit("10000")).unwrap();
+    assert_eq!(refunded.invoice.status, "PAID");
+    assert_eq!(
+        refunded.invoice.history[1].returned.as_deref(),
+        Some("₹11,800.00 refunded")
+    );
+
+    let advance = CreditInput {
+        keep_as_advance: true,
+        ..credit("5000")
+    };
+    let kept = app.issue_credit(number.clone(), advance).unwrap().invoice;
+    assert_eq!(
+        kept.history[2].returned.as_deref(),
+        Some("₹5,900.00 kept as advance")
+    );
+    assert_eq!(kept.client_advance.as_deref(), Some("₹5,900.00"));
+
+    // Together the notes can't take off more than the invoice's ₹47,200
+    let too_much = app
+        .issue_credit(number.clone(), credit("30000"))
+        .unwrap_err();
+    assert_eq!(too_much.field, None);
+    let rest = app.issue_credit(number.clone(), credit("25000")).unwrap();
+    assert!(!rest.invoice.creditable);
+}
+
+#[test]
+fn a_refund_after_tds_names_the_tds_the_client_reverses() {
+    let (_scratch, mut app) = demo();
+    // Website Revamp "Design": ₹59,000, paid ₹54,000 with ₹5,000 TDS
+    let number = app
+        .invoices()
+        .unwrap()
+        .invoices
+        .into_iter()
+        .find(|i| i.milestone_name == "Design")
+        .unwrap()
+        .number;
+    assert!(app.invoice(number.clone()).unwrap().tds_withheld);
+
+    let all_cash = app
+        .issue_credit(number.clone(), credit("50000"))
+        .unwrap_err();
+    assert!(
+        all_cash.message.contains("received"),
+        "{}",
+        all_cash.message
+    );
+    let bad = CreditInput {
+        tds_reversed: "some".to_owned(),
+        ..credit("50000")
+    };
+    assert_eq!(
+        app.issue_credit(number.clone(), bad)
+            .unwrap_err()
+            .field
+            .as_deref(),
+        Some("tds_reversed")
+    );
+
+    let reversed = CreditInput {
+        tds_reversed: "5,000".to_owned(),
+        ..credit("50000")
+    };
+    let preview = app
+        .preview_credit(number.clone(), reversed.clone())
+        .unwrap();
+    assert_eq!(
+        preview.returned.as_deref(),
+        Some("₹59,000.00 already paid will be refunded (₹54,000.00 cash, ₹5,000.00 TDS reversed)")
+    );
+    let credited = app.issue_credit(number, reversed).unwrap();
+    assert!(!credited.invoice.creditable);
 }
 
 #[test]

@@ -7,6 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'rows.dart';
 
+// These functions are ignored because they are not marked as `pub`: `return_detail`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`
 
 /// A credit note as typed
@@ -18,14 +19,34 @@ class CreditInput {
   final String amount;
   final String reason;
 
+  /// What happens to the part already paid: kept as an advance for the client, or refunded
+  final bool keepAsAdvance;
+
+  /// Rupees refunded from the bank, for a refund on an invoice in a foreign currency; blank
+  /// otherwise
+  final String refundedInr;
+
+  /// TDS the client reverses in its return, on a rupee invoice that had TDS withheld; blank
+  /// keeps it as your credit
+  final String tdsReversed;
+
   const CreditInput({
     required this.date,
     required this.amount,
     required this.reason,
+    required this.keepAsAdvance,
+    required this.refundedInr,
+    required this.tdsReversed,
   });
 
   @override
-  int get hashCode => date.hashCode ^ amount.hashCode ^ reason.hashCode;
+  int get hashCode =>
+      date.hashCode ^
+      amount.hashCode ^
+      reason.hashCode ^
+      keepAsAdvance.hashCode ^
+      refundedInr.hashCode ^
+      tdsReversed.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -34,7 +55,10 @@ class CreditInput {
           runtimeType == other.runtimeType &&
           date == other.date &&
           amount == other.amount &&
-          reason == other.reason;
+          reason == other.reason &&
+          keepAsAdvance == other.keepAsAdvance &&
+          refundedInr == other.refundedInr &&
+          tdsReversed == other.tdsReversed;
 }
 
 /// A credit note as it would be issued, shown for confirmation
@@ -48,6 +72,9 @@ class CreditPreviewRow {
 
   /// What the client still owes after the note
   final String balanceAfter;
+
+  /// Money already paid the note gives back: `₹11,800.00 already paid will be refunded`
+  final String? returned;
   final List<String> warnings;
 
   const CreditPreviewRow({
@@ -56,6 +83,7 @@ class CreditPreviewRow {
     required this.total,
     this.gst,
     required this.balanceAfter,
+    this.returned,
     required this.warnings,
   });
 
@@ -66,6 +94,7 @@ class CreditPreviewRow {
       total.hashCode ^
       gst.hashCode ^
       balanceAfter.hashCode ^
+      returned.hashCode ^
       warnings.hashCode;
 
   @override
@@ -78,6 +107,7 @@ class CreditPreviewRow {
           total == other.total &&
           gst == other.gst &&
           balanceAfter == other.balanceAfter &&
+          returned == other.returned &&
           warnings == other.warnings;
 }
 
@@ -125,6 +155,10 @@ class HistoryRow {
   /// How much of the invoice this cleared
   final String settled;
 
+  /// Credit notes only: money already paid it gave back, `₹11,800.00 refunded` or
+  /// `₹5,900.00 kept as advance`
+  final String? returned;
+
   const HistoryRow({
     required this.date,
     required this.document,
@@ -132,6 +166,7 @@ class HistoryRow {
     this.received,
     this.tdsOrBanked,
     required this.settled,
+    this.returned,
   });
 
   @override
@@ -141,7 +176,8 @@ class HistoryRow {
       creditNote.hashCode ^
       received.hashCode ^
       tdsOrBanked.hashCode ^
-      settled.hashCode;
+      settled.hashCode ^
+      returned.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -153,7 +189,8 @@ class HistoryRow {
           creditNote == other.creditNote &&
           received == other.received &&
           tdsOrBanked == other.tdsOrBanked &&
-          settled == other.settled;
+          settled == other.settled &&
+          returned == other.returned;
 }
 
 /// An opened invoice with what has been paid and credited against it
@@ -179,8 +216,17 @@ class InvoiceDetail {
   final String balance;
   final String status;
 
-  /// Nothing is left to pay: no payment or credit note can be added
+  /// Nothing is left to pay: no payment can be added
   final bool settled;
+
+  /// Credit notes haven't yet taken off the whole total, so one can be added, even once paid
+  final bool creditable;
+
+  /// Rupees credit notes hold for this client as an advance, when there are any
+  final String? clientAdvance;
+
+  /// A payment had TDS withheld, so a credit note can say how much of it the client reverses
+  final bool tdsWithheld;
 
   /// Payments ask for the rupees banked instead of TDS
   final bool foreign;
@@ -210,6 +256,9 @@ class InvoiceDetail {
     required this.balance,
     required this.status,
     required this.settled,
+    required this.creditable,
+    this.clientAdvance,
+    required this.tdsWithheld,
     required this.foreign,
     required this.history,
     required this.balanceValue,
@@ -232,6 +281,9 @@ class InvoiceDetail {
       balance.hashCode ^
       status.hashCode ^
       settled.hashCode ^
+      creditable.hashCode ^
+      clientAdvance.hashCode ^
+      tdsWithheld.hashCode ^
       foreign.hashCode ^
       history.hashCode ^
       balanceValue.hashCode ^
@@ -256,6 +308,9 @@ class InvoiceDetail {
           balance == other.balance &&
           status == other.status &&
           settled == other.settled &&
+          creditable == other.creditable &&
+          clientAdvance == other.clientAdvance &&
+          tdsWithheld == other.tdsWithheld &&
           foreign == other.foreign &&
           history == other.history &&
           balanceValue == other.balanceValue &&

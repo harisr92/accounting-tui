@@ -1,0 +1,90 @@
+{
+  "number": "NDC/26-27/001",
+  "date": "2026-06-30",
+  "kind": "export",
+  "project_id": "a58ef817-926e-4a8d-abd0-1d8c09497026",
+  "milestone_id": "d0108dd9-1474-49c9-b552-c302d3ea4d80",
+  "client_name": "Initrode GmbH",
+  "milestone_name": "Audit report",
+  "currency": "EUR",
+  "exchange_rate": "90.0000",
+  "amounts": {
+    "taxable_value": "1000.00",
+    "cgst": "0",
+    "sgst": "0",
+    "igst": "0",
+    "total": "1000.00"
+  },
+  "print": {
+    "title": "Tax Invoice",
+    "invoice_number": "NDC/26-27/001",
+    "invoice_date": "30-06-2026",
+    "place_of_supply": "96",
+    "is_inter_state": true,
+    "seller": {
+      "name": "Nila Design & Code",
+      "address": [
+        "12 FC Road",
+        "Pune 411004"
+      ],
+      "gstin": "27AAPFU0939F1ZV"
+    },
+    "buyer": {
+      "name": "Initrode GmbH",
+      "address": [
+        "Hauptstrasse 1",
+        "10115 Berlin",
+        "Germany"
+      ]
+    },
+    "rows": [
+      {
+        "serial": 1,
+        "hsn_sac": "998314",
+        "description": "API Audit - Audit report",
+        "quantity": "1",
+        "rate": "1,000.00",
+        "taxable_value": "1,000.00",
+        "gst_rate": "0%",
+        "tax": "0.00",
+        "amount": "1,000.00"
+      }
+    ],
+    "taxable_value": "1,000.00",
+    "tax_lines": [
+      {
+        "label": "IGST @ 0% (export under LUT)",
+        "amount": "0.00"
+      }
+    ],
+    "total_tax": "0.00",
+    "total": "1,000.00",
+    "total_in_words": "Euros One Thousand Only"
+  },
+  "terms": [
+    "Amounts in EUR. Exchange rate: 1 EUR = Rs. 90.0000; value Rs. 90,000.00",
+    "Supply meant for export under LUT (ARN AD270426001234X) without payment of IGST",
+    "Bank: HDFC Bank, A/c 50100012345678, IFSC HDFC0000123",
+    "Payment due within 15 days"
+  ],
+  "payments": [
+    {
+      "date": "2026-07-15",
+      "received": "1000.00",
+      "tds": "0",
+      "credited_inr": "90450.00"
+    }
+  ],
+  "credits": [
+    {
+      "number": "CN/26-27/003",
+      "date": "2026-08-01",
+      "amount": "100.00",
+      "returned": {
+        "amount": "100.00",
+        "kind": "refunded",
+        "refunded_inr": "9200.00"
+      }
+    }
+  ]
+}

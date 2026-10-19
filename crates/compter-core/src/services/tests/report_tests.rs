@@ -89,6 +89,7 @@ fn credit_notes_come_off_the_year_they_are_dated_in() {
         date: NaiveDate::from_ymd_opt(2027, 1, 15).unwrap(),
         taxable_value: rupees(10_000),
         reason: "Discount".to_owned(),
+        returned: crate::domain::ReturnTerms::default(),
     };
     let note = invoices.issue_credit(&number, draft).unwrap().note;
     let tax = note.amounts().total_tax();

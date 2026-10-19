@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use bigdecimal::{BigDecimal, Zero};
 
 use crate::domain::{
-    CreditNote, Expense, ExpenseCategory, FiscalYear, Invoice, InvoiceKind, Quarter,
+    CreditNote, Expense, ExpenseCategory, FiscalYear, Invoice, InvoiceKind, Quarter, ReturnKind,
 };
 
 /// Share of gross receipts deemed to be profit under section 44ADA
@@ -54,7 +54,8 @@ pub struct ClientYear {
     pub invoiced: BigDecimal,
     /// Received in the bank in the year
     pub received: BigDecimal,
-    /// Withheld by the client on payments in the year (match with Form 26AS)
+    /// Withheld by the client on payments in the year, less what it reversed on credit notes
+    /// (match with Form 26AS)
     pub tds: BigDecimal,
 }
 
@@ -72,12 +73,13 @@ pub struct YearReport {
     pub export_receipts: BigDecimal,
     /// Invoice totals including GST, for invoices dated in the year
     pub invoiced_total: BigDecimal,
-    /// Payments (whole or part) dated in the year that reached the bank, in rupees
+    /// Payments (whole or part) dated in the year that reached the bank, less refunds by credit
+    /// notes dated in it, in rupees
     pub received: BigDecimal,
     /// On foreign-currency payments dated in the year: rupees banked less their value at the
     /// invoice's rate. Positive is a gain.
     pub exchange_difference: BigDecimal,
-    /// TDS on payments dated in the year
+    /// TDS on payments dated in the year, less TDS clients reversed on credit notes dated in it
     pub tds: BigDecimal,
     /// What is still due on invoices dated in the year, GST included
     pub outstanding: BigDecimal,
@@ -219,6 +221,30 @@ impl YearReportBuilder {
             let client = self.client(invoice.client_name());
             client.received += received;
             client.tds += &payment.tds;
+        }
+        // Credit notes dated in the year that give money back: TDS the client reverses comes
+        // off the year's TDS, and a refund takes its cash back out of the bank (an advance stays
+        // received)
+        let returns = invoice
+            .credits()
+            .iter()
+            .filter(|c| year.contains(c.date))
+            .filter_map(|c| c.returned.as_ref());
+        for returned in returns {
+            if let Some(tds) = &returned.tds_reversed {
+                self.report.tds -= tds;
+                self.client(invoice.client_name()).tds -= tds;
+            }
+            if returned.kind == ReturnKind::Refunded {
+                let booked = invoice.to_inr(&returned.cash());
+                let refunded = returned
+                    .refunded_inr
+                    .clone()
+                    .unwrap_or_else(|| booked.clone());
+                self.report.exchange_difference += &booked - &refunded;
+                self.report.received -= &refunded;
+                self.client(invoice.client_name()).received -= refunded;
+            }
         }
     }
 

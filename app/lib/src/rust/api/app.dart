@@ -13,7 +13,7 @@ import 'profile.dart';
 import 'reports.dart';
 import 'rows.dart';
 
-// These functions are ignored because they are not marked as `pub`: `closed`, `credit_draft`, `date`, `exchange_rate`, `expense_draft`, `expense_id`, `index_of`, `milestone_draft`, `milestone_id`, `over`, `project_draft`, `project_id`, `today`
+// These functions are ignored because they are not marked as `pub`: `closed`, `credit_draft`, `date`, `detail`, `exchange_rate`, `expense_draft`, `expense_id`, `index_of`, `milestone_draft`, `milestone_id`, `optional_money`, `over`, `project_draft`, `project_id`, `today`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>>
 abstract class CompterApp implements RustOpaqueInterface {
