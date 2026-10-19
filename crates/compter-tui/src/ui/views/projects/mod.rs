@@ -18,8 +18,8 @@ use crate::ui::theme::Theme;
 use crate::ui::view::{Action, KeyHint, Notice, View};
 use crate::ui::views::payment::payment_form;
 use compter_core::domain::{
-    Currency, ExchangeRate, InvoiceNumber, Milestone, MilestoneId, MilestoneStatus, Project,
-    ProjectId, ProjectSummary,
+    Currency, ExchangeRate, InvoiceNumber, Milestone, MilestoneId, MilestoneSort, MilestoneStatus,
+    Project, ProjectId, ProjectSummary,
 };
 use compter_core::services::{
     InvoicePreview, InvoiceService, Issued, ProjectService, ServiceError,
@@ -51,6 +51,7 @@ const MILESTONE_HINTS: &[KeyHint] = &[
     KeyHint::new("u", "undo time"),
     KeyHint::new("i", "invoice"),
     KeyHint::new("p", "paid"),
+    KeyHint::new("s", "sort"),
 ];
 
 /// Leaves about 18 columns for a project name next to its status
@@ -106,11 +107,24 @@ pub struct ProjectsView<R> {
     filter: Filter,
     selected: Option<Project>,
     project_sel: Selection,
+    /// Moves over the milestones in `milestone_sort` order, not their stored order: map a row
+    /// to a milestone only through `milestone_order`
     milestone_sel: Selection,
+    milestone_sort: MilestoneSort,
     /// Milestones whose time log is shown under them (`o`)
     open_logs: BTreeSet<MilestoneId>,
     focus: Focus,
     modal: Option<Modal>,
+}
+
+impl<R> ProjectsView<R> {
+    /// Stored positions of the selected project's milestones, in the order they are listed
+    pub(super) fn milestone_order(&self) -> Vec<usize> {
+        self.selected
+            .as_ref()
+            .map(|p| self.milestone_sort.positions(p.milestones()))
+            .unwrap_or_default()
+    }
 }
 
 impl<R: Repository> ProjectsView<R> {
@@ -126,6 +140,7 @@ impl<R: Repository> ProjectsView<R> {
             selected: None,
             project_sel: Selection::default(),
             milestone_sel: Selection::default(),
+            milestone_sort: MilestoneSort::default(),
             open_logs: BTreeSet::new(),
             focus: Focus::Projects,
             modal: None,
@@ -137,6 +152,8 @@ impl<R: Repository> ProjectsView<R> {
     /// Re-read the summaries; select `changed` if given, else reload the project under the cursor.
     /// A changed project the search hides clears the search; one just archived drops out of view.
     fn refresh(&mut self, changed: Option<Project>) -> Result<(), ServiceError> {
+        // A change can reorder the milestones (a new due date): keep the cursor on the same one
+        let keep = self.current_milestone().map(|(_, _, m)| m.id());
         self.summaries = self.service.list()?;
         self.update_visible();
         match changed {
@@ -157,7 +174,37 @@ impl<R: Repository> ProjectsView<R> {
         }
         let milestones = self.selected.as_ref().map_or(0, |p| p.milestones().len());
         self.milestone_sel.clamp(milestones);
+        if let Some(id) = keep {
+            self.select_milestone(id);
+        }
         Ok(())
+    }
+
+    /// Put the cursor on milestone `id`, wherever the sort lists it
+    pub(super) fn select_milestone(&mut self, id: MilestoneId) {
+        let Some(project) = &self.selected else {
+            return;
+        };
+        let row = self
+            .milestone_order()
+            .iter()
+            .position(|&i| project.milestones().get(i).is_some_and(|m| m.id() == id));
+        if let Some(row) = row {
+            self.milestone_sel.select(row);
+        }
+    }
+
+    /// `s`: list the milestones by the next order, keeping the cursor on the same milestone
+    fn cycle_sort(&mut self) -> Action {
+        let keep = self.current_milestone().map(|(_, _, m)| m.id());
+        self.milestone_sort = self.milestone_sort.next();
+        if let Some(id) = keep {
+            self.select_milestone(id);
+        }
+        Action::Notify(Notice::info(format!(
+            "Milestones by {}",
+            self.milestone_sort.label()
+        )))
     }
 
     /// Load the project under the cursor, dropping the previous one first
@@ -268,9 +315,11 @@ impl<R: Repository> ProjectsView<R> {
         })
     }
 
+    /// The milestone under the cursor, with its stored index. Every milestone action goes
+    /// through here, so the row shown and the milestone changed are always the same one.
     fn current_milestone(&self) -> Option<(ProjectId, usize, &Milestone)> {
         let project = self.selected.as_ref()?;
-        let index = self.milestone_sel.index();
+        let index = *self.milestone_order().get(self.milestone_sel.index())?;
         project
             .milestones()
             .get(index)
@@ -479,6 +528,7 @@ impl<R: Repository> ProjectsView<R> {
                 None => Action::Notify(Notice::info("Select a project first")),
             },
             (Focus::Milestones, Key::Char('a')) => self.open_form(FormKind::AddMilestone),
+            (Focus::Milestones, Key::Char('s')) => self.cycle_sort(),
             (Focus::Milestones, Key::Char(c @ ('e' | 'x' | 't' | 'u' | 'i' | 'p' | 'o'))) => {
                 self.milestone_action(c)
             }

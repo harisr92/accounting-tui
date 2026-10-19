@@ -1,7 +1,7 @@
 use bigdecimal::Zero;
 use compter_core::domain::{
-    Billing, ClientRegion, Milestone, MilestoneStatus, Project, ProjectSummary, format_duration,
-    state_name,
+    Billing, ClientRegion, Milestone, MilestoneSort, MilestoneStatus, Project, ProjectSummary,
+    format_duration, state_name,
 };
 
 /// One line of the project list, from the stored summary (never the full record)
@@ -49,7 +49,15 @@ pub struct ProjectDetail {
     /// `None` when nothing was credited, as the terminal hides that tile
     pub credited: Option<String>,
     pub outstanding: String,
+    /// In the order they were added. Listed through one of the orders below, never sorted in
+    /// Dart.
     pub milestones: Vec<MilestoneRow>,
+    /// Positions in `milestones` by due date, earliest first: the default order
+    pub by_due: Vec<u32>,
+    /// Positions in `milestones` by name, A to Z
+    pub by_name: Vec<u32>,
+    /// Positions in `milestones` by amount, largest first
+    pub by_amount: Vec<u32>,
     /// Nothing in it was invoiced, so it may be deleted
     pub deletable: bool,
     /// The form, filled with this project, to edit it
@@ -94,10 +102,21 @@ impl From<&Project> for ProjectDetail {
                 .iter()
                 .map(|m| MilestoneRow::new(m, project, hourly))
                 .collect(),
+            by_due: order(MilestoneSort::Due, project),
+            by_name: order(MilestoneSort::Name, project),
+            by_amount: order(MilestoneSort::Amount, project),
             deletable: project.ensure_deletable().is_ok(),
             edit: ProjectInput::from(project),
         }
     }
+}
+
+/// `project`'s milestone positions in `sort` order
+fn order(sort: MilestoneSort, project: &Project) -> Vec<u32> {
+    sort.positions(project.milestones())
+        .into_iter()
+        .filter_map(|i| u32::try_from(i).ok())
+        .collect()
 }
 
 /// One milestone of an opened project

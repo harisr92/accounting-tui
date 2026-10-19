@@ -287,3 +287,57 @@ impl Milestone {
         self.time_entries.iter().try_for_each(TimeEntry::validate)
     }
 }
+
+/// The order a project's milestones are listed in. Ties keep the order the milestones were
+/// added in, so a list never shuffles between redraws.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum MilestoneSort {
+    /// Earliest due first
+    #[default]
+    Due,
+    /// A to Z, ignoring case
+    Name,
+    /// Largest first
+    Amount,
+}
+
+impl MilestoneSort {
+    pub const ALL: [Self; 3] = [Self::Due, Self::Name, Self::Amount];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Due => "due date",
+            Self::Name => "name",
+            Self::Amount => "amount",
+        }
+    }
+
+    /// The sort after this one: due date, name, amount, then due date again
+    pub const fn next(self) -> Self {
+        match self {
+            Self::Due => Self::Name,
+            Self::Name => Self::Amount,
+            Self::Amount => Self::Due,
+        }
+    }
+
+    /// Positions in `milestones`, in this order
+    pub fn positions(self, milestones: &[Milestone]) -> Vec<usize> {
+        let mut positions: Vec<usize> = (0..milestones.len()).collect();
+        // Lowercased once, not on every comparison
+        let names: Vec<String> = match self {
+            Self::Name => milestones.iter().map(|m| m.name().to_lowercase()).collect(),
+            Self::Due | Self::Amount => Vec::new(),
+        };
+        positions.sort_by(|&a, &b| {
+            let (x, y) = (&milestones[a], &milestones[b]);
+            let order = match self {
+                Self::Due => x.due_date().cmp(&y.due_date()),
+                Self::Name => names[a].cmp(&names[b]),
+                Self::Amount => y.amount().cmp(x.amount()),
+            };
+            order.then(a.cmp(&b))
+        });
+        positions
+    }
+}

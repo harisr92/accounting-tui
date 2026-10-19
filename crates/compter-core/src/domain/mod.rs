@@ -26,7 +26,7 @@ pub use invoice::{
     InvoiceSummary, Payment, ReturnKind, ReturnTerms, Returned,
 };
 pub use logo::{Logo, LogoFormat, LogoId, MAX_LOGO_BYTES};
-pub use milestone::{Milestone, MilestoneId, MilestoneStatus};
+pub use milestone::{Milestone, MilestoneId, MilestoneSort, MilestoneStatus};
 pub use profile::{BusinessProfile, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, ProfileDraft};
 pub use project::{ClientDetails, ClientRegion, Project, ProjectId, ProjectStatus, ProjectSummary};
 pub use states::state_name;

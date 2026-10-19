@@ -2479,6 +2479,18 @@ impl SseDecode for Vec<crate::api::rows::MilestoneRow> {
     }
 }
 
+impl SseDecode for Vec<u32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<u32>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<u8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2661,6 +2673,9 @@ impl SseDecode for crate::api::rows::ProjectDetail {
         let mut var_credited = <Option<String>>::sse_decode(deserializer);
         let mut var_outstanding = <String>::sse_decode(deserializer);
         let mut var_milestones = <Vec<crate::api::rows::MilestoneRow>>::sse_decode(deserializer);
+        let mut var_byDue = <Vec<u32>>::sse_decode(deserializer);
+        let mut var_byName = <Vec<u32>>::sse_decode(deserializer);
+        let mut var_byAmount = <Vec<u32>>::sse_decode(deserializer);
         let mut var_deletable = <bool>::sse_decode(deserializer);
         let mut var_edit = <crate::api::rows::ProjectInput>::sse_decode(deserializer);
         return crate::api::rows::ProjectDetail {
@@ -2679,6 +2694,9 @@ impl SseDecode for crate::api::rows::ProjectDetail {
             credited: var_credited,
             outstanding: var_outstanding,
             milestones: var_milestones,
+            by_due: var_byDue,
+            by_name: var_byName,
+            by_amount: var_byAmount,
             deletable: var_deletable,
             edit: var_edit,
         };
@@ -3542,6 +3560,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::rows::ProjectDetail {
             self.credited.into_into_dart().into_dart(),
             self.outstanding.into_into_dart().into_dart(),
             self.milestones.into_into_dart().into_dart(),
+            self.by_due.into_into_dart().into_dart(),
+            self.by_name.into_into_dart().into_dart(),
+            self.by_amount.into_into_dart().into_dart(),
             self.deletable.into_into_dart().into_dart(),
             self.edit.into_into_dart().into_dart(),
         ]
@@ -4058,6 +4079,16 @@ impl SseEncode for Vec<crate::api::rows::MilestoneRow> {
     }
 }
 
+impl SseEncode for Vec<u32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <u32>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<u8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4188,6 +4219,9 @@ impl SseEncode for crate::api::rows::ProjectDetail {
         <Option<String>>::sse_encode(self.credited, serializer);
         <String>::sse_encode(self.outstanding, serializer);
         <Vec<crate::api::rows::MilestoneRow>>::sse_encode(self.milestones, serializer);
+        <Vec<u32>>::sse_encode(self.by_due, serializer);
+        <Vec<u32>>::sse_encode(self.by_name, serializer);
+        <Vec<u32>>::sse_encode(self.by_amount, serializer);
         <bool>::sse_encode(self.deletable, serializer);
         <crate::api::rows::ProjectInput>::sse_encode(self.edit, serializer);
     }

@@ -117,6 +117,7 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - Colours and styles come only from `ui::theme::Theme`. No `Color::` literals in views. Themes are presets chosen by `domain::Appearance` (saved in settings, switched with `Action::Theme`); `NO_COLOR` forces the monochrome one. A new style is a `Theme` field set in every preset.
 - Use the shared helpers in `ui::widgets`: `panel` (bordered block with focus styling), `modal` (cleared, centred, focused box), `money`, `duration`, `status_span`/`Toned`, `centered_rect`.
 - List and table navigation goes through `ui::selection::{Selection, Nav}`. Don't hand-roll wrap-around or j/k mapping.
+- Milestone order comes only from `domain::MilestoneSort::positions` (due date by default, ties in the order added). The TUI maps a row to a milestone only through `ProjectsView::milestone_order` (actions through `current_milestone`); mobile gets the orders as `ProjectDetail::by_due` / `by_name` / `by_amount` and never sorts in Dart.
 - Searchable lists use `ui::filter::Filter` (`/` opens it, `Esc` clears it) and keep a `visible: Vec<usize>` of positions into their rows; the selection moves over `visible`.
 - Archived projects (`Project::archive`, finished only) stay in storage and reports; only the Projects list hides them.
 - Key hints are defined once as `&'static [KeyHint]`. The footer and the help popup both render from that one slice. The footer always shows `FOOTER_HINTS` (`? help · q quit`) on the right; view hints fill the left and may be cut off on narrow screens.

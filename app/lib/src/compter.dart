@@ -83,6 +83,38 @@ class InvoiceNotifier extends AsyncNotifier<InvoiceDetail> {
   void show(InvoiceDetail saved) => state = AsyncData(saved);
 }
 
+/// How a project's milestones are listed, like `s` in the terminal. Rust computes each order
+/// ([ProjectDetail.byDue] and the rest); Dart only picks one.
+enum MilestoneOrder {
+  due('Due date'),
+  name('Name'),
+  amount('Amount');
+
+  const MilestoneOrder(this.label);
+
+  final String label;
+
+  /// Positions in [ProjectDetail.milestones], in this order
+  List<int> of(ProjectDetail project) => switch (this) {
+    due => project.byDue,
+    name => project.byName,
+    amount => project.byAmount,
+  };
+}
+
+/// The milestone order chosen for this session; due date until changed
+class MilestoneOrderNotifier extends Notifier<MilestoneOrder> {
+  @override
+  MilestoneOrder build() => MilestoneOrder.due;
+
+  void choose(MilestoneOrder order) => state = order;
+}
+
+final milestoneOrderProvider =
+    NotifierProvider<MilestoneOrderNotifier, MilestoneOrder>(
+      MilestoneOrderNotifier.new,
+    );
+
 /// The year the Expenses tab shows
 final expenseYearProvider = NotifierProvider<YearNotifier, int>(
   YearNotifier.new,

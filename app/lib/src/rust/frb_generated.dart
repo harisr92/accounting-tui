@@ -2170,6 +2170,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Uint32List dco_decode_list_prim_u_32_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as Uint32List;
+  }
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint8List;
@@ -2285,8 +2291,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProjectDetail dco_decode_project_detail(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 17)
-      throw Exception('unexpected arr length: expect 17 but see ${arr.length}');
+    if (arr.length != 20)
+      throw Exception('unexpected arr length: expect 20 but see ${arr.length}');
     return ProjectDetail(
       id: dco_decode_String(arr[0]),
       name: dco_decode_String(arr[1]),
@@ -2303,8 +2309,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       credited: dco_decode_opt_String(arr[12]),
       outstanding: dco_decode_String(arr[13]),
       milestones: dco_decode_list_milestone_row(arr[14]),
-      deletable: dco_decode_bool(arr[15]),
-      edit: dco_decode_project_input(arr[16]),
+      byDue: dco_decode_list_prim_u_32_strict(arr[15]),
+      byName: dco_decode_list_prim_u_32_strict(arr[16]),
+      byAmount: dco_decode_list_prim_u_32_strict(arr[17]),
+      deletable: dco_decode_bool(arr[18]),
+      edit: dco_decode_project_input(arr[19]),
     );
   }
 
@@ -2949,6 +2958,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getUint32List(len_);
+  }
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
@@ -3122,6 +3138,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_credited = sse_decode_opt_String(deserializer);
     var var_outstanding = sse_decode_String(deserializer);
     var var_milestones = sse_decode_list_milestone_row(deserializer);
+    var var_byDue = sse_decode_list_prim_u_32_strict(deserializer);
+    var var_byName = sse_decode_list_prim_u_32_strict(deserializer);
+    var var_byAmount = sse_decode_list_prim_u_32_strict(deserializer);
     var var_deletable = sse_decode_bool(deserializer);
     var var_edit = sse_decode_project_input(deserializer);
     return ProjectDetail(
@@ -3140,6 +3159,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       credited: var_credited,
       outstanding: var_outstanding,
       milestones: var_milestones,
+      byDue: var_byDue,
+      byName: var_byName,
+      byAmount: var_byAmount,
       deletable: var_deletable,
       edit: var_edit,
     );
@@ -3705,6 +3727,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_prim_u_32_strict(
+    Uint32List self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putUint32List(self);
+  }
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
     SseSerializer serializer,
@@ -3839,6 +3871,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.credited, serializer);
     sse_encode_String(self.outstanding, serializer);
     sse_encode_list_milestone_row(self.milestones, serializer);
+    sse_encode_list_prim_u_32_strict(self.byDue, serializer);
+    sse_encode_list_prim_u_32_strict(self.byName, serializer);
+    sse_encode_list_prim_u_32_strict(self.byAmount, serializer);
     sse_encode_bool(self.deletable, serializer);
     sse_encode_project_input(self.edit, serializer);
   }
