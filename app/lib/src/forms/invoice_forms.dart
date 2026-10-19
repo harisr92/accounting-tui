@@ -9,6 +9,8 @@ import 'form_dialog.dart';
 
 const _amount = TextInputType.numberWithOptions(decimal: true);
 const _date = FieldSpec('date', 'Date', date: true);
+const _refund = 'Refund';
+const _advance = 'Keep as advance';
 
 /// Show the invoice [milestone] would get today and issue it on a yes, like `i` in the
 /// terminal. A project billed in a foreign currency first asks for today's exchange rate.
@@ -131,7 +133,9 @@ Future<InvoiceDetail?> recordPayment(
 }
 
 /// Ask what to take off the invoice, show the credit note it makes, and issue it on a yes.
-/// Prefilled to cancel the whole invoice while nothing has been paid or credited.
+/// Prefilled to cancel the whole invoice while nothing has been paid or credited. A note beyond
+/// what is due gives the rest back to the client: refunded (in rupees, on a foreign invoice) or
+/// kept as an advance.
 Future<CreditedRow?> issueCreditNote(
   BuildContext context,
   CompterApp app,
@@ -155,12 +159,37 @@ Future<CreditedRow?> issueCreditNote(
         'Reason',
         hint: 'e.g. Discount agreed, billed in error',
       ),
+      const FieldSpec(
+        'returned',
+        'If already paid',
+        hint: 'what happens to the part the client already paid',
+        initial: _refund,
+        options: [_refund, _advance],
+      ),
+      if (invoice.foreign)
+        const FieldSpec(
+          'refunded_inr',
+          'Refunded ₹',
+          hint: 'rupees refunded from your bank, for a refund',
+          keyboardType: _amount,
+        )
+      else if (invoice.tdsWithheld)
+        const FieldSpec(
+          'tds_reversed',
+          'TDS reversed',
+          hint:
+              'TDS the client cancels in its return; blank keeps it as your credit',
+          keyboardType: _amount,
+        ),
     ],
     submit: (values) async {
       final input = CreditInput(
         date: values['date']!,
         amount: values['amount']!,
         reason: values['reason']!,
+        keepAsAdvance: values['returned'] == _advance,
+        refundedInr: values['refunded_inr'] ?? '',
+        tdsReversed: values['tds_reversed'] ?? '',
       );
       return (
         input,
@@ -178,6 +207,7 @@ Future<CreditedRow?> issueCreditNote(
       'Against ${preview.invoice} for ${preview.total}'
           '${preview.gst == null ? '' : ' incl. GST ${preview.gst}'}',
       '${preview.balanceAfter} will still be due.',
+      if (preview.returned != null) '${preview.returned}.',
       for (final warning in preview.warnings) 'Note: $warning',
     ],
   );

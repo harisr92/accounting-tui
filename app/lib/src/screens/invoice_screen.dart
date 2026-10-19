@@ -13,8 +13,9 @@ import '../ui/record_tile.dart';
 import '../ui/section.dart';
 import '../ui/theme.dart';
 
-/// One invoice: its amounts, payments and credit notes. Its PDF can be opened or shared, and
-/// while something is due a payment or credit note can be added.
+/// One invoice: its amounts, payments and credit notes. Its PDF can be opened or shared. While
+/// something is due a payment can be added, and until credit notes take off the whole total, a
+/// credit note (on a paid invoice, it refunds or keeps the rest as an advance).
 class InvoiceScreen extends ConsumerWidget {
   const InvoiceScreen({super.key, required this.number});
 
@@ -25,6 +26,7 @@ class InvoiceScreen extends ConsumerWidget {
     final invoice = ref.watch(invoiceProvider(number));
     final detail = invoice.value;
     final due = detail != null && !detail.settled;
+    final creditable = detail != null && detail.creditable;
     return LargeTitleScope(
       child: FabScrollScope(
         child: Scaffold(
@@ -58,7 +60,7 @@ class InvoiceScreen extends ConsumerWidget {
                         icon: const Icon(Icons.picture_as_pdf_outlined),
                         onPressed: () => _pdf(context, ref, share: false),
                       ),
-                      if (due)
+                      if (creditable)
                         IconButton(
                           tooltip: 'Credit note',
                           icon: const Icon(Icons.remove_circle_outline),
@@ -184,6 +186,10 @@ class _InvoiceBody extends StatelessWidget {
           if (totalInr != null) ('In INR', totalInr),
         ]),
         SectionNote(invoice.breakdown),
+        if (invoice.clientAdvance != null)
+          SectionNote(
+            '${invoice.clientAdvance} held as an advance for ${invoice.clientName}',
+          ),
         const SectionHeader('Payments and credit notes'),
         if (invoice.history.isEmpty) const SectionNote('Nothing received yet'),
         for (final row in invoice.history)
@@ -192,7 +198,11 @@ class _InvoiceBody extends StatelessWidget {
             builder: (context) => RecordTile(
               title: row.document,
               supporting: row.creditNote
-                  ? '${row.date} · tap to share its PDF'
+                  ? [
+                      row.date,
+                      ?row.returned,
+                      'tap to share its PDF',
+                    ].join(' · ')
                   : [
                       row.date,
                       if (row.tdsOrBanked != null)
