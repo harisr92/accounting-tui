@@ -5,8 +5,9 @@ use flutter_rust_bridge::frb;
 
 use compter_core::demo;
 use compter_core::domain::{
-    Billing, ClientDetails, ClientRegion, Currency, ExchangeRate, ExpenseId, InvoiceNumber,
-    MilestoneId, ProfileDraft, Project, ProjectId, TimeEntry,
+    Billing, ClientDetails, ClientRegion, Currency, ExchangeRate, ExpenseId, Invoice,
+    InvoiceNumber, MilestoneId, ProfileDraft, Project, ProjectId, ReturnKind, ReturnTerms,
+    TimeEntry,
 };
 use compter_core::input;
 use compter_core::services::{
@@ -264,9 +265,7 @@ impl CompterApp {
     }
 
     pub fn invoice(&self, number: String) -> Result<InvoiceDetail, ApiError> {
-        Ok(InvoiceDetail::from(
-            &self.invoices.load(&InvoiceNumber::from_stored(&number))?,
-        ))
+        self.detail(&self.invoices.load(&InvoiceNumber::from_stored(&number))?)
     }
 
     /// The invoice a pending milestone would get today, without saving anything. `rate` (rupees
@@ -301,7 +300,7 @@ impl CompterApp {
             exchange_rate(rate.as_deref())?,
         )?;
         Ok(IssuedRow {
-            invoice: InvoiceDetail::from(&issued.invoice),
+            invoice: self.detail(&issued.invoice)?,
             // The service returns only the invoice; the milestone it invoiced is in the project
             project: ProjectDetail::from(&self.projects.load(id)?),
             pdf_error: issued.pdf.err(),
@@ -327,7 +326,7 @@ impl CompterApp {
             self.invoices
                 .record_foreign_payment(&number, date, received, third)
         }?;
-        Ok(InvoiceDetail::from(&invoice))
+        self.detail(&invoice)
     }
 
     /// The credit note `input` would make against invoice `number`, without saving
@@ -353,8 +352,17 @@ impl CompterApp {
             .issue_credit(&InvoiceNumber::from_stored(&number), credit_draft(input)?)?;
         Ok(CreditedRow {
             note_number: credited.note.number().to_string(),
-            invoice: InvoiceDetail::from(&credited.invoice),
+            invoice: self.detail(&credited.invoice)?,
             pdf_error: credited.pdf.err(),
+        })
+    }
+
+    /// An invoice as the invoice screen shows it, with the advance its client holds
+    fn detail(&self, invoice: &Invoice) -> Result<InvoiceDetail, ApiError> {
+        let held = self.invoices.client_advance(invoice.client_name())?;
+        Ok(InvoiceDetail {
+            client_advance: (!held.is_zero()).then(|| Currency::Inr.display(&held)),
+            ..InvoiceDetail::from(invoice)
         })
     }
 
@@ -660,7 +668,23 @@ fn credit_draft(input: CreditInput) -> Result<CreditDraft, ApiError> {
         date: date(&input.date, "date")?,
         taxable_value: input::money(&input.amount).map_err(|e| ApiError::invalid("amount", e))?,
         reason: input.reason.trim().to_owned(),
+        returned: ReturnTerms {
+            kind: if input.keep_as_advance {
+                ReturnKind::Advance
+            } else {
+                ReturnKind::Refunded
+            },
+            refunded_inr: optional_money(&input.refunded_inr, "refunded_inr")?,
+            tds_reversed: optional_money(&input.tds_reversed, "tds_reversed")?,
+        },
     })
+}
+
+/// A money field that may be left blank
+fn optional_money(value: &str, field: &'static str) -> Result<Option<BigDecimal>, ApiError> {
+    input::optional(value)
+        .map(|amount| input::money(&amount).map_err(|e| ApiError::invalid(field, e)))
+        .transpose()
 }
 
 fn expense_id(id: &str) -> Result<ExpenseId, ApiError> {
