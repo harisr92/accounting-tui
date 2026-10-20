@@ -390,6 +390,13 @@ impl Project {
         self.milestones.iter().map(Milestone::credited).sum()
     }
 
+    /// Time logged across every milestone, in minutes
+    pub fn logged_minutes(&self) -> u32 {
+        self.milestones
+            .iter()
+            .fold(0, |total, m| total.saturating_add(m.logged_minutes()))
+    }
+
     /// Amount still to be received: billed or to bill, less what was paid or credited
     pub fn outstanding_amount(&self) -> BigDecimal {
         &self.total_amount - self.paid_amount() - self.credited_amount()
