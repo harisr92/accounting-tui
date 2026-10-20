@@ -14,24 +14,34 @@ import '../ui/collapsing_fab.dart';
 import '../ui/figures.dart';
 import '../ui/large_title.dart';
 import '../ui/record_tile.dart';
+import '../ui/search.dart';
 import '../ui/section.dart';
 import '../ui/theme.dart';
 
-/// One project: its totals and milestones. The app bar edits or deletes the project; tapping a
-/// milestone offers what can be done with it.
-class ProjectScreen extends ConsumerWidget {
+/// One project: its totals and milestones. The app bar edits or deletes the project, and
+/// searches its milestones by name or amount; tapping a milestone offers what can be done with
+/// it.
+class ProjectScreen extends ConsumerStatefulWidget {
   const ProjectScreen({super.key, required this.id});
 
   final String id;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProjectScreen> createState() => _ProjectScreenState();
+}
+
+class _ProjectScreenState extends ConsumerState<ProjectScreen> with Searching {
+  String get id => widget.id;
+
+  @override
+  Widget build(BuildContext context) {
     final project = ref.watch(projectProvider(id));
     return LargeTitleScope(
       child: FabScrollScope(
         child: Scaffold(
-          appBar: TitleBar(
+          appBar: searchAppBar(
             title: project.value?.name ?? 'Project',
+            hint: 'Milestone name or amount',
             actions: [
               if (project.value case final detail?) ...[
                 PopupMenuButton<MilestoneOrder>(
@@ -71,6 +81,7 @@ class ProjectScreen extends ConsumerWidget {
             data: (detail) => _ProjectBody(
               detail,
               order: ref.watch(milestoneOrderProvider),
+              query: query,
               onMilestone: (m) => _milestoneActions(context, ref, detail, m),
             ),
           ),
@@ -250,16 +261,24 @@ class _ProjectBody extends StatelessWidget {
   const _ProjectBody(
     this.project, {
     required this.order,
+    required this.query,
     required this.onMilestone,
   });
 
   final ProjectDetail project;
   final MilestoneOrder order;
+  final SearchQuery query;
   final void Function(MilestoneRow) onMilestone;
 
   @override
   Widget build(BuildContext context) {
     final credited = project.credited;
+    final listed = order.of(project).map((i) => project.milestones[i]).toList();
+    // Without commas too, so `50000` finds ₹50,000.00
+    final matching = query.apply(
+      listed,
+      (m) => [m.name, m.amount, m.amount.replaceAll(',', '')],
+    );
     return ListView(
       padding: const EdgeInsets.only(bottom: 96),
       children: [
@@ -284,8 +303,9 @@ class _ProjectBody extends StatelessWidget {
         SectionHeader('Milestones · by ${order.label.toLowerCase()}'),
         if (project.milestones.isEmpty)
           const SectionNote('No milestones yet. Add one to invoice it.'),
+        if (listed.isNotEmpty && matching.isEmpty) noMatches(query),
         // Each tile carries its own milestone, so a tap acts on the one shown
-        for (final m in order.of(project).map((i) => project.milestones[i]))
+        for (final m in matching)
           RecordTile(
             title: m.name,
             supporting: [
