@@ -2792,6 +2792,7 @@ impl SseDecode for crate::api::rows::ProjectDetail {
         let mut var_paid = <String>::sse_decode(deserializer);
         let mut var_credited = <Option<String>>::sse_decode(deserializer);
         let mut var_outstanding = <String>::sse_decode(deserializer);
+        let mut var_logged = <Option<String>>::sse_decode(deserializer);
         let mut var_milestones = <Vec<crate::api::rows::MilestoneRow>>::sse_decode(deserializer);
         let mut var_byDue = <Vec<u32>>::sse_decode(deserializer);
         let mut var_byName = <Vec<u32>>::sse_decode(deserializer);
@@ -2813,6 +2814,7 @@ impl SseDecode for crate::api::rows::ProjectDetail {
             paid: var_paid,
             credited: var_credited,
             outstanding: var_outstanding,
+            logged: var_logged,
             milestones: var_milestones,
             by_due: var_byDue,
             by_name: var_byName,
@@ -3733,6 +3735,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::rows::ProjectDetail {
             self.paid.into_into_dart().into_dart(),
             self.credited.into_into_dart().into_dart(),
             self.outstanding.into_into_dart().into_dart(),
+            self.logged.into_into_dart().into_dart(),
             self.milestones.into_into_dart().into_dart(),
             self.by_due.into_into_dart().into_dart(),
             self.by_name.into_into_dart().into_dart(),
@@ -4434,6 +4437,7 @@ impl SseEncode for crate::api::rows::ProjectDetail {
         <String>::sse_encode(self.paid, serializer);
         <Option<String>>::sse_encode(self.credited, serializer);
         <String>::sse_encode(self.outstanding, serializer);
+        <Option<String>>::sse_encode(self.logged, serializer);
         <Vec<crate::api::rows::MilestoneRow>>::sse_encode(self.milestones, serializer);
         <Vec<u32>>::sse_encode(self.by_due, serializer);
         <Vec<u32>>::sse_encode(self.by_name, serializer);
