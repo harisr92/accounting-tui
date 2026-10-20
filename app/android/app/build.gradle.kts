@@ -22,7 +22,7 @@ val uploadKey = Properties().apply {
 val hasUploadKey = uploadKey.getProperty("storeFile") != null
 
 android {
-    namespace = "dev.compter.compter"
+    namespace = "app.compter"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -32,7 +32,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "dev.compter.compter"
+        applicationId = "app.compter"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION

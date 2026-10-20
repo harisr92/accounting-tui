@@ -1,4 +1,4 @@
-package dev.compter.compter
+package app.compter
 
 import io.flutter.embedding.android.FlutterActivity
 

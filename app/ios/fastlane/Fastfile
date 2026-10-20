@@ -41,7 +41,7 @@ platform :ios do
         <key>signingStyle</key><string>manual</string>
         <key>teamID</key><string>#{team_id}</string>
         <key>provisioningProfiles</key>
-        <dict><key>dev.compter.compter</key><string>#{profile_name}</string></dict>
+        <dict><key>app.compter</key><string>#{profile_name}</string></dict>
       </dict>
       </plist>
     PLIST

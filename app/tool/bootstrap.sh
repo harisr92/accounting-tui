@@ -16,7 +16,7 @@ fi
 # 1. Platform folders. `flutter create` skips files that exist, so lib/ and pubspec.yaml stay
 if [ ! -d ios ] || [ ! -d android ]; then
   had_test=$([ -e test/widget_test.dart ] && echo yes || echo no)
-  flutter create --project-name compter --org dev.compter --platforms ios,android .
+  flutter create --project-name compter --org app --platforms ios,android .
   # Its sample test drives the counter app, which this isn't
   [ "$had_test" = no ] && rm -f test/widget_test.dart && rmdir test 2>/dev/null || true
 fi

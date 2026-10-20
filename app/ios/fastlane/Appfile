@@ -1,2 +1,2 @@
-app_identifier("dev.compter.compter")
+app_identifier("app.compter")
 team_id(ENV["COMPTER_IOS_TEAM_ID"])
