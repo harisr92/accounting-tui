@@ -22,7 +22,7 @@ fn same_day_gaps_are_exact() {
         at("2026-03-21T11:08:25+05:30"),
         at("2026-03-21T20:02:20+05:30"),
     );
-    assert_eq!(minutes, 534);
+    assert_eq!(minutes, MAX_MULTI_DAY_MINUTES);
 }
 
 #[test]
