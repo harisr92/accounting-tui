@@ -124,10 +124,21 @@ impl<R> ProjectsView<R> {
     }
 
     fn render_milestones(&self, frame: &mut Frame, area: Rect, project: &Project, theme: &Theme) {
-        let title = format!("Milestones · by {}", self.milestone_sort.label());
+        let mut title = format!("Milestones · by {}", self.milestone_sort.label());
+        if !self.milestone_filter.is_empty() {
+            title.push_str(&format!(" /{}", self.milestone_filter.query()));
+        }
         let block = panel(&title, self.focus == Focus::Milestones, theme);
         if project.milestones().is_empty() {
             let empty = Paragraph::new("No milestones yet. Press Tab, then a to add one.")
+                .style(theme.dim())
+                .block(block);
+            frame.render_widget(empty, area);
+            return;
+        }
+        let order = self.milestone_order();
+        if order.is_empty() {
+            let empty = Paragraph::new("No milestones match the search. Esc clears it.")
                 .style(theme.dim())
                 .block(block);
             frame.render_widget(empty, area);
@@ -162,7 +173,6 @@ impl<R> ProjectsView<R> {
         let mut rows = Vec::with_capacity(project.milestones().len());
         let mut selected_row = None;
         let mut selected_end = 0;
-        let order = self.milestone_order();
         let listed = order.iter().filter_map(|&i| project.milestones().get(i));
         for (row, m) in listed.enumerate() {
             let selected = row == self.milestone_sel.index();

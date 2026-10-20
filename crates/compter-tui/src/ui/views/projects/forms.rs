@@ -82,6 +82,10 @@ impl<R: Repository> ProjectsView<R> {
                 time_form()
             }
             FormKind::Search => self.filter.form("project or client name"),
+            FormKind::MilestoneSearch => {
+                project?;
+                self.milestone_filter.form("milestone name or amount")
+            }
             // Built from the stored invoice by `open_payment`, and by `confirm_issue`
             FormKind::Payment(_) | FormKind::IssueRate(..) => return None,
         })
@@ -144,6 +148,7 @@ impl<R: Repository> ProjectsView<R> {
                 return Ok(Notice::info("Check the invoice before issuing it"));
             }
             FormKind::Search => return self.search(form),
+            FormKind::MilestoneSearch => return self.search_milestones(form),
             FormKind::Payment(number) => {
                 let notice = submit_payment(&mut self.invoices, &number, form)?;
                 let id = id.ok_or_else(no_project)?;

@@ -52,6 +52,8 @@ const MILESTONE_HINTS: &[KeyHint] = &[
     KeyHint::new("i", "invoice (pick)"),
     KeyHint::new("p", "paid"),
     KeyHint::new("s", "sort"),
+    Filter::HINT,
+    Filter::CLEAR_HINT,
 ];
 
 /// Leaves about 18 columns for a project name next to its status
@@ -76,6 +78,7 @@ enum FormKind {
     /// The exchange rate to invoice milestones of a foreign-currency project at
     IssueRate(ProjectId, Vec<MilestoneId>),
     Search,
+    MilestoneSearch,
 }
 
 /// A change waiting for a yes
@@ -117,6 +120,9 @@ pub struct ProjectsView<R> {
     /// to a milestone only through `milestone_order`
     milestone_sel: Selection,
     milestone_sort: MilestoneSort,
+    /// Narrows the selected project's milestones by name or amount; cleared when another
+    /// project is selected
+    milestone_filter: Filter,
     /// Milestones whose time log is shown under them (`o`)
     open_logs: BTreeSet<MilestoneId>,
     focus: Focus,
@@ -124,12 +130,39 @@ pub struct ProjectsView<R> {
 }
 
 impl<R> ProjectsView<R> {
-    /// Stored positions of the selected project's milestones, in the order they are listed
+    /// Stored positions of the selected project's milestones, in the order they are listed:
+    /// sorted, and only those matching the search
     pub(super) fn milestone_order(&self) -> Vec<usize> {
+        let mut order = self.sorted_milestones();
+        if let Some(project) = &self.selected
+            && !self.milestone_filter.is_empty()
+        {
+            let currency = project.currency();
+            order.retain(|&i| {
+                project.milestones().get(i).is_some_and(|m| {
+                    // Both `₹50,000.00` and `50000` find it
+                    let (shown, plain) = (money_in(m.amount(), currency), m.amount().to_string());
+                    self.milestone_filter.matches(&[m.name(), &shown, &plain])
+                })
+            });
+        }
+        order
+    }
+
+    /// Stored positions of every milestone of the selected project, in sort order
+    fn sorted_milestones(&self) -> Vec<usize> {
         self.selected
             .as_ref()
             .map(|p| self.milestone_sort.positions(p.milestones()))
             .unwrap_or_default()
+    }
+
+    /// The row milestone `id` is listed in, if the search shows it
+    fn milestone_row(&self, id: MilestoneId) -> Option<usize> {
+        let project = self.selected.as_ref()?;
+        self.milestone_order()
+            .iter()
+            .position(|&i| project.milestones().get(i).is_some_and(|m| m.id() == id))
     }
 }
 
@@ -147,6 +180,7 @@ impl<R: Repository> ProjectsView<R> {
             project_sel: Selection::default(),
             milestone_sel: Selection::default(),
             milestone_sort: MilestoneSort::default(),
+            milestone_filter: Filter::default(),
             open_logs: BTreeSet::new(),
             focus: Focus::Projects,
             modal: None,
@@ -160,6 +194,7 @@ impl<R: Repository> ProjectsView<R> {
     fn refresh(&mut self, changed: Option<Project>) -> Result<(), ServiceError> {
         // A change can reorder the milestones (a new due date): keep the cursor on the same one
         let keep = self.current_milestone().map(|(_, _, m)| m.id());
+        let previous = self.selected.as_ref().map(Project::id);
         self.summaries = self.service.list()?;
         self.update_visible();
         match changed {
@@ -171,6 +206,9 @@ impl<R: Repository> ProjectsView<R> {
                 if let Some(index) = self.position_of(project.id()) {
                     self.project_sel.select(index);
                 }
+                if previous != Some(project.id()) {
+                    self.milestone_filter = Filter::default();
+                }
                 self.selected = Some(project);
             }
             _ => {
@@ -178,24 +216,20 @@ impl<R: Repository> ProjectsView<R> {
                 self.load_selected()?;
             }
         }
-        let milestones = self.selected.as_ref().map_or(0, |p| p.milestones().len());
-        self.milestone_sel.clamp(milestones);
+        self.milestone_sel.clamp(self.milestone_order().len());
         if let Some(id) = keep {
             self.select_milestone(id);
         }
         Ok(())
     }
 
-    /// Put the cursor on milestone `id`, wherever the sort lists it
+    /// Put the cursor on milestone `id`, wherever the sort lists it. One the search hides
+    /// (just added, or renamed) clears the search.
     pub(super) fn select_milestone(&mut self, id: MilestoneId) {
-        let Some(project) = &self.selected else {
-            return;
-        };
-        let row = self
-            .milestone_order()
-            .iter()
-            .position(|&i| project.milestones().get(i).is_some_and(|m| m.id() == id));
-        if let Some(row) = row {
+        if self.milestone_row(id).is_none() {
+            self.milestone_filter = Filter::default();
+        }
+        if let Some(row) = self.milestone_row(id) {
             self.milestone_sel.select(row);
         }
     }
@@ -213,13 +247,17 @@ impl<R: Repository> ProjectsView<R> {
         )))
     }
 
-    /// Load the project under the cursor, dropping the previous one first
+    /// Load the project under the cursor, dropping the previous one first. Another project
+    /// starts with its milestones unsearched.
     fn load_selected(&mut self) -> Result<(), ServiceError> {
-        self.selected = None;
-        if let Some(id) = self
+        let previous = self.selected.take().map(|p| p.id());
+        let id = self
             .listed(self.project_sel.index())
-            .map(ProjectSummary::id)
-        {
+            .map(ProjectSummary::id);
+        if id != previous {
+            self.milestone_filter = Filter::default();
+        }
+        if let Some(id) = id {
             self.selected = Some(self.service.load(id)?);
         }
         Ok(())
@@ -319,6 +357,35 @@ impl<R: Repository> ProjectsView<R> {
                 self.visible.len()
             ))
         })
+    }
+
+    /// Narrow the milestones to those matching the search, keeping the cursor on the same one
+    /// when it is still listed
+    fn search_milestones(&mut self, form: &Form) -> Result<Notice, String> {
+        let keep = self.current_milestone().map(|(_, _, m)| m.id());
+        self.milestone_filter = Filter::from_form(form);
+        match keep.and_then(|id| self.milestone_row(id)) {
+            Some(row) => self.milestone_sel.select(row),
+            None => self.milestone_sel.reset(),
+        }
+        Ok(if self.milestone_filter.is_empty() {
+            Notice::info("Search cleared")
+        } else {
+            Notice::info(format!(
+                "{} milestone(s) match; Esc clears the search",
+                self.milestone_order().len()
+            ))
+        })
+    }
+
+    /// `Esc`: list every milestone again, keeping the cursor on the same one
+    fn clear_milestone_search(&mut self) -> Action {
+        let keep = self.current_milestone().map(|(_, _, m)| m.id());
+        self.milestone_filter = Filter::default();
+        if let Some(id) = keep {
+            self.select_milestone(id);
+        }
+        Action::Notify(Notice::info("Search cleared"))
     }
 
     /// The milestone under the cursor, with its stored index. Every milestone action goes
@@ -439,8 +506,9 @@ impl<R: Repository> ProjectsView<R> {
             return Action::Notify(Notice::info("Select a project first"));
         };
         let currency = project.currency();
+        // Every pending milestone, whatever the search shows
         let pending: Vec<&Milestone> = self
-            .milestone_order()
+            .sorted_milestones()
             .into_iter()
             .filter_map(|i| project.milestones().get(i))
             .filter(|m| m.status() == MilestoneStatus::Pending)
@@ -592,6 +660,10 @@ impl<R: Repository> ProjectsView<R> {
                 }
                 None => Action::Notify(Notice::info("Select a project first")),
             },
+            (Focus::Milestones, Key::Char('/')) => self.open_form(FormKind::MilestoneSearch),
+            (Focus::Milestones, Key::Esc) if !self.milestone_filter.is_empty() => {
+                self.clear_milestone_search()
+            }
             (Focus::Milestones, Key::Char('a')) => self.open_form(FormKind::AddMilestone),
             (Focus::Milestones, Key::Char('s')) => self.cycle_sort(),
             (Focus::Milestones, Key::Char(c @ ('e' | 'x' | 't' | 'u' | 'i' | 'p' | 'o'))) => {
@@ -615,7 +687,7 @@ impl<R: Repository> ProjectsView<R> {
                 }
             }
             Focus::Milestones => {
-                let len = self.selected.as_ref().map_or(0, |p| p.milestones().len());
+                let len = self.milestone_order().len();
                 self.milestone_sel.move_by(nav, len);
             }
         }
