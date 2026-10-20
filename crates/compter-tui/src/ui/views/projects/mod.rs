@@ -36,7 +36,7 @@ const PROJECT_HINTS: &[KeyHint] = &[
     KeyHint::new("e", "edit"),
     KeyHint::new("x", "delete"),
     KeyHint::new("A", "archive/restore"),
-    KeyHint::new("H", "show archived"),
+    KeyHint::new("H", "archived only"),
     Filter::HINT,
     Filter::CLEAR_HINT,
 ];
@@ -117,10 +117,11 @@ pub struct ProjectsView<R> {
     service: ProjectService<R>,
     invoices: InvoiceService<R>,
     summaries: Vec<ProjectSummary>,
-    /// Positions in `summaries` of the rows listed: not archived (unless shown) and matching the
-    /// search. `project_sel` moves over these.
+    /// Positions in `summaries` of the rows listed: the archived ones or the others (as
+    /// `archived_only` says) matching the search. `project_sel` moves over these.
     visible: Vec<usize>,
-    show_archived: bool,
+    /// `H`: list only the archived projects, instead of only the others
+    archived_only: bool,
     filter: Filter,
     selected: Option<Project>,
     project_sel: Selection,
@@ -182,7 +183,7 @@ impl<R: Repository> ProjectsView<R> {
             invoices: InvoiceService::new(repo, data_dir),
             summaries: Vec::new(),
             visible: Vec::new(),
-            show_archived: false,
+            archived_only: false,
             filter: Filter::default(),
             selected: None,
             project_sel: Selection::default(),
@@ -198,7 +199,8 @@ impl<R: Repository> ProjectsView<R> {
     }
 
     /// Re-read the summaries; select `changed` if given, else reload the project under the cursor.
-    /// A changed project the search hides clears the search; one just archived drops out of view.
+    /// A changed project the search hides clears the search; one just archived (or restored, while
+    /// only archived ones are listed) drops out of view.
     fn refresh(&mut self, changed: Option<Project>) -> Result<(), ServiceError> {
         // A change can reorder the milestones (a new due date): keep the cursor on the same one
         let keep = self.current_milestone().map(|(_, _, m)| m.id());
@@ -206,7 +208,7 @@ impl<R: Repository> ProjectsView<R> {
         self.summaries = self.service.list()?;
         self.update_visible();
         match changed {
-            Some(project) if !project.is_archived() || self.show_archived => {
+            Some(project) if project.is_archived() == self.archived_only => {
                 if self.position_of(project.id()).is_none() {
                     self.filter = Filter::default();
                     self.update_visible();
@@ -284,12 +286,12 @@ impl<R: Repository> ProjectsView<R> {
     }
 
     fn update_visible(&mut self) {
-        let (show_archived, filter) = (self.show_archived, &self.filter);
+        let (archived_only, filter) = (self.archived_only, &self.filter);
         self.visible = self
             .summaries
             .iter()
             .enumerate()
-            .filter(|(_, s)| show_archived || !s.is_archived())
+            .filter(|(_, s)| s.is_archived() == archived_only)
             .filter(|(_, s)| filter.matches(&[s.name(), s.client_name()]))
             .map(|(index, _)| index)
             .collect();
@@ -323,7 +325,7 @@ impl<R: Repository> ProjectsView<R> {
         let archive = !project.is_archived();
         let id = project.id();
         let result = self.service.set_archived(id, archive).and_then(|p| {
-            if p.is_archived() && !self.show_archived {
+            if p.is_archived() != self.archived_only {
                 // It drops out of the list: the project now under the cursor starts afresh
                 self.milestone_sel.reset();
                 self.open_logs.clear();
@@ -331,24 +333,21 @@ impl<R: Repository> ProjectsView<R> {
             self.refresh(Some(p))
         });
         Action::Notify(match result {
-            Ok(()) if archive && !self.show_archived => {
-                Notice::success("Project archived: H shows archived projects")
-            }
-            Ok(()) if archive => Notice::success("Project archived"),
-            Ok(()) => Notice::success("Project restored to the list"),
+            Ok(()) if archive => Notice::success("Project archived: H lists archived projects"),
+            Ok(()) => Notice::success("Project restored: H goes back to the list"),
             Err(error) => Notice::error(error.to_string()),
         })
     }
 
-    /// `H`: show or hide archived projects
-    fn toggle_show_archived(&mut self) -> Action {
-        self.show_archived = !self.show_archived;
+    /// `H`: list only the archived projects, or go back to the others
+    fn toggle_archived_only(&mut self) -> Action {
+        self.archived_only = !self.archived_only;
         if let Err(error) = self.relist() {
             return Action::Notify(Notice::error(error.to_string()));
         }
         let count = self.summaries.iter().filter(|s| s.is_archived()).count();
-        Action::Notify(Notice::info(if self.show_archived {
-            format!("Showing {count} archived project(s)")
+        Action::Notify(Notice::info(if self.archived_only {
+            format!("Showing only the {count} archived project(s)")
         } else {
             "Archived projects hidden".to_owned()
         }))
@@ -661,7 +660,7 @@ impl<R: Repository> ProjectsView<R> {
                 }
             }
             (Focus::Projects, Key::Char('A')) => self.toggle_archived(),
-            (Focus::Projects, Key::Char('H')) => self.toggle_show_archived(),
+            (Focus::Projects, Key::Char('H')) => self.toggle_archived_only(),
             (Focus::Projects, Key::Char('e')) => self.open_form(FormKind::EditProject),
             (Focus::Projects, Key::Char('x')) => match &self.selected {
                 Some(p) if p.ensure_deletable().is_err() => Action::Notify(Notice::error(

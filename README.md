@@ -64,7 +64,7 @@ Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Un
 | project list | `e` | edit name, client, GSTIN, billing or hourly rate |
 | project list | `x` | delete the project (asks first; only while nothing in it is invoiced) |
 | project list | `A` | archive a finished project (nothing pending), or restore an archived one |
-| project list | `H` | show or hide archived projects (hidden by default; their names are dimmed) |
+| project list | `H` | list only the archived projects, or go back to the others (archived ones are hidden by default) |
 | project list | `/` | search projects by name or client; `Esc` clears the search |
 | milestones | `s` | sort by due date (the default), name or amount; ties keep the order added, and the cursor stays on its milestone |
 | milestones | `a` | add a milestone |

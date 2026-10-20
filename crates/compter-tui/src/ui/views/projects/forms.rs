@@ -165,6 +165,8 @@ impl<R: Repository> ProjectsView<R> {
                 (self.service.load(id).map_err(fail)?, notice)
             }
         };
+        // A project made while only archived ones are listed goes back to the list to show it
+        self.archived_only &= project.is_archived();
         self.refresh(Some(project)).map_err(fail)?;
         if let Some(added) = added {
             self.select_milestone(added);
