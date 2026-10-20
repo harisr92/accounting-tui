@@ -5,14 +5,14 @@ use flutter_rust_bridge::frb;
 
 use compter_core::demo;
 use compter_core::domain::{
-    Billing, ClientDetails, ClientRegion, Currency, ExchangeRate, ExpenseId, Invoice,
-    InvoiceNumber, MilestoneId, ProfileDraft, Project, ProjectId, ReturnKind, ReturnTerms,
+    Billing, ClientDetails, ClientRegion, Currency, Discount, DomainError, ExchangeRate, ExpenseId,
+    Invoice, InvoiceNumber, MilestoneId, ProfileDraft, Project, ProjectId, ReturnKind, ReturnTerms,
     TimeEntry,
 };
 use compter_core::input;
 use compter_core::services::{
-    CreditDraft, CreditLineDraft, ExpenseDraft, ExpenseService, InvoiceService, MilestoneDraft,
-    ProjectDraft, ProjectService, ReportService, ServiceError, creditable_lines_of,
+    CreditDraft, CreditLineDraft, ExpenseDraft, ExpenseService, InvoiceService, InvoicingError,
+    MilestoneDraft, ProjectDraft, ProjectService, ReportService, ServiceError, creditable_lines_of,
 };
 use compter_core::storage::sync::{self, Lease, Resolution, SyncDir, SyncError};
 use compter_core::storage::{DataDir, RedbRepository, Store};
@@ -270,19 +270,25 @@ impl CompterApp {
 
     /// The invoice pending milestones of a project would get together today, without saving
     /// anything. `rate` (rupees per unit) is needed when the project is billed in a foreign
-    /// currency.
+    /// currency; `discount` (`5000` or `10%`, blank for none) comes off before GST.
     pub fn preview_invoice(
         &self,
         project_id: String,
         milestone_ids: Vec<String>,
         rate: Option<String>,
+        discount: Option<String>,
     ) -> Result<InvoicePreviewRow, ApiError> {
-        let preview = self.invoices.preview(
-            self::project_id(&project_id)?,
-            &milestone_ids_of(&milestone_ids)?,
-            today(),
-            exchange_rate(rate.as_deref())?,
-        )?;
+        let discount = discount_of(discount.as_deref())?;
+        let preview = self
+            .invoices
+            .preview(
+                self::project_id(&project_id)?,
+                &milestone_ids_of(&milestone_ids)?,
+                today(),
+                exchange_rate(rate.as_deref())?,
+                discount.as_ref(),
+            )
+            .map_err(discount_error)?;
         Ok(InvoicePreviewRow::from(&preview))
     }
 
@@ -293,14 +299,20 @@ impl CompterApp {
         project_id: String,
         milestone_ids: Vec<String>,
         rate: Option<String>,
+        discount: Option<String>,
     ) -> Result<IssuedRow, ApiError> {
         let id = self::project_id(&project_id)?;
-        let issued = self.invoices.issue(
-            id,
-            &milestone_ids_of(&milestone_ids)?,
-            today(),
-            exchange_rate(rate.as_deref())?,
-        )?;
+        let discount = discount_of(discount.as_deref())?;
+        let issued = self
+            .invoices
+            .issue(
+                id,
+                &milestone_ids_of(&milestone_ids)?,
+                today(),
+                exchange_rate(rate.as_deref())?,
+                discount.as_ref(),
+            )
+            .map_err(discount_error)?;
         // The service returns only the invoice; the milestones it invoiced are in the project,
         // read once for both
         let project = self.projects.load(id)?;
@@ -704,6 +716,28 @@ fn exchange_rate(rate: Option<&str>) -> Result<Option<ExchangeRate>, ApiError> {
             ExchangeRate::new(rate).map_err(|e| ApiError::invalid("rate", e.to_string()))
         })
         .transpose()
+}
+
+fn discount_of(discount: Option<&str>) -> Result<Option<Discount>, ApiError> {
+    input::discount(discount.unwrap_or_default()).map_err(|e| ApiError::invalid("discount", e))
+}
+
+/// A discount the invoice can't take names the discount field
+fn discount_error(error: ServiceError) -> ApiError {
+    let message = error.to_string();
+    match error {
+        ServiceError::Domain(e) | ServiceError::Invoicing(InvoicingError::Domain(e))
+            if matches!(
+                e,
+                DomainError::DiscountPercent
+                    | DomainError::DiscountTooLarge { .. }
+                    | DomainError::FractionOfPaisa
+            ) =>
+        {
+            ApiError::invalid("discount", message)
+        }
+        error => error.into(),
+    }
 }
 
 /// Credit note lines as typed; a refused one names its field, `line:<milestone_id>`

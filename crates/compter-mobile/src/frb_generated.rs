@@ -1015,6 +1015,7 @@ fn wire__crate__api__app__CompterApp_issue_invoice_impl(
             let api_project_id = <String>::sse_decode(&mut deserializer);
             let api_milestone_ids = <Vec<String>>::sse_decode(&mut deserializer);
             let api_rate = <Option<String>>::sse_decode(&mut deserializer);
+            let api_discount = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, crate::api::error::ApiError>((move || {
@@ -1037,6 +1038,7 @@ fn wire__crate__api__app__CompterApp_issue_invoice_impl(
                         api_project_id,
                         api_milestone_ids,
                         api_rate,
+                        api_discount,
                     )?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -1321,6 +1323,7 @@ fn wire__crate__api__app__CompterApp_preview_invoice_impl(
             let api_project_id = <String>::sse_decode(&mut deserializer);
             let api_milestone_ids = <Vec<String>>::sse_decode(&mut deserializer);
             let api_rate = <Option<String>>::sse_decode(&mut deserializer);
+            let api_discount = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, crate::api::error::ApiError>((move || {
@@ -1343,6 +1346,7 @@ fn wire__crate__api__app__CompterApp_preview_invoice_impl(
                         api_project_id,
                         api_milestone_ids,
                         api_rate,
+                        api_discount,
                     )?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -2350,6 +2354,7 @@ impl SseDecode for crate::api::invoicing::InvoiceDetail {
         let mut var_exchangeRate = <Option<String>>::sse_decode(deserializer);
         let mut var_total = <String>::sse_decode(deserializer);
         let mut var_breakdown = <String>::sse_decode(deserializer);
+        let mut var_discount = <Option<String>>::sse_decode(deserializer);
         let mut var_totalInr = <Option<String>>::sse_decode(deserializer);
         let mut var_balance = <String>::sse_decode(deserializer);
         let mut var_status = <String>::sse_decode(deserializer);
@@ -2373,6 +2378,7 @@ impl SseDecode for crate::api::invoicing::InvoiceDetail {
             exchange_rate: var_exchangeRate,
             total: var_total,
             breakdown: var_breakdown,
+            discount: var_discount,
             total_inr: var_totalInr,
             balance: var_balance,
             status: var_status,
@@ -2431,6 +2437,7 @@ impl SseDecode for crate::api::invoicing::InvoicePreviewRow {
         let mut var_kind = <String>::sse_decode(deserializer);
         let mut var_total = <String>::sse_decode(deserializer);
         let mut var_breakdown = <String>::sse_decode(deserializer);
+        let mut var_discount = <Option<String>>::sse_decode(deserializer);
         let mut var_totalInr = <Option<String>>::sse_decode(deserializer);
         let mut var_warnings = <Vec<String>>::sse_decode(deserializer);
         return crate::api::invoicing::InvoicePreviewRow {
@@ -2439,6 +2446,7 @@ impl SseDecode for crate::api::invoicing::InvoicePreviewRow {
             kind: var_kind,
             total: var_total,
             breakdown: var_breakdown,
+            discount: var_discount,
             total_inr: var_totalInr,
             warnings: var_warnings,
         };
@@ -3441,6 +3449,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::invoicing::InvoiceDetail {
             self.exchange_rate.into_into_dart().into_dart(),
             self.total.into_into_dart().into_dart(),
             self.breakdown.into_into_dart().into_dart(),
+            self.discount.into_into_dart().into_dart(),
             self.total_inr.into_into_dart().into_dart(),
             self.balance.into_into_dart().into_dart(),
             self.status.into_into_dart().into_dart(),
@@ -3524,6 +3533,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::invoicing::InvoicePreviewRow 
             self.kind.into_into_dart().into_dart(),
             self.total.into_into_dart().into_dart(),
             self.breakdown.into_into_dart().into_dart(),
+            self.discount.into_into_dart().into_dart(),
             self.total_inr.into_into_dart().into_dart(),
             self.warnings.into_into_dart().into_dart(),
         ]
@@ -4136,6 +4146,7 @@ impl SseEncode for crate::api::invoicing::InvoiceDetail {
         <Option<String>>::sse_encode(self.exchange_rate, serializer);
         <String>::sse_encode(self.total, serializer);
         <String>::sse_encode(self.breakdown, serializer);
+        <Option<String>>::sse_encode(self.discount, serializer);
         <Option<String>>::sse_encode(self.total_inr, serializer);
         <String>::sse_encode(self.balance, serializer);
         <String>::sse_encode(self.status, serializer);
@@ -4180,6 +4191,7 @@ impl SseEncode for crate::api::invoicing::InvoicePreviewRow {
         <String>::sse_encode(self.kind, serializer);
         <String>::sse_encode(self.total, serializer);
         <String>::sse_encode(self.breakdown, serializer);
+        <Option<String>>::sse_encode(self.discount, serializer);
         <Option<String>>::sse_encode(self.total_inr, serializer);
         <Vec<String>>::sse_encode(self.warnings, serializer);
     }

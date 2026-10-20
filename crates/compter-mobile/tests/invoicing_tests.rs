@@ -34,7 +34,7 @@ fn milestone_id(project: &ProjectDetail, name: &str) -> String {
 fn issue_launch(app: &mut CompterApp) -> String {
     let website = open(app, "Website Revamp");
     let launch = milestone_id(&website, "Launch");
-    app.issue_invoice(website.id, vec![launch], None)
+    app.issue_invoice(website.id, vec![launch], None, None)
         .unwrap()
         .invoice
         .number
@@ -113,7 +113,7 @@ fn issuing_shows_the_invoice_first_then_writes_it_and_its_pdf() {
     let launch = milestone_id(&website, "Launch");
 
     let preview = app
-        .preview_invoice(website.id.clone(), vec![launch.clone()], None)
+        .preview_invoice(website.id.clone(), vec![launch.clone()], None, None)
         .unwrap();
     assert_eq!(preview.kind, "TAX");
     assert_eq!(preview.total, "₹47,200.00");
@@ -124,7 +124,7 @@ fn issuing_shows_the_invoice_first_then_writes_it_and_its_pdf() {
     assert_eq!(preview.total_inr, None);
 
     let issued = app
-        .issue_invoice(website.id, vec![launch.clone()], None)
+        .issue_invoice(website.id, vec![launch.clone()], None, None)
         .unwrap();
 
     assert_eq!(issued.invoice.number, preview.number);
@@ -354,11 +354,12 @@ fn a_client_abroad_is_invoiced_at_the_rate_typed() {
             created.id.clone(),
             vec![draft.clone()],
             Some("ninety".to_owned()),
+            None,
         )
         .unwrap_err();
     assert_eq!(bad_rate.field.as_deref(), Some("rate"));
     let preview = app
-        .preview_invoice(created.id, vec![draft], Some("90".to_owned()))
+        .preview_invoice(created.id, vec![draft], Some("90".to_owned()), None)
         .unwrap();
     assert_eq!(preview.kind, "EXPORT");
     assert_eq!(preview.total, "€1,000.00");
@@ -438,11 +439,13 @@ fn several_milestones_go_on_one_invoice_and_credit_notes_pick_its_lines() {
     let ids: Vec<String> = detail.milestones.iter().map(|m| m.id.clone()).collect();
 
     let preview = app
-        .preview_invoice(created.id.clone(), ids.clone(), None)
+        .preview_invoice(created.id.clone(), ids.clone(), None, None)
         .unwrap();
     assert_eq!(preview.total, "₹17,700.00");
     let project_id = created.id.clone();
-    let issued = app.issue_invoice(created.id, ids.clone(), None).unwrap();
+    let issued = app
+        .issue_invoice(created.id, ids.clone(), None, None)
+        .unwrap();
     assert!(
         issued
             .project
@@ -540,4 +543,47 @@ fn several_milestones_go_on_one_invoice_and_credit_notes_pick_its_lines() {
         .issue_credit(invoice.number.clone(), credit(&ids[0], "10000"))
         .unwrap();
     assert_eq!(cancelled.invoice.status, "CREDITED");
+}
+
+#[test]
+fn a_discount_comes_off_before_gst_and_shows_on_the_invoice() {
+    let (_scratch, mut app) = demo();
+    let website = open(&app, "Website Revamp");
+    let launch = milestone_id(&website, "Launch");
+
+    let refused = app
+        .preview_invoice(
+            website.id.clone(),
+            vec![launch.clone()],
+            None,
+            Some("100%".to_owned()),
+        )
+        .unwrap_err();
+    assert_eq!(refused.field.as_deref(), Some("discount"));
+    let refused = app
+        .preview_invoice(
+            website.id.clone(),
+            vec![launch.clone()],
+            None,
+            Some("lots".to_owned()),
+        )
+        .unwrap_err();
+    assert_eq!(refused.field.as_deref(), Some("discount"));
+
+    let preview = app
+        .preview_invoice(
+            website.id.clone(),
+            vec![launch.clone()],
+            None,
+            Some("10%".to_owned()),
+        )
+        .unwrap();
+    assert_eq!(preview.total, "₹42,480.00");
+    assert_eq!(preview.discount.as_deref(), Some("₹4,000.00"));
+
+    let issued = app
+        .issue_invoice(website.id, vec![launch], None, Some("10%".to_owned()))
+        .unwrap();
+    assert_eq!(issued.invoice.discount.as_deref(), Some("₹4,000.00"));
+    assert_eq!(issued.invoice.balance, "₹42,480.00");
 }
