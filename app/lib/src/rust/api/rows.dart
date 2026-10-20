@@ -147,6 +147,9 @@ class ProjectDetail {
   /// Nothing in it was invoiced, so it may be deleted
   final bool deletable;
 
+  /// Finished (nothing pending), so it may be archived
+  final bool archivable;
+
   /// The form, filled with this project, to edit it
   final ProjectInput edit;
 
@@ -171,6 +174,7 @@ class ProjectDetail {
     required this.byName,
     required this.byAmount,
     required this.deletable,
+    required this.archivable,
     required this.edit,
   });
 
@@ -196,6 +200,7 @@ class ProjectDetail {
       byName.hashCode ^
       byAmount.hashCode ^
       deletable.hashCode ^
+      archivable.hashCode ^
       edit.hashCode;
 
   @override
@@ -223,6 +228,7 @@ class ProjectDetail {
           byName == other.byName &&
           byAmount == other.byAmount &&
           deletable == other.deletable &&
+          archivable == other.archivable &&
           edit == other.edit;
 }
 

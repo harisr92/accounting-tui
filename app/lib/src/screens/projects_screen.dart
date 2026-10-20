@@ -11,7 +11,8 @@ import '../ui/large_title.dart';
 import '../ui/record_tile.dart';
 import '../ui/search.dart';
 
-/// Every project that isn't archived, like the terminal's Projects tab
+/// Every project that isn't archived (or every one, while archived are shown), like the
+/// terminal's Projects tab
 class ProjectsScreen extends ConsumerStatefulWidget {
   const ProjectsScreen({super.key});
 
@@ -24,10 +25,23 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
   @override
   Widget build(BuildContext context) {
     final projects = ref.watch(projectsProvider);
+    final showArchived = ref.watch(showArchivedProvider);
     return LargeTitleScope(
       child: FabScrollScope(
         child: Scaffold(
-          appBar: searchAppBar(title: 'Projects', hint: 'Name or client'),
+          appBar: searchAppBar(
+            title: 'Projects',
+            hint: 'Name or client',
+            actions: [
+              IconButton(
+                tooltip: showArchived ? 'Hide archived' : 'Show archived',
+                icon: Icon(
+                  showArchived ? Icons.inventory_2 : Icons.inventory_2_outlined,
+                ),
+                onPressed: ref.read(showArchivedProvider.notifier).toggle,
+              ),
+            ],
+          ),
           body: projects.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (error, _) => Center(child: Text('$error')),
@@ -47,8 +61,19 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                     const EmptyState(
                       icon: Icons.work_outline,
                       message: 'No projects yet. Add one to start billing.',
+                    )
+                  else if (!showArchived && rows.every((row) => row.archived))
+                    const EmptyState(
+                      icon: Icons.inventory_2_outlined,
+                      message:
+                          'Every project is archived. Show archived to see them, or add one.',
                     ),
-                  ..._matching(query, rows),
+                  ..._matching(
+                    query,
+                    showArchived
+                        ? rows
+                        : rows.where((row) => !row.archived).toList(),
+                  ),
                 ],
               ),
             ),
@@ -81,7 +106,9 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
       for (final row in matches)
         RecordTile(
           title: row.name,
-          supporting: row.clientName,
+          supporting: row.archived
+              ? '${row.clientName} · Archived'
+              : row.clientName,
           status: row.status,
           onTap: () => context.go('/projects/${row.id}'),
         ),

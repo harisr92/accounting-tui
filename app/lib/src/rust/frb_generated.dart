@@ -71,7 +71,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1782505248;
+  int get rustContentHash => -1849027922;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -266,6 +266,12 @@ abstract class RustLibApi extends BaseApi {
     required CompterApp that,
     required String folder,
     required String deviceName,
+  });
+
+  Future<ProjectDetail> crateApiAppCompterAppSetArchived({
+    required CompterApp that,
+    required String id,
+    required bool archived,
   });
 
   Future<String> crateApiAppCompterAppSettleSnapshot({
@@ -1659,6 +1665,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ProjectDetail> crateApiAppCompterAppSetArchived({
+    required CompterApp that,
+    required String id,
+    required bool archived,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(id, serializer);
+          sse_encode_bool(archived, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 36,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_detail,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppSetArchivedConstMeta,
+        argValues: [that, id, archived],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppSetArchivedConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_set_archived",
+        argNames: ["that", "id", "archived"],
+      );
+
+  @override
   Future<String> crateApiAppCompterAppSettleSnapshot({
     required CompterApp that,
     required String folder,
@@ -1679,7 +1725,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 36,
+            funcId: 37,
             port: port_,
           );
         },
@@ -1715,7 +1761,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 37,
+            funcId: 38,
             port: port_,
           );
         },
@@ -1755,7 +1801,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 38,
+            funcId: 39,
             port: port_,
           );
         },
@@ -1782,7 +1828,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 40)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_i_32,
@@ -1804,7 +1850,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 40)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 41)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
@@ -2387,8 +2433,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProjectDetail dco_decode_project_detail(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 21)
-      throw Exception('unexpected arr length: expect 21 but see ${arr.length}');
+    if (arr.length != 22)
+      throw Exception('unexpected arr length: expect 22 but see ${arr.length}');
     return ProjectDetail(
       id: dco_decode_String(arr[0]),
       name: dco_decode_String(arr[1]),
@@ -2410,7 +2456,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       byName: dco_decode_list_prim_u_32_strict(arr[17]),
       byAmount: dco_decode_list_prim_u_32_strict(arr[18]),
       deletable: dco_decode_bool(arr[19]),
-      edit: dco_decode_project_input(arr[20]),
+      archivable: dco_decode_bool(arr[20]),
+      edit: dco_decode_project_input(arr[21]),
     );
   }
 
@@ -3303,6 +3350,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_byName = sse_decode_list_prim_u_32_strict(deserializer);
     var var_byAmount = sse_decode_list_prim_u_32_strict(deserializer);
     var var_deletable = sse_decode_bool(deserializer);
+    var var_archivable = sse_decode_bool(deserializer);
     var var_edit = sse_decode_project_input(deserializer);
     return ProjectDetail(
       id: var_id,
@@ -3325,6 +3373,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       byName: var_byName,
       byAmount: var_byAmount,
       deletable: var_deletable,
+      archivable: var_archivable,
       edit: var_edit,
     );
   }
@@ -4090,6 +4139,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_prim_u_32_strict(self.byName, serializer);
     sse_encode_list_prim_u_32_strict(self.byAmount, serializer);
     sse_encode_bool(self.deletable, serializer);
+    sse_encode_bool(self.archivable, serializer);
     sse_encode_project_input(self.edit, serializer);
   }
 
@@ -4485,6 +4535,16 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
     that: this,
     folder: folder,
     deviceName: deviceName,
+  );
+
+  /// Archive a finished project, hiding it from the list, or restore an archived one
+  Future<ProjectDetail> setArchived({
+    required String id,
+    required bool archived,
+  }) => RustLib.instance.api.crateApiAppCompterAppSetArchived(
+    that: this,
+    id: id,
+    archived: archived,
   );
 
   /// Settle what `receive_snapshot` couldn't: keep this phone's data (send it next), or take

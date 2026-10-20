@@ -183,6 +183,12 @@ abstract class CompterApp implements RustOpaqueInterface {
     required String deviceName,
   });
 
+  /// Archive a finished project, hiding it from the list, or restore an archived one
+  Future<ProjectDetail> setArchived({
+    required String id,
+    required bool archived,
+  });
+
   /// Settle what `receive_snapshot` couldn't: keep this phone's data (send it next), or take
   /// the snapshot in `folder`, keeping this phone's database beside it as a backup
   Future<String> settleSnapshot({
