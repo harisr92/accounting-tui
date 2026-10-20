@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-pub use compter_core::input::{ParseResult, date_or, duration_minutes, money, optional};
+pub use compter_core::input::{ParseResult, date_or, discount, duration_minutes, money, optional};
 
 /// `$HOME`, or `%USERPROFILE%` on Windows: what a leading `~` stands for
 pub fn home_dir() -> Option<PathBuf> {

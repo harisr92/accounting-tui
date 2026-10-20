@@ -705,8 +705,14 @@ fn render_payments(
             money(held)
         )
     });
+    let discount = invoice.discount();
+    let discount = if discount.is_zero() {
+        String::new()
+    } else {
+        format!(" · {} discount", money_in(&discount, currency))
+    };
     let title = format!(
-        "Payments for {} · {} due{held}",
+        "Payments for {} · {} due{discount}{held}",
         invoice.number(),
         money_in(&invoice.balance(), currency)
     );

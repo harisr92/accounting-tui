@@ -443,7 +443,7 @@ fn invoicing_after_sorting_bills_the_highlighted_milestone() {
     let picker = screen(&app, W, H);
     assert!(picker.contains("Milestones to invoice"), "{picker}");
     assert!(picker.contains("1 picked"), "{picker}");
-    type_keys(&mut app, "\ny");
+    type_keys(&mut app, "\n\ny");
     assert_eq!(
         milestones(&store, &project),
         [
@@ -517,7 +517,7 @@ fn a_picks_every_pending_milestone_for_one_invoice() {
     let refused = screen(&app, W, H);
     assert!(refused.contains("Pick at least one milestone"), "{refused}");
 
-    type_keys(&mut app, "a\n");
+    type_keys(&mut app, "a\n\n");
     let question = screen(&app, W, H);
     assert!(question.contains("billing 3 milestones"), "{question}");
     // ₹2,100 + IGST 18%
@@ -546,7 +546,7 @@ fn the_last_pending_milestone_is_invoiced_without_a_picker() {
     // a picked all three; Space on the cursor's row (Design) unpicks it
     let picker = screen(&app, W, H);
     assert!(picker.contains("2 picked"), "{picker}");
-    type_keys(&mut app, "\ny");
+    type_keys(&mut app, "\n\ny");
     assert_eq!(
         milestones(&store, &project),
         [
@@ -555,7 +555,7 @@ fn the_last_pending_milestone_is_invoiced_without_a_picker() {
             ("build".to_owned(), MilestoneStatus::Invoiced),
         ]
     );
-    type_keys(&mut app, "i");
+    type_keys(&mut app, "i\n");
     let question = screen(&app, W, H);
     assert!(question.contains("Issue INV/26-27/002"), "{question}");
 }
