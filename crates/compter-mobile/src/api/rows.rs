@@ -49,6 +49,8 @@ pub struct ProjectDetail {
     /// `None` when nothing was credited, as the terminal hides that tile
     pub credited: Option<String>,
     pub outstanding: String,
+    /// Time logged on every milestone, `12h 30m`; `None` on fixed-price projects
+    pub logged: Option<String>,
     /// In the order they were added. Listed through one of the orders below, never sorted in
     /// Dart.
     pub milestones: Vec<MilestoneRow>,
@@ -97,6 +99,7 @@ impl From<&Project> for ProjectDetail {
             paid: currency.display(&project.paid_amount()),
             credited: (!credited.is_zero()).then(|| currency.display(&credited)),
             outstanding: currency.display(&project.outstanding_amount()),
+            logged: hourly.then(|| format_duration(project.logged_minutes())),
             milestones: project
                 .milestones()
                 .iter()

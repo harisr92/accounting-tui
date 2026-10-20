@@ -110,6 +110,19 @@ fn hourly_time_drives_amounts() {
 }
 
 #[test]
+fn logged_minutes_sum_every_milestone() {
+    let mut p = hourly();
+    assert_eq!(p.logged_minutes(), 0);
+    p.add_milestone("Prototype", date(), None).unwrap();
+    p.add_milestone("Launch", date(), None).unwrap();
+    p.log_time(0, TimeEntry::new(date(), 90, "spike").unwrap())
+        .unwrap();
+    p.log_time(1, TimeEntry::new(date(), 45, "deploy").unwrap())
+        .unwrap();
+    assert_eq!(p.logged_minutes(), 135);
+}
+
+#[test]
 fn billing_type_must_match() {
     let mut f = fixed();
     assert!(matches!(

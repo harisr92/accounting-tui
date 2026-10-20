@@ -128,6 +128,9 @@ class ProjectDetail {
   final String? credited;
   final String outstanding;
 
+  /// Time logged on every milestone, `12h 30m`; `None` on fixed-price projects
+  final String? logged;
+
   /// In the order they were added. Listed through one of the orders below, never sorted in
   /// Dart.
   final List<MilestoneRow> milestones;
@@ -162,6 +165,7 @@ class ProjectDetail {
     required this.paid,
     this.credited,
     required this.outstanding,
+    this.logged,
     required this.milestones,
     required this.byDue,
     required this.byName,
@@ -186,6 +190,7 @@ class ProjectDetail {
       paid.hashCode ^
       credited.hashCode ^
       outstanding.hashCode ^
+      logged.hashCode ^
       milestones.hashCode ^
       byDue.hashCode ^
       byName.hashCode ^
@@ -212,6 +217,7 @@ class ProjectDetail {
           paid == other.paid &&
           credited == other.credited &&
           outstanding == other.outstanding &&
+          logged == other.logged &&
           milestones == other.milestones &&
           byDue == other.byDue &&
           byName == other.byName &&

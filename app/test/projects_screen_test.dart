@@ -206,7 +206,9 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, 'Time'), '2h');
     await tester.tap(find.text('Save'));
     await settle(tester);
-    expect(find.textContaining('2h 00m'), findsOneWidget);
+    // On the milestone and in the project's Logged figure
+    expect(find.text('Logged'), findsOneWidget);
+    expect(find.textContaining('2h 00m'), findsNWidgets(2));
 
     await tester.tap(find.text('October'));
     await tester.pumpAndSettle();
@@ -214,7 +216,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Undo'));
     await settle(tester);
-    expect(find.textContaining('0h 00m'), findsOneWidget);
+    expect(find.textContaining('0h 00m'), findsNWidgets(2));
   });
 
   testWidgets('a project with nothing invoiced is deleted', (tester) async {

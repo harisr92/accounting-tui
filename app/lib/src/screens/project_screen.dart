@@ -273,6 +273,7 @@ class _ProjectBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final credited = project.credited;
+    final logged = project.logged;
     final listed = order.of(project).map((i) => project.milestones[i]).toList();
     // Without commas too, so `50000` finds ₹50,000.00
     final matching = query.apply(
@@ -299,6 +300,7 @@ class _ProjectBody extends StatelessWidget {
           ('Paid', project.paid),
           if (credited != null) ('Credited', credited),
           ('Outstanding', project.outstanding),
+          if (logged != null) ('Logged', logged),
         ]),
         SectionHeader('Milestones · by ${order.label.toLowerCase()}'),
         if (project.milestones.isEmpty)

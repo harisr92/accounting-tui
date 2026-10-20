@@ -51,6 +51,7 @@ fn a_fixed_project_takes_milestones_with_amounts() {
     assert_eq!(design.status, "PENDING");
     assert_eq!(design.logged, None);
     assert_eq!(detail.total, "₹50,000.00");
+    assert_eq!(detail.logged, None);
 }
 
 #[test]
@@ -259,6 +260,7 @@ fn the_last_time_entry_is_undone() {
         .unwrap();
     let last = logged.milestones[0].last_time.clone().unwrap();
     assert!(last.ends_with("1h 30m · Fixes"), "{last}");
+    assert_eq!(logged.logged.as_deref(), Some("1h 30m"));
 
     let undone = app.undo_time(created.id.clone(), october.clone()).unwrap();
     assert_eq!(undone.milestones[0].last_time, None);
