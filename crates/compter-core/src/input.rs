@@ -6,6 +6,8 @@ use std::str::FromStr;
 use bigdecimal::{BigDecimal, RoundingMode, ToPrimitive};
 use chrono::NaiveDate;
 
+use crate::domain::Discount;
+
 pub type ParseResult<T> = Result<T, &'static str>;
 
 /// `150000`, `1,50,000.50`, `₹1,50,000` or `$1,500.50`
@@ -68,4 +70,18 @@ pub fn duration_minutes(input: &str) -> ParseResult<u32> {
 pub fn optional(input: &str) -> Option<String> {
     let input = input.trim();
     (!input.is_empty()).then(|| input.to_owned())
+}
+
+/// `10%` off, or an amount like `5,000`; blank means no discount
+pub fn discount(input: &str) -> ParseResult<Option<Discount>> {
+    let input = input.trim();
+    if input.is_empty() {
+        return Ok(None);
+    }
+    match input.strip_suffix('%') {
+        Some(percent) => BigDecimal::from_str(percent.trim())
+            .map(|p| Some(Discount::Percent(p)))
+            .map_err(|_| "discount must be an amount or a percent, like 5,000 or 10%"),
+        None => money(input).map(|amount| Some(Discount::Amount(amount))),
+    }
 }

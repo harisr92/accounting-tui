@@ -65,6 +65,8 @@ pub struct InvoiceDetail {
     pub total: String,
     /// `50,000.00 + IGST 9,000.00`
     pub breakdown: String,
+    /// Taken off before GST, when the invoice had a discount
+    pub discount: Option<String>,
     /// The total in rupees, for an invoice in a foreign currency
     pub total_inr: Option<String>,
     pub balance: String,
@@ -172,6 +174,7 @@ impl InvoiceDetail {
                 .map(|rate| format!("₹{rate} per {currency}")),
             total: currency.display(&amounts.total),
             breakdown: amounts.breakdown(invoice.kind(), currency),
+            discount: discount_of(&invoice.discount(), currency),
             total_inr: invoice
                 .exchange_rate()
                 .map(|_| Currency::Inr.display(&invoice.inr_amounts().total)),
@@ -217,6 +220,8 @@ pub struct InvoicePreviewRow {
     pub kind: String,
     pub total: String,
     pub breakdown: String,
+    /// Taken off before GST, when a discount was given
+    pub discount: Option<String>,
     pub total_inr: Option<String>,
     pub warnings: Vec<String>,
 }
@@ -230,6 +235,7 @@ impl From<&InvoicePreview> for InvoicePreviewRow {
             kind: preview.kind.label().to_owned(),
             total: currency.display(&preview.amounts.total),
             breakdown: preview.amounts.breakdown(preview.kind, currency),
+            discount: discount_of(&preview.discount, currency),
             total_inr: preview
                 .total_inr
                 .as_ref()
@@ -360,4 +366,9 @@ pub struct TimeInput {
     /// `1h30m`, `45m`, `1:30` or `1.5` (hours)
     pub duration: String,
     pub note: String,
+}
+
+/// A discount as shown, or `None` when there was none
+fn discount_of(discount: &BigDecimal, currency: Currency) -> Option<String> {
+    (!discount.is_zero()).then(|| currency.display(discount))
 }

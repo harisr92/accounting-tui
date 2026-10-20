@@ -11,7 +11,7 @@ use chrono::NaiveDate;
 
 use super::chart;
 use crate::domain::{
-    Billing, BusinessProfile, ClientRegion, Currency, DomainError, ExchangeRate, Invoice,
+    Billing, BusinessProfile, ClientRegion, Currency, Discount, DomainError, ExchangeRate, Invoice,
     InvoiceAmounts, InvoiceKind, InvoiceLine, InvoiceNumber, InvoiceParts, Milestone,
     MilestoneStatus, Project,
 };
@@ -69,7 +69,8 @@ pub struct BuiltInvoice {
 
 /// Build invoice `number` billing `milestones` of `project`, a line each in the order given,
 /// choosing the kind from who is billing whom. A project billed in a foreign currency needs
-/// `rate`, the rupees per unit on `date`; rupee projects ignore it.
+/// `rate`, the rupees per unit on `date`; rupee projects ignore it. A `discount` comes off the
+/// total before GST, spread over the lines.
 pub fn build(
     profile: &BusinessProfile,
     project: &Project,
@@ -77,6 +78,7 @@ pub fn build(
     number: InvoiceNumber,
     date: NaiveDate,
     rate: Option<ExchangeRate>,
+    discount: Option<&Discount>,
 ) -> Result<BuiltInvoice, InvoicingError> {
     if milestones.is_empty() {
         return Err(InvoicingError::NothingSelected);
@@ -97,17 +99,28 @@ pub fn build(
     } else {
         Some(rate.ok_or(InvoicingError::MissingExchangeRate(currency))?)
     };
-    let lines: Vec<Line> = milestones
+    let mut lines: Vec<Line> = milestones
         .iter()
         .map(|milestone| Line::describe(project, milestone))
         .collect();
+    let discount_note = match discount {
+        Some(discount) => Some(apply_discount(discount, &mut lines, currency)?),
+        None => None,
+    };
     match (profile.gstin(), project.client_region()) {
-        (Some(_), ClientRegion::India { .. }) => tax_invoice(profile, project, lines, number, date),
+        (Some(_), ClientRegion::India { .. }) => {
+            let terms = discount_note
+                .into_iter()
+                .chain(profile.terms().iter().cloned())
+                .collect();
+            tax_invoice(profile, project, lines, number, date, terms)
+        }
         (Some(_), ClientRegion::Abroad { .. }) => {
             let arn = profile.lut_arn().ok_or(InvoicingError::MissingLut)?;
             let terms = std::iter::once(format!(
                 "Supply meant for export under LUT (ARN {arn}) without payment of IGST"
             ))
+            .chain(discount_note)
             .chain(profile.terms().iter().cloned())
             .collect();
             untaxed_invoice(
@@ -126,6 +139,7 @@ pub fn build(
         (None, _) => {
             // accounting-core's layout always prints a GST supply line, so say it outright
             let terms = std::iter::once(PLAIN_NOTE.to_owned())
+                .chain(discount_note)
                 .chain(profile.terms().iter().cloned())
                 .collect();
             untaxed_invoice(
@@ -156,9 +170,42 @@ struct Issue {
 /// The invoice line for one milestone
 struct Line {
     description: String,
+    /// Before GST, after `discount`
     amount: BigDecimal,
+    discount: BigDecimal,
     milestone_id: crate::domain::MilestoneId,
     milestone_name: String,
+}
+
+/// Take `discount` off `lines` in proportion, noting each line's share on its row, and return
+/// the line printed with the terms. GST is then charged on what is left.
+fn apply_discount(
+    discount: &Discount,
+    lines: &mut [Line],
+    currency: Currency,
+) -> Result<String, InvoicingError> {
+    let gross: Vec<BigDecimal> = lines.iter().map(|line| line.amount.clone()).collect();
+    let shares = discount.split(&gross)?;
+    let label = currency.pdf_label();
+    for (line, share) in lines.iter_mut().zip(&shares) {
+        line.description.push_str(&format!(
+            " less discount {label} {}",
+            currency.format(share)
+        ));
+        line.amount = &line.amount - share;
+        line.discount = share.clone();
+    }
+    let subtotal: BigDecimal = gross.iter().sum();
+    let total: BigDecimal = shares.iter().sum();
+    let percent = match discount {
+        Discount::Percent(_) => format!(" ({discount})"),
+        Discount::Amount(_) => String::new(),
+    };
+    Ok(format!(
+        "Discount of {label} {}{percent} on {label} {}, taken off before tax",
+        currency.format(&total),
+        currency.format(&subtotal)
+    ))
 }
 
 /// The lines as the invoice records them
@@ -169,6 +216,7 @@ fn invoice_lines(lines: &[Line]) -> Vec<InvoiceLine> {
             milestone_id: line.milestone_id,
             milestone_name: line.milestone_name.clone(),
             taxable_value: line.amount.clone(),
+            discount: line.discount.clone(),
         })
         .collect()
 }
@@ -190,6 +238,7 @@ impl Line {
         Self {
             description,
             amount: milestone.amount().clone(),
+            discount: BigDecimal::zero(),
             milestone_id: milestone.id(),
             milestone_name: milestone.name().to_owned(),
         }
@@ -221,6 +270,7 @@ fn tax_invoice(
     lines: Vec<Line>,
     number: InvoiceNumber,
     date: NaiveDate,
+    terms: Vec<String>,
 ) -> Result<BuiltInvoice, InvoicingError> {
     let seller_gstin = profile.gstin().cloned().ok_or(InvoicingError::NoProfile)?;
     let recipient = match (project.client_gstin(), project.client_region()) {
@@ -277,7 +327,7 @@ fn tax_invoice(
         exchange_rate: None,
         amounts,
         print,
-        terms: profile.terms().to_vec(),
+        terms,
         gst: Some(gst),
         logo: profile.logo(),
     })?;

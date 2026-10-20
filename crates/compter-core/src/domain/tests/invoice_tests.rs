@@ -49,6 +49,7 @@ fn parts() -> InvoiceParts {
             milestone_id: MilestoneId::generate(),
             milestone_name: "Design".to_owned(),
             taxable_value: BigDecimal::from(1000),
+            discount: BigDecimal::from(0),
         }],
         currency: Currency::Inr,
         exchange_rate: None,
@@ -363,6 +364,7 @@ fn design_line(amount: i64) -> InvoiceLine {
         milestone_id: MilestoneId::generate(),
         milestone_name: "Design".to_owned(),
         taxable_value: BigDecimal::from(amount),
+        discount: BigDecimal::from(0),
     }
 }
 

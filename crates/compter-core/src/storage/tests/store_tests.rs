@@ -132,7 +132,7 @@ fn a_v2_database_moves_to_the_current_version_with_its_records_unchanged() {
             .unwrap()
             .unwrap()
             .value();
-        assert_eq!(version, 5);
+        assert_eq!(version, SCHEMA_VERSION);
         // v5 rewrote the invoice's single milestone as its one line
         let stored: serde_json::Value = serde_json::from_slice(
             txn.open_table(INVOICES)

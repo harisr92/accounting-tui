@@ -7,7 +7,7 @@ use super::fixtures::{
     profile_draft,
 };
 use crate::domain::{
-    Currency, DomainError, ExchangeRate, InvoiceStatus, MilestoneId, MilestoneStatus,
+    Currency, Discount, DomainError, ExchangeRate, InvoiceStatus, MilestoneId, MilestoneStatus,
     ProjectStatus, ReturnKind, ReturnTerms,
 };
 use crate::services::{CreditLineDraft, InvoiceService, InvoicingError, ServiceError, chart};
@@ -53,7 +53,7 @@ fn issuing_without_a_profile_says_what_to_do() {
     store.repository().save(&project).unwrap();
     let milestone = project.milestones()[0].id();
     assert!(matches!(
-        service.issue(project.id(), &[milestone], date(), None),
+        service.issue(project.id(), &[milestone], date(), None, None),
         Err(ServiceError::Invoicing(InvoicingError::NoProfile))
     ));
 }
@@ -63,14 +63,14 @@ fn preview_matches_what_is_issued_and_saves_nothing() {
     let (store, mut service, project) = setup();
     let milestone = project.milestones()[0].id();
     let preview = service
-        .preview(project.id(), &[milestone], date(), None)
+        .preview(project.id(), &[milestone], date(), None, None)
         .unwrap();
     assert_eq!(preview.number.as_str(), "INV/26-27/001");
     assert_eq!(preview.amounts.total, rupees(59_000));
     assert!(service.list().unwrap().is_empty());
 
     let issued = service
-        .issue(project.id(), &[milestone], date(), None)
+        .issue(project.id(), &[milestone], date(), None, None)
         .unwrap();
     assert_eq!(issued.invoice.number(), &preview.number);
     assert!(matches!(issued.pdf, Ok(None)));
@@ -95,15 +95,15 @@ fn numbers_run_in_sequence_and_milestones_are_billed_once() {
     let ids: Vec<_> = project.milestones().iter().map(|m| m.id()).collect();
 
     let first = service
-        .issue(project.id(), &[ids[0]], date(), None)
+        .issue(project.id(), &[ids[0]], date(), None, None)
         .unwrap();
     let second = service
-        .issue(project.id(), &[ids[1]], date(), None)
+        .issue(project.id(), &[ids[1]], date(), None, None)
         .unwrap();
     assert_eq!(first.invoice.number().as_str(), "INV/26-27/001");
     assert_eq!(second.invoice.number().as_str(), "INV/26-27/002");
     assert!(matches!(
-        service.issue(project.id(), &[ids[0]], date(), None),
+        service.issue(project.id(), &[ids[0]], date(), None, None),
         Err(ServiceError::Invoicing(InvoicingError::NotPending))
     ));
     assert_eq!(
@@ -117,7 +117,7 @@ fn part_payments_with_tds_settle_the_ledger() {
     let (store, mut service, project) = setup();
     let milestone = project.milestones()[0].id();
     let number = service
-        .issue(project.id(), &[milestone], date(), None)
+        .issue(project.id(), &[milestone], date(), None, None)
         .unwrap()
         .invoice
         .number()
@@ -158,7 +158,7 @@ fn every_kind_renders_a_pdf() {
     let (_store, mut service, project) = setup();
     let milestone = project.milestones()[0].id();
     let invoice = service
-        .issue(project.id(), &[milestone], date(), None)
+        .issue(project.id(), &[milestone], date(), None, None)
         .unwrap()
         .invoice;
     let bytes = service.pdf_bytes(&invoice).unwrap();
@@ -182,12 +182,12 @@ fn usd_export() -> (
     let rate = || Some(ExchangeRate::new(rupees(90)).unwrap());
 
     let preview = service
-        .preview(project.id(), &[milestone], date(), rate())
+        .preview(project.id(), &[milestone], date(), rate(), None)
         .unwrap();
     assert_eq!(preview.currency, Currency::Usd);
     assert_eq!(preview.total_inr, Some(rupees(90_000)));
     let issued = service
-        .issue(project.id(), &[milestone], date(), rate())
+        .issue(project.id(), &[milestone], date(), rate(), None)
         .unwrap();
     assert_eq!(balance(&store, chart::RECEIVABLE), rupees(90_000));
     assert_eq!(balance(&store, chart::EXPORT_REVENUE), rupees(90_000));
@@ -257,7 +257,7 @@ fn invoices_print_the_logo_they_were_issued_with() {
     let (store, mut service, mut project) = setup();
     let first = project.milestones()[0].id();
     let plain = service
-        .issue(project.id(), &[first], date(), None)
+        .issue(project.id(), &[first], date(), None, None)
         .unwrap()
         .invoice;
     assert_eq!(plain.logo(), None);
@@ -273,7 +273,7 @@ fn invoices_print_the_logo_they_were_issued_with() {
     store.repository().save(&project).unwrap();
     let second = project.milestones()[1].id();
     let branded = service
-        .issue(project.id(), &[second], date(), None)
+        .issue(project.id(), &[second], date(), None, None)
         .unwrap()
         .invoice;
     assert_eq!(branded.logo(), Some(logo));
@@ -344,7 +344,7 @@ fn a_part_credit_reverses_its_share_of_tax_and_lowers_the_balance() {
     let (store, mut service, project) = setup();
     let milestone = project.milestones()[0].id();
     let number = service
-        .issue(project.id(), &[milestone], date(), None)
+        .issue(project.id(), &[milestone], date(), None, None)
         .unwrap()
         .invoice
         .number()
@@ -388,7 +388,7 @@ fn a_full_credit_cancels_the_invoice_and_its_milestone() {
     let (store, mut service, project) = setup();
     let milestone = project.milestones()[0].id();
     let number = service
-        .issue(project.id(), &[milestone], date(), None)
+        .issue(project.id(), &[milestone], date(), None, None)
         .unwrap()
         .invoice
         .number()
@@ -439,7 +439,7 @@ fn a_credit_beyond_what_is_due_refunds_the_rest() {
     let (store, mut service, project) = setup();
     let milestone = project.milestones()[0].id();
     let number = service
-        .issue(project.id(), &[milestone], date(), None)
+        .issue(project.id(), &[milestone], date(), None, None)
         .unwrap()
         .invoice
         .number()
@@ -491,7 +491,13 @@ fn credits_on_a_paid_invoice_can_be_kept_as_an_advance_up_to_its_total() {
     let (store, mut service, project) = setup();
     let milestone = project.milestones()[0].id();
     let number = service
-        .issue(project.id(), &[project.milestones()[0].id()], date(), None)
+        .issue(
+            project.id(),
+            &[project.milestones()[0].id()],
+            date(),
+            None,
+            None,
+        )
         .unwrap()
         .invoice
         .number()
@@ -555,7 +561,13 @@ fn a_refund_never_hands_back_tds_the_client_kept_unless_it_is_reversed() {
     let (store, mut service, project) = setup();
     let milestone = project.milestones()[0].id();
     let number = service
-        .issue(project.id(), &[project.milestones()[0].id()], date(), None)
+        .issue(
+            project.id(),
+            &[project.milestones()[0].id()],
+            date(),
+            None,
+            None,
+        )
         .unwrap()
         .invoice
         .number()
@@ -597,7 +609,13 @@ fn a_part_refund_can_reverse_part_of_the_tds() {
     let (store, mut service, project) = setup();
     let milestone = project.milestones()[0].id();
     let number = service
-        .issue(project.id(), &[project.milestones()[0].id()], date(), None)
+        .issue(
+            project.id(),
+            &[project.milestones()[0].id()],
+            date(),
+            None,
+            None,
+        )
         .unwrap()
         .invoice
         .number()
@@ -641,6 +659,7 @@ fn a_foreign_refund_books_the_rupees_that_left_the_bank() {
             &[project.milestones()[0].id()],
             date(),
             Some(rate),
+            None,
         )
         .unwrap()
         .invoice
@@ -691,6 +710,7 @@ fn credits_on_a_foreign_invoice_are_at_its_rate_without_gst() {
             &[project.milestones()[0].id()],
             date(),
             Some(rate),
+            None,
         )
         .unwrap()
         .invoice
@@ -713,7 +733,13 @@ fn credit_notes_close_on_30_november_after_the_invoice_year() {
     let (_store, mut service, project) = setup();
     let milestone = project.milestones()[0].id();
     let number = service
-        .issue(project.id(), &[project.milestones()[0].id()], date(), None)
+        .issue(
+            project.id(),
+            &[project.milestones()[0].id()],
+            date(),
+            None,
+            None,
+        )
         .unwrap()
         .invoice
         .number()
@@ -786,13 +812,13 @@ fn credit_lines(lines: Vec<CreditLineDraft>) -> crate::services::CreditDraft {
 fn several_milestones_are_billed_together_in_due_date_order() {
     let (store, mut service, project, ids) = three_milestones();
     let preview = service
-        .preview(project.id(), &[ids[1], ids[0], ids[2]], date(), None)
+        .preview(project.id(), &[ids[1], ids[0], ids[2]], date(), None, None)
         .unwrap();
     assert_eq!(preview.amounts.taxable_value, rupees(80_000));
     assert_eq!(preview.amounts.igst, rupees(14_400));
 
     let issued = service
-        .issue(project.id(), &[ids[1], ids[0], ids[2]], date(), None)
+        .issue(project.id(), &[ids[1], ids[0], ids[2]], date(), None, None)
         .unwrap();
     let invoice = &issued.invoice;
     let names: Vec<_> = invoice
@@ -834,11 +860,11 @@ fn several_milestones_are_billed_together_in_due_date_order() {
 fn an_invoice_bills_only_pending_milestones_of_its_project_each_once() {
     let (_store, mut service, project, ids) = three_milestones();
     assert!(matches!(
-        service.preview(project.id(), &[], date(), None),
+        service.preview(project.id(), &[], date(), None, None),
         Err(ServiceError::Invoicing(InvoicingError::NothingSelected))
     ));
     assert!(matches!(
-        service.preview(project.id(), &[ids[0], ids[0]], date(), None),
+        service.preview(project.id(), &[ids[0], ids[0]], date(), None, None),
         Err(ServiceError::Domain(DomainError::DuplicateInvoiceLine))
     ));
     assert!(matches!(
@@ -846,16 +872,17 @@ fn an_invoice_bills_only_pending_milestones_of_its_project_each_once() {
             project.id(),
             &[ids[0], MilestoneId::generate()],
             date(),
-            None
+            None,
+            None,
         ),
         Err(ServiceError::Invoicing(InvoicingError::NotPending))
     ));
     service
-        .issue(project.id(), &[ids[0]], date(), None)
+        .issue(project.id(), &[ids[0]], date(), None, None)
         .unwrap();
     // One already invoiced leaves the others pending
     assert!(matches!(
-        service.issue(project.id(), &[ids[1], ids[0]], date(), None),
+        service.issue(project.id(), &[ids[1], ids[0]], date(), None, None),
         Err(ServiceError::Invoicing(InvoicingError::NotPending))
     ));
     assert_eq!(service.list().unwrap().len(), 1);
@@ -865,7 +892,7 @@ fn an_invoice_bills_only_pending_milestones_of_its_project_each_once() {
 fn a_credit_note_takes_back_from_the_lines_picked() {
     let (store, mut service, project, ids) = three_milestones();
     let number = service
-        .issue(project.id(), &ids, date(), None)
+        .issue(project.id(), &ids, date(), None, None)
         .unwrap()
         .invoice
         .number()
@@ -926,7 +953,7 @@ fn a_credit_note_takes_back_from_the_lines_picked() {
 fn a_line_is_credited_at_most_what_it_billed() {
     let (store, mut service, project, ids) = three_milestones();
     let number = service
-        .issue(project.id(), &ids, date(), None)
+        .issue(project.id(), &ids, date(), None, None)
         .unwrap()
         .invoice
         .number()
@@ -982,7 +1009,7 @@ fn crediting_every_line_in_full_cancels_the_invoice_and_its_milestones() {
     store.repository().save(&project).unwrap();
     let ids: Vec<_> = project.milestones().iter().map(|m| m.id()).collect();
     let invoice = service
-        .issue(project.id(), &ids, date(), None)
+        .issue(project.id(), &ids, date(), None, None)
         .unwrap()
         .invoice;
 
@@ -1013,7 +1040,7 @@ fn crediting_every_line_in_full_cancels_the_invoice_and_its_milestones() {
 fn a_line_takes_a_credit_of_at_most_what_is_left_on_it() {
     let (_store, mut service, project, ids) = three_milestones();
     let invoice = service
-        .issue(project.id(), &ids, date(), None)
+        .issue(project.id(), &ids, date(), None, None)
         .unwrap()
         .invoice;
     assert!(invoice.untouched());
@@ -1042,7 +1069,7 @@ fn a_line_takes_a_credit_of_at_most_what_is_left_on_it() {
 fn picked_lines_are_checked_together_and_a_refusal_names_its_line() {
     let (_store, mut service, project, ids) = three_milestones();
     let invoice = service
-        .issue(project.id(), &ids, date(), None)
+        .issue(project.id(), &ids, date(), None, None)
         .unwrap()
         .invoice;
     let ok = [line(ids[0], "50000"), line(ids[1], "10000")];
@@ -1084,4 +1111,68 @@ fn picked_lines_are_checked_together_and_a_refusal_names_its_line() {
             )
             .is_err()
     );
+}
+
+#[test]
+fn a_discounted_invoice_is_billed_paid_and_credited_net_of_its_discount() {
+    let (store, mut service, project) = setup();
+    let milestone = project.milestones()[0].id();
+    let discount = Discount::Percent(rupees(10));
+    let preview = service
+        .preview(project.id(), &[milestone], date(), None, Some(&discount))
+        .unwrap();
+    assert_eq!(preview.discount, rupees(5_000));
+    assert_eq!(preview.amounts.igst, rupees(8_100));
+    assert_eq!(preview.amounts.total, rupees(53_100));
+
+    let issued = service
+        .issue(project.id(), &[milestone], date(), None, Some(&discount))
+        .unwrap();
+    let number = issued.invoice.number().clone();
+    assert_eq!(
+        store.repository().load_invoice(&number).unwrap().discount(),
+        rupees(5_000)
+    );
+    assert_eq!(balance(&store, chart::RECEIVABLE), rupees(53_100));
+    let stored = store.repository().load(project.id()).unwrap();
+    assert_eq!(stored.milestones()[0].discount(), &rupees(5_000));
+    assert_eq!(stored.total_amount(), &rupees(45_000));
+    let lines = service.creditable_lines(&issued.invoice).unwrap();
+    assert_eq!(lines[0].creditable, rupees(45_000));
+
+    // Crediting all that was billed cancels the milestone, though its amount was ₹50,000
+    let credited = service
+        .issue_credit(&number, credit(milestone, 45_000, "Cancelled"))
+        .unwrap();
+    assert_eq!(credited.invoice.status(), InvoiceStatus::Credited);
+    let stored = store.repository().load(project.id()).unwrap();
+    assert_eq!(stored.milestones()[0].status(), MilestoneStatus::Credited);
+    assert_eq!(stored.outstanding_amount(), rupees(0));
+}
+
+#[test]
+fn paying_a_discounted_invoice_settles_its_milestone() {
+    let (store, mut service, project) = setup();
+    let milestone = project.milestones()[0].id();
+    let number = service
+        .issue(
+            project.id(),
+            &[milestone],
+            date(),
+            None,
+            Some(&Discount::Amount(rupees(10_000))),
+        )
+        .unwrap()
+        .invoice
+        .number()
+        .clone();
+    let paid = service
+        .record_payment(&number, date(), rupees(47_200), rupees(0))
+        .unwrap();
+    assert_eq!(paid.status(), InvoiceStatus::Paid);
+    let stored = store.repository().load(project.id()).unwrap();
+    assert_eq!(stored.milestones()[0].status(), MilestoneStatus::Paid);
+    assert_eq!(stored.paid_amount(), rupees(40_000));
+    assert_eq!(stored.outstanding_amount(), rupees(0));
+    assert_eq!(stored.status(), ProjectStatus::Paid);
 }

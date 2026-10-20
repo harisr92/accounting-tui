@@ -86,8 +86,8 @@ impl<R: Repository> ProjectsView<R> {
                 project?;
                 self.milestone_filter.form("milestone name or amount")
             }
-            // Built from the stored invoice by `open_payment`, and by `confirm_issue`
-            FormKind::Payment(_) | FormKind::IssueRate(..) => return None,
+            // Built from the stored invoice by `open_payment`, and by `start_issue`
+            FormKind::Payment(_) | FormKind::Issue(..) => return None,
         })
     }
 
@@ -142,9 +142,19 @@ impl<R: Repository> ProjectsView<R> {
                 (project, notice)
             }
             // Opens the confirm; nothing changes until it is answered
-            FormKind::IssueRate(id, milestones) => {
-                let rate = ExchangeRate::new(parse::money(form.value(0))?).map_err(fail)?;
-                self.preview_issue(id, milestones, Some(rate))?;
+            FormKind::Issue(id, milestones) => {
+                let discount = parse::discount(form.value(issue::DISCOUNT))?;
+                let foreign = self
+                    .selected
+                    .as_ref()
+                    .is_some_and(|p| !p.currency().is_inr());
+                let rate = if foreign {
+                    let rate = parse::money(form.value(issue::RATE))?;
+                    Some(ExchangeRate::new(rate).map_err(fail)?)
+                } else {
+                    None
+                };
+                self.preview_issue(id, milestones, rate, discount)?;
                 return Ok(Notice::info("Check the invoice before issuing it"));
             }
             FormKind::Search => return self.search(form),
@@ -246,10 +256,22 @@ fn project_draft(form: &Form) -> Result<ProjectDraft, String> {
     })
 }
 
-/// The one field of the exchange-rate form, asked before invoicing in a foreign currency
-pub(super) fn rate_form(currency: Currency) -> Form {
-    let hint = format!("rupees per {currency} today, e.g. RBI reference rate");
-    Form::new("Exchange rate", vec![Field::text("₹ per unit", hint)])
+/// Fields of the form asked before invoicing
+mod issue {
+    pub const DISCOUNT: usize = 0;
+    /// Only for a project billed in a foreign currency
+    pub const RATE: usize = 1;
+}
+
+/// Asked before invoicing: a discount off the total before GST, and the day's exchange rate
+/// for a project billed in a foreign currency
+pub(super) fn issue_form(currency: Currency) -> Form {
+    let mut fields = vec![Field::text("Discount", "e.g. 5000 or 10%; blank for none")];
+    if !currency.is_inr() {
+        let hint = format!("rupees per {currency} today, e.g. RBI reference rate");
+        fields.push(Field::text("₹ per unit", hint));
+    }
+    Form::new("Invoice", fields)
 }
 
 fn milestone_form(title: &'static str, hourly: bool, existing: Option<&Milestone>) -> Form {

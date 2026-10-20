@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'rows.dart';
 
-// These functions are ignored because they are not marked as `pub`: `new`, `return_detail`
+// These functions are ignored because they are not marked as `pub`: `discount_of`, `new`, `return_detail`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`
 
 /// A credit note as typed
@@ -240,6 +240,9 @@ class InvoiceDetail {
   /// `50,000.00 + IGST 9,000.00`
   final String breakdown;
 
+  /// Taken off before GST, when the invoice had a discount
+  final String? discount;
+
   /// The total in rupees, for an invoice in a foreign currency
   final String? totalInr;
   final String balance;
@@ -282,6 +285,7 @@ class InvoiceDetail {
     this.exchangeRate,
     required this.total,
     required this.breakdown,
+    this.discount,
     this.totalInr,
     required this.balance,
     required this.status,
@@ -308,6 +312,7 @@ class InvoiceDetail {
       exchangeRate.hashCode ^
       total.hashCode ^
       breakdown.hashCode ^
+      discount.hashCode ^
       totalInr.hashCode ^
       balance.hashCode ^
       status.hashCode ^
@@ -336,6 +341,7 @@ class InvoiceDetail {
           exchangeRate == other.exchangeRate &&
           total == other.total &&
           breakdown == other.breakdown &&
+          discount == other.discount &&
           totalInr == other.totalInr &&
           balance == other.balance &&
           status == other.status &&
@@ -434,6 +440,9 @@ class InvoicePreviewRow {
   final String kind;
   final String total;
   final String breakdown;
+
+  /// Taken off before GST, when a discount was given
+  final String? discount;
   final String? totalInr;
   final List<String> warnings;
 
@@ -443,6 +452,7 @@ class InvoicePreviewRow {
     required this.kind,
     required this.total,
     required this.breakdown,
+    this.discount,
     this.totalInr,
     required this.warnings,
   });
@@ -454,6 +464,7 @@ class InvoicePreviewRow {
       kind.hashCode ^
       total.hashCode ^
       breakdown.hashCode ^
+      discount.hashCode ^
       totalInr.hashCode ^
       warnings.hashCode;
 
@@ -467,6 +478,7 @@ class InvoicePreviewRow {
           kind == other.kind &&
           total == other.total &&
           breakdown == other.breakdown &&
+          discount == other.discount &&
           totalInr == other.totalInr &&
           warnings == other.warnings;
 }

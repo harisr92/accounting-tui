@@ -29,6 +29,8 @@ const REFUNDED_EUR_INVOICE_V4: &str = include_str!("fixtures/invoice_refunded_eu
 const TDS_REVERSED_INVOICE_V4: &str = include_str!("fixtures/invoice_tds_reversed_v4.json");
 const LINES_INVOICE_V5: &str = include_str!("fixtures/invoice_lines_v5.json");
 const LINES_CREDIT_NOTE_V5: &str = include_str!("fixtures/credit_note_lines_v5.json");
+const DISCOUNT_INVOICE_V6: &str = include_str!("fixtures/invoice_discount_v6.json");
+const DISCOUNT_PROJECT_V6: &str = include_str!("fixtures/project_discount_v6.json");
 
 #[test]
 fn hourly_project_v1_still_loads() {
@@ -253,4 +255,36 @@ fn invoice_of_several_milestones_v5_still_loads() {
 fn credit_notes_from_before_lines_name_none() {
     let note: CreditNote = decode("credit_notes", "fixture", CREDIT_NOTE_V3.as_bytes()).unwrap();
     assert!(note.lines().is_empty());
+}
+
+#[test]
+fn discounted_invoice_and_project_v6_still_load() {
+    let invoice: Invoice = decode("invoices", "fixture", DISCOUNT_INVOICE_V6.as_bytes()).unwrap();
+    assert_eq!(invoice.discount(), BigDecimal::from(4_000));
+    assert_eq!(invoice.amounts().taxable_value, BigDecimal::from(36_000));
+    assert_eq!(invoice.amounts().total, BigDecimal::from(42_480));
+
+    let project: Project = decode("projects", "fixture", DISCOUNT_PROJECT_V6.as_bytes()).unwrap();
+    let design = &project.milestones()[0];
+    assert_eq!(design.discount(), &BigDecimal::from(3_000));
+    assert_eq!(design.billed(), BigDecimal::from(27_000));
+    assert_eq!(design.net_amount(), BigDecimal::from(27_000));
+    assert_eq!(project.total_amount(), &BigDecimal::from(36_000));
+    assert_eq!(
+        invoice.lines()[0].milestone_id,
+        project.milestones()[0].id()
+    );
+}
+
+#[test]
+fn records_from_before_discounts_have_none() {
+    let invoice: Invoice = decode("invoices", "fixture", LINES_INVOICE_V5.as_bytes()).unwrap();
+    assert_eq!(invoice.discount(), BigDecimal::from(0));
+    let project: Project = decode("projects", "fixture", FIXED_V1.as_bytes()).unwrap();
+    assert!(
+        project
+            .milestones()
+            .iter()
+            .all(|m| m.discount() == &BigDecimal::from(0))
+    );
 }

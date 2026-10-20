@@ -79,7 +79,13 @@ fn months_of_a_quarter_merge_per_buyer() {
         store.repository().save(&project).unwrap();
         let day = NaiveDate::from_ymd_opt(2026, month, 10).unwrap();
         invoices
-            .issue(project.id(), &[project.milestones()[0].id()], day, None)
+            .issue(
+                project.id(),
+                &[project.milestones()[0].id()],
+                day,
+                None,
+                None,
+            )
             .unwrap();
     }
     let json = gstr1(&store, quarter(2026, 7));
@@ -118,7 +124,13 @@ fn store_with_credited_quarter() -> Store {
         store.repository().save(&project).unwrap();
         let day = NaiveDate::from_ymd_opt(2026, month, 10).unwrap();
         let issued = invoices
-            .issue(project.id(), &[project.milestones()[0].id()], day, None)
+            .issue(
+                project.id(),
+                &[project.milestones()[0].id()],
+                day,
+                None,
+                None,
+            )
             .unwrap();
         numbers.push(issued.invoice.number().clone());
     }
@@ -198,6 +210,7 @@ fn credit_notes_on_exports_are_cdnur_expwop() {
             &[project.milestones()[0].id()],
             day,
             Some(rate),
+            None,
         )
         .unwrap()
         .invoice
@@ -247,7 +260,7 @@ fn invoices_of_several_milestones_are_returned_whole() {
             .unwrap();
         store.repository().save(&project).unwrap();
         let ids: Vec<_> = project.milestones().iter().map(|m| m.id()).collect();
-        invoices.issue(project.id(), &ids, day, rate).unwrap();
+        invoices.issue(project.id(), &ids, day, rate, None).unwrap();
     }
     let json = gstr1(&store, quarter(2026, 7));
     let b2b = &json["b2b"][0]["inv"][0];

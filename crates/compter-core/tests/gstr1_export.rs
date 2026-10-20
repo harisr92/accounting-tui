@@ -32,7 +32,13 @@ fn quarterly_gstr1_json_is_written() {
         .unwrap();
     store.repository().save(&project).unwrap();
     invoices
-        .issue(project.id(), &[project.milestones()[0].id()], date, None)
+        .issue(
+            project.id(),
+            &[project.milestones()[0].id()],
+            date,
+            None,
+            None,
+        )
         .unwrap();
 
     let reports = ReportService::new(store.repository(), Some(data_dir));

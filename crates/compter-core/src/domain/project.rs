@@ -538,7 +538,8 @@ impl Project {
         index: usize,
         number: impl Into<String>,
     ) -> Result<(), DomainError> {
-        self.milestone_mut(index)?.invoice(number.into())?;
+        self.milestone_mut(index)?
+            .invoice(number.into(), &BigDecimal::zero())?;
         self.refresh();
         Ok(())
     }
@@ -561,14 +562,23 @@ impl Project {
         Ok(())
     }
 
-    /// Mark the pending milestones `ids` as billed together by invoice `number`. All or none:
-    /// one that can't be invoiced leaves every milestone as it was.
+    /// Mark the pending milestones of `lines` as billed together by invoice `number`, each
+    /// with the discount the invoice took off it. All or none: one that can't be invoiced
+    /// leaves every milestone as it was.
     pub fn invoice_milestones(
         &mut self,
-        ids: &[MilestoneId],
+        lines: &[(MilestoneId, BigDecimal)],
         number: &str,
     ) -> Result<(), DomainError> {
-        self.change_milestones(ids, |milestone| milestone.invoice(number.to_owned()))
+        let ids: Vec<MilestoneId> = lines.iter().map(|(id, _)| *id).collect();
+        self.change_milestones(&ids, |milestone| {
+            let discount = lines
+                .iter()
+                .find(|(id, _)| *id == milestone.id())
+                .map(|(_, discount)| discount)
+                .ok_or(DomainError::NotOnInvoice)?;
+            milestone.invoice(number.to_owned(), discount)
+        })
     }
 
     /// Record a credit note taking each amount (before GST) off its invoiced or paid milestone;
@@ -666,7 +676,7 @@ impl Project {
                 milestone.set_amount(amount_for(rate, milestone.logged_minutes()));
             }
         }
-        self.total_amount = self.milestones.iter().map(Milestone::amount).sum();
+        self.total_amount = self.milestones.iter().map(Milestone::billed).sum();
         self.status = ProjectStatus::derive(&self.milestones);
     }
 

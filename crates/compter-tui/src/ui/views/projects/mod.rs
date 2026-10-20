@@ -9,6 +9,7 @@ use ratatui::layout::{Constraint, Layout, Rect};
 
 use std::collections::BTreeSet;
 
+use bigdecimal::Zero;
 use chrono::Local;
 
 use crate::ui::filter::Filter;
@@ -18,8 +19,8 @@ use crate::ui::theme::Theme;
 use crate::ui::view::{Action, KeyHint, Notice, View};
 use crate::ui::views::payment::payment_form;
 use compter_core::domain::{
-    Currency, ExchangeRate, InvoiceNumber, Milestone, MilestoneId, MilestoneSort, MilestoneStatus,
-    Project, ProjectId, ProjectSummary,
+    Currency, Discount, ExchangeRate, InvoiceNumber, Milestone, MilestoneId, MilestoneSort,
+    MilestoneStatus, Project, ProjectId, ProjectSummary,
 };
 use compter_core::services::{
     InvoicePreview, InvoiceService, Issued, ProjectService, ServiceError,
@@ -75,8 +76,9 @@ enum FormKind {
     LogTime(usize),
     /// Payment for the invoice that billed a milestone
     Payment(InvoiceNumber),
-    /// The exchange rate to invoice milestones of a foreign-currency project at
-    IssueRate(ProjectId, Vec<MilestoneId>),
+    /// The discount, and the exchange rate for a foreign-currency project, to invoice
+    /// milestones with
+    Issue(ProjectId, Vec<MilestoneId>),
     Search,
     MilestoneSearch,
 }
@@ -88,7 +90,13 @@ enum ConfirmAction {
     DeleteMilestone(ProjectId, usize),
     UndoTime(ProjectId, usize),
     /// The milestones billed together, with the exchange rate for a foreign-currency project
-    Issue(ProjectId, Vec<MilestoneId>, Option<ExchangeRate>),
+    /// and any discount
+    Issue(
+        ProjectId,
+        Vec<MilestoneId>,
+        Option<ExchangeRate>,
+        Option<Discount>,
+    ),
 }
 
 enum Modal {
@@ -470,8 +478,8 @@ impl<R: Repository> ProjectsView<R> {
                 .remove_last_time_entry(id, index)
                 .and_then(|p| self.refresh(Some(p)))
                 .map(|()| "Time entry removed"),
-            ConfirmAction::Issue(id, milestones, rate) => {
-                return self.issue(id, &milestones, rate);
+            ConfirmAction::Issue(id, milestones, rate, discount) => {
+                return self.issue(id, &milestones, rate, discount.as_ref());
             }
         };
         Action::Notify(match result {
@@ -485,9 +493,10 @@ impl<R: Repository> ProjectsView<R> {
         id: ProjectId,
         milestones: &[MilestoneId],
         rate: Option<ExchangeRate>,
+        discount: Option<&Discount>,
     ) -> Action {
         let today = Local::now().date_naive();
-        let issued = match self.invoices.issue(id, milestones, today, rate) {
+        let issued = match self.invoices.issue(id, milestones, today, rate, discount) {
             Ok(issued) => issued,
             Err(error) => return Action::Notify(Notice::error(error.to_string())),
         };
@@ -535,9 +544,9 @@ impl<R: Repository> ProjectsView<R> {
         Action::Handled
     }
 
-    /// Show what the invoice billing `milestones` will be and ask before issuing it. A project
-    /// billed in a foreign currency first asks for the day's exchange rate. Returns what to do
-    /// next, for the footer.
+    /// Ask for any discount, and the day's exchange rate for a project billed in a foreign
+    /// currency, then show what the invoice billing `milestones` will be before issuing it.
+    /// Returns what to do next, for the footer.
     fn start_issue(
         &mut self,
         id: ProjectId,
@@ -547,15 +556,15 @@ impl<R: Repository> ProjectsView<R> {
             .selected
             .as_ref()
             .map_or(Currency::Inr, Project::currency);
-        if !currency.is_inr() {
-            self.modal = Some(Modal::Form(
-                FormKind::IssueRate(id, milestones),
-                forms::rate_form(currency),
-            ));
-            return Ok("Enter today's exchange rate");
-        }
-        self.preview_issue(id, milestones, None)?;
-        Ok("Check the invoice before issuing it")
+        self.modal = Some(Modal::Form(
+            FormKind::Issue(id, milestones),
+            forms::issue_form(currency),
+        ));
+        Ok(if currency.is_inr() {
+            "Enter any discount, or leave it blank"
+        } else {
+            "Enter any discount and today's exchange rate"
+        })
     }
 
     /// Open the confirm showing the invoice `milestones` would get today
@@ -564,14 +573,18 @@ impl<R: Repository> ProjectsView<R> {
         id: ProjectId,
         milestones: Vec<MilestoneId>,
         rate: Option<ExchangeRate>,
+        discount: Option<Discount>,
     ) -> Result<(), String> {
         let today = Local::now().date_naive();
         let preview = self
             .invoices
-            .preview(id, &milestones, today, rate.clone())
+            .preview(id, &milestones, today, rate.clone(), discount.as_ref())
             .map_err(|e| e.to_string())?;
         let message = issue_question(&preview, milestones.len());
-        self.ask(ConfirmAction::Issue(id, milestones, rate), message);
+        self.ask(
+            ConfirmAction::Issue(id, milestones, rate, discount),
+            message,
+        );
         Ok(())
     }
 
@@ -809,13 +822,21 @@ fn issue_question(preview: &InvoicePreview, milestones: usize) -> String {
         .as_ref()
         .map(|inr| format!(", {} in INR", money(inr)))
         .unwrap_or_default();
+    let discount = if preview.discount.is_zero() {
+        String::new()
+    } else {
+        format!(
+            ", after {} off",
+            money_in(&preview.discount, preview.currency)
+        )
+    };
     let lines = if milestones > 1 {
         format!(" billing {milestones} milestones")
     } else {
         String::new()
     };
     let mut question = format!(
-        "Issue {}{lines} to {} for {} ({}{in_rupees})?",
+        "Issue {}{lines} to {} for {} ({}{discount}{in_rupees})?",
         preview.number,
         preview.client_name,
         money_in(&a.total, preview.currency),

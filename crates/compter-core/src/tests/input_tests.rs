@@ -1,7 +1,8 @@
 use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 
-use crate::input::{date_or, duration_minutes, money, optional};
+use crate::domain::Discount;
+use crate::input::{date_or, discount, duration_minutes, money, optional};
 
 #[test]
 fn money_accepts_indian_grouping_and_rupee_sign() {
@@ -54,4 +55,19 @@ fn optional_text_is_trimmed() {
         Some("29AAPFU0939F1ZR".to_owned())
     );
     assert_eq!(optional("   "), None);
+}
+
+#[test]
+fn discount_is_a_percent_an_amount_or_nothing() {
+    assert_eq!(discount("  ").unwrap(), None);
+    assert_eq!(
+        discount(" 12.5 % ").unwrap(),
+        Some(Discount::Percent("12.5".parse().unwrap()))
+    );
+    assert_eq!(
+        discount("₹5,000").unwrap(),
+        Some(Discount::Amount(BigDecimal::from(5000)))
+    );
+    assert!(discount("ten%").is_err());
+    assert!(discount("abc").is_err());
 }

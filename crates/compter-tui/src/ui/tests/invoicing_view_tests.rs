@@ -63,7 +63,7 @@ fn milestone_status(store: &Store, project: &Project) -> MilestoneStatus {
 fn invoicing_before_settings_says_where_to_go() {
     let (store, _) = store_with_milestone(false);
     let mut app = invoicing_app(&store);
-    type_keys(&mut app, "\ti");
+    type_keys(&mut app, "\ti\n");
     let screen = screen(&app, W, H);
     assert!(screen.contains("Settings tab first"), "{screen}");
 }
@@ -97,8 +97,11 @@ fn issue_from_projects_then_see_it_in_invoices() {
     let (store, project) = store_with_milestone(true);
     let mut app = invoicing_app(&store);
     type_keys(&mut app, "\ti");
+    assert!(screen(&app, W, H).contains("Discount"));
+    app.handle_key(Key::Enter);
     let question = screen(&app, W, H);
     assert!(question.contains("Issue INV/"), "{question}");
+    assert!(!question.contains(" off"), "{question}");
     assert!(question.contains("₹59,000.00"));
     assert!(question.contains("IGST 9,000.00"));
 
@@ -120,7 +123,7 @@ fn issue_from_projects_then_see_it_in_invoices() {
 fn payment_must_add_up_and_shows_in_projects() {
     let (store, project) = store_with_milestone(true);
     let mut app = invoicing_app(&store);
-    type_keys(&mut app, "\tiy");
+    type_keys(&mut app, "\ti\ny");
     app.handle_key(Key::Char('2'));
 
     app.handle_key(Key::Char('p'));
@@ -148,7 +151,7 @@ fn locked_milestones_still_take_the_payment_key() {
     let mut app = invoicing_app(&store);
     type_keys(&mut app, "\tp");
     assert!(screen(&app, W, H).contains("Invoice the milestone first"));
-    type_keys(&mut app, "iyp");
+    type_keys(&mut app, "i\nyp");
     assert!(screen(&app, W, H).contains("Record payment"));
 }
 
@@ -156,7 +159,7 @@ fn locked_milestones_still_take_the_payment_key() {
 fn part_payments_show_their_history_and_balance() {
     let (store, project) = store_with_milestone(true);
     let mut app = invoicing_app(&store);
-    type_keys(&mut app, "\tiy");
+    type_keys(&mut app, "\ti\ny");
     app.handle_key(Key::Char('2'));
 
     // ₹59,000 due: receive 20,000 now
@@ -255,8 +258,8 @@ fn dollar_invoices_ask_for_the_rate_and_payments_for_rupees_banked() {
     assert!(milestones.contains("$1,000.00"), "{milestones}");
 
     type_keys(&mut app, "\ti");
-    assert!(screen(&app, W, H).contains("Exchange rate"));
-    type_keys(&mut app, "abc\n");
+    assert!(screen(&app, W, H).contains("₹ per unit"));
+    type_keys(&mut app, "\tabc\n");
     assert!(screen(&app, W, H).contains("amount must be a number"));
     app.handle_key(Key::Ctrl('u'));
     type_keys(&mut app, "83.5\n");
@@ -345,7 +348,7 @@ fn credit_lines(app: &mut App, amount: &str) {
 fn a_credit_note_is_confirmed_then_cancels_the_invoice() {
     let (store, project) = store_with_milestone(true);
     let mut app = invoicing_app(&store);
-    type_keys(&mut app, "\tiy");
+    type_keys(&mut app, "\ti\ny");
     app.handle_key(Key::Char('2'));
 
     // The one line is picked, for all of it
@@ -397,7 +400,7 @@ fn a_credit_note_is_confirmed_then_cancels_the_invoice() {
 fn a_credit_note_on_a_paid_invoice_refunds_or_keeps_the_rest() {
     let (store, project) = store_with_milestone(true);
     let mut app = invoicing_app(&store);
-    type_keys(&mut app, "\tiy");
+    type_keys(&mut app, "\ti\ny");
     app.handle_key(Key::Char('2'));
     // Paid in full: ₹59,000
     app.handle_key(Key::Char('p'));
@@ -455,7 +458,7 @@ fn a_credit_note_on_a_paid_invoice_refunds_or_keeps_the_rest() {
 fn cancelling_after_a_tds_payment_asks_for_the_tds_reversed() {
     let (store, _) = store_with_milestone(true);
     let mut app = invoicing_app(&store);
-    type_keys(&mut app, "\tiy");
+    type_keys(&mut app, "\ti\ny");
     app.handle_key(Key::Char('2'));
     // ₹59,000: ₹54,000 banked, ₹5,000 TDS
     app.handle_key(Key::Char('p'));
@@ -496,7 +499,7 @@ fn cancelling_after_a_tds_payment_asks_for_the_tds_reversed() {
 fn search_narrows_invoices() {
     let (store, _) = store_with_milestone(true);
     let mut app = invoicing_app(&store);
-    type_keys(&mut app, "\tiy");
+    type_keys(&mut app, "\ti\ny");
     app.handle_key(Key::Char('2'));
     app.handle_key(Key::Char('/'));
     type_keys(&mut app, "globex\n");
@@ -584,7 +587,7 @@ fn a_credit_note_takes_back_the_lines_picked() {
         .unwrap();
     store.repository().save(&project).unwrap();
     let mut app = invoicing_app(&store);
-    type_keys(&mut app, "\tia\ny");
+    type_keys(&mut app, "\tia\n\ny");
     app.handle_key(Key::Char('2'));
     let listed = screen(&app, W, H);
     assert!(listed.contains("Design, Build"), "{listed}");
@@ -642,4 +645,26 @@ fn a_credit_note_takes_back_the_lines_picked() {
             .iter()
             .all(|m| m.status() == MilestoneStatus::Credited)
     );
+}
+
+#[test]
+fn a_discount_comes_off_before_gst() {
+    let (store, project) = store_with_milestone(true);
+    let mut app = invoicing_app(&store);
+    type_keys(&mut app, "\ti");
+    type_keys(&mut app, "110%\n");
+    assert!(screen(&app, W, H).contains("less than 100"));
+    app.handle_key(Key::Ctrl('u'));
+    type_keys(&mut app, "10%\n");
+    let question = screen(&app, W, H);
+    // ₹45,000 + IGST 8,100
+    assert!(question.contains("₹53,100.00"), "{question}");
+    assert!(question.contains("after ₹5,000.00 off"), "{question}");
+
+    app.handle_key(Key::Char('y'));
+    let stored = store.repository().load(project.id()).unwrap();
+    assert_eq!(stored.milestones()[0].billed(), BigDecimal::from(45_000));
+    app.handle_key(Key::Char('2'));
+    let invoices = screen(&app, W, H);
+    assert!(invoices.contains("outstanding ₹53,100.00"), "{invoices}");
 }

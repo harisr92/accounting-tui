@@ -19,8 +19,13 @@ use crate::domain::Invoice;
 pub(super) type Migration = fn(&WriteTransaction) -> Result<(), StorageError>;
 
 /// `MIGRATIONS[i]` upgrades schema version `i + 1` to `i + 2`
-pub(super) const MIGRATIONS: &[Migration] =
-    &[payments_list, credit_notes, credit_returns, invoice_lines];
+pub(super) const MIGRATIONS: &[Migration] = &[
+    payments_list,
+    credit_notes,
+    credit_returns,
+    invoice_lines,
+    invoice_discounts,
+];
 
 /// Run every step from `from` up to the current version, inside the caller's transaction
 pub(super) fn upgrade(txn: &WriteTransaction, from: u32) -> Result<(), StorageError> {
@@ -70,6 +75,13 @@ fn invoice_lines(txn: &WriteTransaction) -> Result<(), StorageError> {
         let invoice: Invoice = decode(INVOICES.name(), &key, &bytes)?;
         put_invoice(txn, &invoice)?;
     }
+    Ok(())
+}
+
+/// v5 → v6: nothing to rewrite. Invoice lines and milestones record a discount (defaulted). The
+/// version moves so an older compter refuses the file instead of reading a discounted milestone
+/// as billed, and owed, in full.
+fn invoice_discounts(_txn: &WriteTransaction) -> Result<(), StorageError> {
     Ok(())
 }
 

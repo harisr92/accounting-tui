@@ -183,6 +183,7 @@ abstract class RustLibApi extends BaseApi {
     required String projectId,
     required List<String> milestoneIds,
     String? rate,
+    String? discount,
   });
 
   Future<String?> crateApiAppCompterAppLeaseHolder({
@@ -215,6 +216,7 @@ abstract class RustLibApi extends BaseApi {
     required String projectId,
     required List<String> milestoneIds,
     String? rate,
+    String? discount,
   });
 
   Future<ProfileRow?> crateApiAppCompterAppProfile({required CompterApp that});
@@ -1010,6 +1012,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required String projectId,
     required List<String> milestoneIds,
     String? rate,
+    String? discount,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1022,6 +1025,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(projectId, serializer);
           sse_encode_list_String(milestoneIds, serializer);
           sse_encode_opt_String(rate, serializer);
+          sse_encode_opt_String(discount, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1034,7 +1038,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_api_error,
         ),
         constMeta: kCrateApiAppCompterAppIssueInvoiceConstMeta,
-        argValues: [that, projectId, milestoneIds, rate],
+        argValues: [that, projectId, milestoneIds, rate, discount],
         apiImpl: this,
       ),
     );
@@ -1043,7 +1047,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiAppCompterAppIssueInvoiceConstMeta =>
       const TaskConstMeta(
         debugName: "CompterApp_issue_invoice",
-        argNames: ["that", "projectId", "milestoneIds", "rate"],
+        argNames: ["that", "projectId", "milestoneIds", "rate", "discount"],
       );
 
   @override
@@ -1239,6 +1243,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required String projectId,
     required List<String> milestoneIds,
     String? rate,
+    String? discount,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -1251,6 +1256,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(projectId, serializer);
           sse_encode_list_String(milestoneIds, serializer);
           sse_encode_opt_String(rate, serializer);
+          sse_encode_opt_String(discount, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1263,7 +1269,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_api_error,
         ),
         constMeta: kCrateApiAppCompterAppPreviewInvoiceConstMeta,
-        argValues: [that, projectId, milestoneIds, rate],
+        argValues: [that, projectId, milestoneIds, rate, discount],
         apiImpl: this,
       ),
     );
@@ -1272,7 +1278,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiAppCompterAppPreviewInvoiceConstMeta =>
       const TaskConstMeta(
         debugName: "CompterApp_preview_invoice",
-        argNames: ["that", "projectId", "milestoneIds", "rate"],
+        argNames: ["that", "projectId", "milestoneIds", "rate", "discount"],
       );
 
   @override
@@ -2098,8 +2104,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   InvoiceDetail dco_decode_invoice_detail(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 22)
-      throw Exception('unexpected arr length: expect 22 but see ${arr.length}');
+    if (arr.length != 23)
+      throw Exception('unexpected arr length: expect 23 but see ${arr.length}');
     return InvoiceDetail(
       number: dco_decode_String(arr[0]),
       date: dco_decode_String(arr[1]),
@@ -2111,18 +2117,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       exchangeRate: dco_decode_opt_String(arr[7]),
       total: dco_decode_String(arr[8]),
       breakdown: dco_decode_String(arr[9]),
-      totalInr: dco_decode_opt_String(arr[10]),
-      balance: dco_decode_String(arr[11]),
-      status: dco_decode_String(arr[12]),
-      settled: dco_decode_bool(arr[13]),
-      creditable: dco_decode_bool(arr[14]),
-      creditGuide: dco_decode_String(arr[15]),
-      clientAdvance: dco_decode_opt_String(arr[16]),
-      tdsWithheld: dco_decode_bool(arr[17]),
-      foreign: dco_decode_bool(arr[18]),
-      history: dco_decode_list_history_row(arr[19]),
-      balanceValue: dco_decode_String(arr[20]),
-      usualTds: dco_decode_opt_String(arr[21]),
+      discount: dco_decode_opt_String(arr[10]),
+      totalInr: dco_decode_opt_String(arr[11]),
+      balance: dco_decode_String(arr[12]),
+      status: dco_decode_String(arr[13]),
+      settled: dco_decode_bool(arr[14]),
+      creditable: dco_decode_bool(arr[15]),
+      creditGuide: dco_decode_String(arr[16]),
+      clientAdvance: dco_decode_opt_String(arr[17]),
+      tdsWithheld: dco_decode_bool(arr[18]),
+      foreign: dco_decode_bool(arr[19]),
+      history: dco_decode_list_history_row(arr[20]),
+      balanceValue: dco_decode_String(arr[21]),
+      usualTds: dco_decode_opt_String(arr[22]),
     );
   }
 
@@ -2159,16 +2166,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   InvoicePreviewRow dco_decode_invoice_preview_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return InvoicePreviewRow(
       number: dco_decode_String(arr[0]),
       clientName: dco_decode_String(arr[1]),
       kind: dco_decode_String(arr[2]),
       total: dco_decode_String(arr[3]),
       breakdown: dco_decode_String(arr[4]),
-      totalInr: dco_decode_opt_String(arr[5]),
-      warnings: dco_decode_list_String(arr[6]),
+      discount: dco_decode_opt_String(arr[5]),
+      totalInr: dco_decode_opt_String(arr[6]),
+      warnings: dco_decode_list_String(arr[7]),
     );
   }
 
@@ -2865,6 +2873,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_exchangeRate = sse_decode_opt_String(deserializer);
     var var_total = sse_decode_String(deserializer);
     var var_breakdown = sse_decode_String(deserializer);
+    var var_discount = sse_decode_opt_String(deserializer);
     var var_totalInr = sse_decode_opt_String(deserializer);
     var var_balance = sse_decode_String(deserializer);
     var var_status = sse_decode_String(deserializer);
@@ -2888,6 +2897,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       exchangeRate: var_exchangeRate,
       total: var_total,
       breakdown: var_breakdown,
+      discount: var_discount,
       totalInr: var_totalInr,
       balance: var_balance,
       status: var_status,
@@ -2942,6 +2952,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_kind = sse_decode_String(deserializer);
     var var_total = sse_decode_String(deserializer);
     var var_breakdown = sse_decode_String(deserializer);
+    var var_discount = sse_decode_opt_String(deserializer);
     var var_totalInr = sse_decode_opt_String(deserializer);
     var var_warnings = sse_decode_list_String(deserializer);
     return InvoicePreviewRow(
@@ -2950,6 +2961,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       kind: var_kind,
       total: var_total,
       breakdown: var_breakdown,
+      discount: var_discount,
       totalInr: var_totalInr,
       warnings: var_warnings,
     );
@@ -3749,6 +3761,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.exchangeRate, serializer);
     sse_encode_String(self.total, serializer);
     sse_encode_String(self.breakdown, serializer);
+    sse_encode_opt_String(self.discount, serializer);
     sse_encode_opt_String(self.totalInr, serializer);
     sse_encode_String(self.balance, serializer);
     sse_encode_String(self.status, serializer);
@@ -3796,6 +3809,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.kind, serializer);
     sse_encode_String(self.total, serializer);
     sse_encode_String(self.breakdown, serializer);
+    sse_encode_opt_String(self.discount, serializer);
     sse_encode_opt_String(self.totalInr, serializer);
     sse_encode_list_String(self.warnings, serializer);
   }
@@ -4347,11 +4361,13 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
     required String projectId,
     required List<String> milestoneIds,
     String? rate,
+    String? discount,
   }) => RustLib.instance.api.crateApiAppCompterAppIssueInvoice(
     that: this,
     projectId: projectId,
     milestoneIds: milestoneIds,
     rate: rate,
+    discount: discount,
   );
 
   /// Who has compter open, from the `lease.json` found in the sync folder: `compter is open
@@ -4390,16 +4406,18 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
 
   /// The invoice pending milestones of a project would get together today, without saving
   /// anything. `rate` (rupees per unit) is needed when the project is billed in a foreign
-  /// currency.
+  /// currency; `discount` (`5000` or `10%`, blank for none) comes off before GST.
   Future<InvoicePreviewRow> previewInvoice({
     required String projectId,
     required List<String> milestoneIds,
     String? rate,
+    String? discount,
   }) => RustLib.instance.api.crateApiAppCompterAppPreviewInvoice(
     that: this,
     projectId: projectId,
     milestoneIds: milestoneIds,
     rate: rate,
+    discount: discount,
   );
 
   /// The business profile, or `None` before it is set up (invoicing needs it)

@@ -6,7 +6,7 @@ use super::fixtures::{
     foreign_client, hourly_project, india, profile,
 };
 use crate::domain::{
-    ClientRegion, Currency, ExchangeRate, FiscalYear, InvoiceKind, InvoiceNumber, Project,
+    ClientRegion, Currency, Discount, ExchangeRate, FiscalYear, InvoiceKind, InvoiceNumber, Project,
 };
 use crate::services::{InvoicingError, build_invoice, chart};
 
@@ -24,6 +24,7 @@ fn build(
         &[&project.milestones()[0]],
         number(),
         date(),
+        None,
         None,
     )
 }
@@ -197,6 +198,7 @@ fn foreign_currency_export_prints_in_that_currency_and_posts_rupees() {
         number(),
         date(),
         Some(rate.clone()),
+        None,
     )
     .unwrap();
     let invoice = &built.invoice;
@@ -232,6 +234,7 @@ fn rupee_projects_ignore_a_rate() {
         number(),
         date(),
         Some(rate),
+        None,
     )
     .unwrap();
     assert_eq!(built.invoice.currency(), Currency::Inr);
@@ -246,7 +249,8 @@ fn each_milestone_is_a_line_of_its_own() {
         .unwrap();
     let milestones: Vec<_> = project.milestones().iter().collect();
     let seller = profile(None, None);
-    let built = build_invoice(&seller, &project, &milestones, number(), date(), None).unwrap();
+    let built =
+        build_invoice(&seller, &project, &milestones, number(), date(), None, None).unwrap();
     let invoice = &built.invoice;
     assert_eq!(invoice.kind(), InvoiceKind::Plain);
     assert_eq!(invoice.lines().len(), 2);
@@ -269,7 +273,8 @@ fn each_milestone_is_a_line_of_its_own() {
         p
     };
     let milestones: Vec<_> = project.milestones().iter().collect();
-    let built = build_invoice(&seller, &project, &milestones, number(), date(), None).unwrap();
+    let built =
+        build_invoice(&seller, &project, &milestones, number(), date(), None, None).unwrap();
     let invoice = &built.invoice;
     assert_eq!(invoice.gst().unwrap().line_items.len(), 2);
     assert_eq!(invoice.print().rows.len(), 2);
@@ -282,12 +287,20 @@ fn nothing_selected_is_nothing_to_invoice() {
     let project = fixed_project(client(Some(OTHER_STATE_GSTIN), india(), &[]), 1_000);
     let seller = profile(Some(SELLER_GSTIN), None);
     assert!(matches!(
-        build_invoice(&seller, &project, &[], number(), date(), None),
+        build_invoice(&seller, &project, &[], number(), date(), None, None),
         Err(InvoicingError::NothingSelected)
     ));
     let design = &project.milestones()[0];
     assert!(matches!(
-        build_invoice(&seller, &project, &[design, design], number(), date(), None),
+        build_invoice(
+            &seller,
+            &project,
+            &[design, design],
+            number(),
+            date(),
+            None,
+            None
+        ),
         Err(InvoicingError::Domain(_))
     ));
     let other = fixed_project(client(None, india(), &[]), 1_000);
@@ -298,8 +311,123 @@ fn nothing_selected_is_nothing_to_invoice() {
             &[&other.milestones()[0]],
             number(),
             date(),
-            None
+            None,
+            None,
         ),
         Err(InvoicingError::NotPending)
     ));
+}
+
+fn ten_percent() -> Discount {
+    Discount::Percent(rupees(10))
+}
+
+#[test]
+fn a_discount_comes_off_before_gst_is_charged() {
+    let seller = profile(Some(SELLER_GSTIN), None);
+    let mut project = fixed_project(client(Some(SAME_STATE_GSTIN), india(), &[]), 30_000);
+    project
+        .add_milestone("Build", date(), Some(rupees(10_000)))
+        .unwrap();
+    let milestones: Vec<_> = project.milestones().iter().collect();
+    let built = build_invoice(
+        &seller,
+        &project,
+        &milestones,
+        number(),
+        date(),
+        None,
+        Some(&ten_percent()),
+    )
+    .unwrap();
+    let invoice = &built.invoice;
+    let amounts = invoice.amounts();
+    assert_eq!(amounts.taxable_value, rupees(36_000));
+    assert_eq!(
+        (&amounts.cgst, &amounts.sgst),
+        (&rupees(3_240), &rupees(3_240))
+    );
+    assert_eq!(amounts.total, rupees(42_480));
+    assert_eq!(invoice.discount(), rupees(4_000));
+    let lines = invoice.lines();
+    assert_eq!(
+        (&lines[0].taxable_value, &lines[0].discount),
+        (&rupees(27_000), &rupees(3_000))
+    );
+    assert_eq!(
+        (&lines[1].taxable_value, &lines[1].discount),
+        (&rupees(9_000), &rupees(1_000))
+    );
+    let rows = &invoice.print().rows;
+    assert!(rows[0].description.ends_with("less discount Rs. 3,000.00"));
+    assert_eq!(rows[0].taxable_value, "27,000.00");
+    assert_eq!(
+        invoice.terms()[0],
+        "Discount of Rs. 4,000.00 (10%) on Rs. 40,000.00, taken off before tax"
+    );
+    let receivable: BigDecimal = built
+        .entries
+        .iter()
+        .filter(|e| e.entry_type == EntryType::Debit)
+        .map(|e| e.amount.clone())
+        .sum();
+    assert_eq!(receivable, rupees(42_480));
+}
+
+#[test]
+fn a_discount_on_an_export_is_converted_with_the_rest() {
+    let seller = profile(Some(SELLER_GSTIN), Some("AD2710260012345"));
+    let project = fixed_project(foreign_client(Currency::Usd), 1_200);
+    let rate = ExchangeRate::new(rupees(80)).unwrap();
+    let built = build_invoice(
+        &seller,
+        &project,
+        &[&project.milestones()[0]],
+        number(),
+        date(),
+        Some(rate),
+        Some(&Discount::Amount(rupees(200))),
+    )
+    .unwrap();
+    let invoice = &built.invoice;
+    assert_eq!(invoice.amounts().total, rupees(1_000));
+    assert_eq!(invoice.discount(), rupees(200));
+    assert_eq!(invoice.print().total, "1,000.00");
+    assert!(invoice.terms()[1].contains("export under LUT"));
+    assert_eq!(
+        invoice.terms()[2],
+        "Discount of USD 200.00 on USD 1,200.00, taken off before tax"
+    );
+    for entry in &built.entries {
+        assert_eq!(entry.amount, rupees(80_000));
+    }
+}
+
+#[test]
+fn a_discount_must_leave_something_to_bill() {
+    let seller = profile(None, None);
+    let project = fixed_project(client(None, abroad(), &["1 Main St"]), 1_000);
+    let result = build_invoice(
+        &seller,
+        &project,
+        &[&project.milestones()[0]],
+        number(),
+        date(),
+        None,
+        Some(&Discount::Amount(rupees(1_000))),
+    );
+    assert!(matches!(result, Err(InvoicingError::Domain(_))));
+
+    let built = build_invoice(
+        &seller,
+        &project,
+        &[&project.milestones()[0]],
+        number(),
+        date(),
+        None,
+        Some(&ten_percent()),
+    )
+    .unwrap();
+    assert_eq!(built.invoice.amounts().total, rupees(900));
+    assert_eq!(built.invoice.print().total, "900.00");
 }

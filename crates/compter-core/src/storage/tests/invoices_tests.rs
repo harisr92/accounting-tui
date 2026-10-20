@@ -53,6 +53,7 @@ fn issue(
         number,
         date(),
         None,
+        None,
     )
     .unwrap();
     let mut invoiced = project.clone();
