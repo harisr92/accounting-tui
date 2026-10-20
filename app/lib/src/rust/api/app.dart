@@ -13,7 +13,7 @@ import 'profile.dart';
 import 'reports.dart';
 import 'rows.dart';
 
-// These functions are ignored because they are not marked as `pub`: `checked_draft`, `closed`, `credit_draft`, `credit_lines`, `date`, `detail_in`, `detail`, `exchange_rate`, `expense_draft`, `expense_id`, `index_of`, `milestone_draft`, `milestone_id`, `milestone_ids_of`, `optional_money`, `over`, `project_draft`, `project_id`, `today`
+// These functions are ignored because they are not marked as `pub`: `checked_draft`, `closed`, `credit_draft`, `credit_lines`, `date`, `detail_in`, `detail`, `discount_error`, `discount_of`, `exchange_rate`, `expense_draft`, `expense_id`, `index_of`, `milestone_draft`, `milestone_id`, `milestone_ids_of`, `optional_money`, `over`, `project_draft`, `project_id`, `today`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>>
 abstract class CompterApp implements RustOpaqueInterface {
@@ -103,6 +103,7 @@ abstract class CompterApp implements RustOpaqueInterface {
     required String projectId,
     required List<String> milestoneIds,
     String? rate,
+    String? discount,
   });
 
   /// Who has compter open, from the `lease.json` found in the sync folder: `compter is open
@@ -133,11 +134,12 @@ abstract class CompterApp implements RustOpaqueInterface {
 
   /// The invoice pending milestones of a project would get together today, without saving
   /// anything. `rate` (rupees per unit) is needed when the project is billed in a foreign
-  /// currency.
+  /// currency; `discount` (`5000` or `10%`, blank for none) comes off before GST.
   Future<InvoicePreviewRow> previewInvoice({
     required String projectId,
     required List<String> milestoneIds,
     String? rate,
+    String? discount,
   });
 
   /// The business profile, or `None` before it is set up (invoicing needs it)

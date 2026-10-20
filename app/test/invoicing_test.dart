@@ -38,10 +38,15 @@ void main() {
     await tester.tap(find.text('Issue invoice'));
     await settle(tester);
 
+    // A discount comes off before GST
+    await tester.enterText(find.widgetWithText(TextField, 'Discount'), '10%');
+    await tester.tap(find.text('Preview'));
+    await settle(tester);
     expect(
-      find.text('₹47,200.00 (40,000.00 + CGST 3,600.00 + SGST 3,600.00)'),
+      find.text('₹42,480.00 (36,000.00 + CGST 3,240.00 + SGST 3,240.00)'),
       findsOneWidget,
     );
+    expect(find.text('After ₹4,000.00 discount'), findsOneWidget);
     await tester.tap(find.text('Issue'));
     await pumpUntil(tester, find.byTooltip('Share PDF'));
 
@@ -49,6 +54,7 @@ void main() {
     expect(find.byTooltip('Open PDF'), findsOneWidget);
     expect(find.text('Nothing received yet'), findsOneWidget);
     expect(find.textContaining('Issued NDC/'), findsOneWidget);
+    expect(find.text('After ₹4,000.00 discount, before GST'), findsOneWidget);
   });
 
   testWidgets(
@@ -85,6 +91,8 @@ void main() {
       await tester.tap(find.text('Select all'));
       await tester.pump();
       await tester.tap(find.text('Next'));
+      await settle(tester);
+      await tester.tap(find.text('Preview'));
       await settle(tester);
       expect(find.text('2 milestones'), findsOneWidget);
       // ₹50,000 + 18% GST

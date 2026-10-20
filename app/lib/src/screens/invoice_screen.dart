@@ -165,6 +165,7 @@ class _InvoiceBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final totalInr = invoice.totalInr;
+    final discount = invoice.discount;
     return ListView(
       padding: const EdgeInsets.only(bottom: gutter),
       children: [
@@ -186,6 +187,8 @@ class _InvoiceBody extends StatelessWidget {
           if (totalInr != null) ('In INR', totalInr),
         ]),
         SectionNote(invoice.breakdown),
+        if (discount != null)
+          SectionNote('After $discount discount, before GST'),
         if (invoice.clientAdvance != null)
           SectionNote(
             '${invoice.clientAdvance} held as an advance for ${invoice.clientName}',

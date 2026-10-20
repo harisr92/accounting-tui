@@ -18,9 +18,9 @@ const _line = 'line:';
 
 /// Pick which pending milestones of [project] to invoice together, starting from [milestone],
 /// then show the invoice they would get today and issue it on a yes, like `i` in the terminal.
-/// With only [milestone] pending there is nothing to pick. A project billed in a foreign
-/// currency first asks for today's exchange rate. `null` when cancelled or refused (the refusal
-/// is shown).
+/// With only [milestone] pending there is nothing to pick. Asks for any discount first, and
+/// today's exchange rate for a project billed in a foreign currency. `null` when cancelled or
+/// refused (the refusal is shown).
 Future<IssuedRow?> issueInvoice(
   BuildContext context,
   CompterApp app,
@@ -49,43 +49,38 @@ Future<IssuedRow?> issueInvoice(
     if (picked == null || !context.mounted) return null;
     milestoneIds = [for (final (id, _) in picked) id];
   }
-  String? rate;
-  InvoicePreviewRow? preview;
-  if (project.currency == 'INR') {
-    try {
-      preview = await app.previewInvoice(
-        projectId: project.id,
-        milestoneIds: milestoneIds,
-      );
-    } on ApiError catch (error) {
-      if (context.mounted) notify(context, error.message, error: true);
-      return null;
-    }
-  } else {
-    final asked = await FormDialog.show<(String, InvoicePreviewRow)>(
-      context,
-      title: 'Exchange rate',
-      submitLabel: 'Preview',
-      fields: [
+  final foreign = project.currency != 'INR';
+  final asked = await FormDialog.show<(String?, String?, InvoicePreviewRow)>(
+    context,
+    title: 'Invoice',
+    submitLabel: 'Preview',
+    fields: [
+      const FieldSpec(
+        'discount',
+        'Discount',
+        hint: 'e.g. 5000 or 10%, before GST; blank for none',
+      ),
+      if (foreign)
         FieldSpec(
           'rate',
           '₹ per ${project.currency}',
           hint: "today's rate, e.g. RBI reference rate",
           keyboardType: _amount,
         ),
-      ],
-      submit: (values) async => (
-        values['rate']!,
-        await app.previewInvoice(
-          projectId: project.id,
-          milestoneIds: milestoneIds,
-          rate: values['rate'],
-        ),
+    ],
+    submit: (values) async => (
+      values['rate'],
+      values['discount'],
+      await app.previewInvoice(
+        projectId: project.id,
+        milestoneIds: milestoneIds,
+        rate: values['rate'],
+        discount: values['discount'],
       ),
-    );
-    if (asked == null) return null;
-    (rate, preview) = asked;
-  }
+    ),
+  );
+  if (asked == null) return null;
+  final (rate, discount, preview) = asked;
   if (!context.mounted) return null;
   final yes = await confirm(
     context,
@@ -95,6 +90,7 @@ Future<IssuedRow?> issueInvoice(
       '${preview.clientName} · ${preview.kind}',
       if (milestoneIds.length > 1) '${milestoneIds.length} milestones',
       '${preview.total} (${preview.breakdown})',
+      if (preview.discount != null) 'After ${preview.discount} discount',
       if (preview.totalInr != null) '${preview.totalInr} in INR',
       for (final warning in preview.warnings) 'Note: $warning',
     ],
@@ -105,6 +101,7 @@ Future<IssuedRow?> issueInvoice(
       projectId: project.id,
       milestoneIds: milestoneIds,
       rate: rate,
+      discount: discount,
     );
   } on ApiError catch (error) {
     if (context.mounted) notify(context, error.message, error: true);
