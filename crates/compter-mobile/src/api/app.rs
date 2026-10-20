@@ -143,6 +143,14 @@ impl CompterApp {
         Ok(self.projects.delete(project_id(&id)?)?)
     }
 
+    /// Archive a finished project, hiding it from the list, or restore an archived one
+    pub fn set_archived(&mut self, id: String, archived: bool) -> Result<ProjectDetail, ApiError> {
+        let id = project_id(&id)?;
+        Ok(ProjectDetail::from(
+            &self.projects.set_archived(id, archived)?,
+        ))
+    }
+
     pub fn add_milestone(
         &mut self,
         project_id: String,

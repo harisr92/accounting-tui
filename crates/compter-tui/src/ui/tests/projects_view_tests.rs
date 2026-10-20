@@ -308,7 +308,7 @@ fn listed(app: &crate::app::App) -> String {
 }
 
 #[test]
-fn archived_projects_leave_the_list_until_shown() {
+fn archived_projects_are_listed_on_their_own() {
     let store = store_with_finished_project();
     let mut app = projects_app(&store);
     // "Audit" sorts first and is selected
@@ -318,14 +318,20 @@ fn archived_projects_leave_the_list_until_shown() {
     assert!(list.contains("Website"), "{list}");
 
     app.handle_key(Key::Char('H'));
-    let screen = screen(&app, W, H);
-    assert!(screen.contains("Projects + archived"), "{screen}");
-    assert!(screen.contains("Audit"), "{screen}");
+    let list = listed(&app);
+    assert!(list.contains("Archived projects"), "{list}");
+    assert!(list.contains("Audit"), "{list}");
+    assert!(!list.contains("Website"), "{list}");
 
-    // The cursor stayed on Website; Audit is listed above it again. Restore it.
-    app.handle_key(Key::Char('k'));
+    // Restored, it leaves the archived list for the other one
     app.handle_key(Key::Char('A'));
     assert!(!store.repository().list().unwrap()[0].is_archived());
+    let screen = screen(&app, W, H);
+    assert!(screen.contains("No archived projects"), "{screen}");
+
+    app.handle_key(Key::Char('H'));
+    let list = listed(&app);
+    assert!(list.contains("Audit") && list.contains("Website"), "{list}");
 }
 
 #[test]

@@ -71,6 +71,56 @@ void main() {
     expect(find.text('₹40,000.00'), findsWidgets);
   });
 
+  testWidgets('an archived project is listed on its own until restored', (
+    tester,
+  ) async {
+    await launchDemo(tester);
+    // The demo has two API Audits; this one is paid in full
+    await tester.tap(find.text('Initrode GmbH'));
+    await settle(tester);
+
+    await tester.tap(find.byTooltip('Archive project'));
+    await settle(tester);
+    expect(find.byTooltip('New project'), findsOneWidget);
+    // The list refetches behind its old rows, showing no spinner to wait for
+    final audit = find.widgetWithText(ListTile, 'Initrode GmbH');
+    for (var i = 0; i < 100 && audit.evaluate().isNotEmpty; i++) {
+      await settle(tester);
+    }
+    expect(audit, findsNothing);
+
+    await tester.tap(find.byTooltip('Show archived'));
+    await settle(tester);
+    expect(audit, findsOneWidget);
+    expect(find.text('Data Pipeline'), findsNothing);
+
+    await tester.tap(audit);
+    await settle(tester);
+    expect(find.byType(FloatingActionButton), findsNothing);
+    await tester.tap(find.byTooltip('Restore project'));
+    await settle(tester);
+    expect(find.byTooltip('Archive project'), findsOneWidget);
+
+    await tester.pageBack();
+    await settle(tester);
+    for (var i = 0; i < 100 && audit.evaluate().isNotEmpty; i++) {
+      await settle(tester);
+    }
+    expect(find.text('No archived projects.'), findsOneWidget);
+    await tester.tap(find.byTooltip('Show projects'));
+    await settle(tester);
+    expect(audit, findsOneWidget);
+    expect(find.text('Data Pipeline'), findsOneWidget);
+  });
+
+  testWidgets('a project with work pending offers no archive', (tester) async {
+    await launchDemo(tester);
+    await tester.tap(find.text('Website Revamp'));
+    await settle(tester);
+
+    expect(find.byTooltip('Archive project'), findsNothing);
+  });
+
   testWidgets('a refused rate stays in the form under its field', (
     tester,
   ) async {

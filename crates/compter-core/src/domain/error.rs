@@ -38,7 +38,7 @@ pub enum DomainError {
         "only finished projects can be archived: invoice or delete the pending milestones first"
     )]
     ProjectNotFinished,
-    #[error("this project is archived; restore it (A) to add work")]
+    #[error("this project is archived; restore it to add work")]
     ProjectArchived,
     #[error("a client abroad can't have a GSTIN")]
     ForeignClientWithGstin,

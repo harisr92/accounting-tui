@@ -18,9 +18,9 @@ import '../ui/search.dart';
 import '../ui/section.dart';
 import '../ui/theme.dart';
 
-/// One project: its totals and milestones. The app bar edits or deletes the project, and
-/// searches its milestones by name or amount; tapping a milestone offers what can be done with
-/// it.
+/// One project: its totals and milestones. The app bar edits, archives (once finished) or
+/// deletes the project, and searches its milestones by name or amount; tapping a milestone
+/// offers what can be done with it.
 class ProjectScreen extends ConsumerStatefulWidget {
   const ProjectScreen({super.key, required this.id});
 
@@ -66,6 +66,18 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> with Searching {
                     if (updated != null) _show(ref, updated);
                   },
                 ),
+                if (detail.archived)
+                  IconButton(
+                    tooltip: 'Restore project',
+                    icon: const Icon(Icons.unarchive_outlined),
+                    onPressed: () => _setArchived(context, ref, detail, false),
+                  )
+                else if (detail.archivable)
+                  IconButton(
+                    tooltip: 'Archive project',
+                    icon: const Icon(Icons.archive_outlined),
+                    onPressed: () => _setArchived(context, ref, detail, true),
+                  ),
                 if (detail.deletable)
                   IconButton(
                     tooltip: 'Delete project',
@@ -85,7 +97,8 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> with Searching {
               onMilestone: (m) => _milestoneActions(context, ref, detail, m),
             ),
           ),
-          floatingActionButton: project.value == null
+          // An archived project takes no new work until restored
+          floatingActionButton: project.value == null || project.value!.archived
               ? null
               : CollapsingFab(
                   icon: Icons.add,
@@ -108,6 +121,34 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> with Searching {
   void _show(WidgetRef ref, ProjectDetail saved) {
     ref.read(projectProvider(id).notifier).show(saved);
     ref.invalidate(projectsProvider);
+  }
+
+  /// Archive or restore the project. One archived while the list shows the others leaves for
+  /// the list, as the terminal drops it from view.
+  Future<void> _setArchived(
+    BuildContext context,
+    WidgetRef ref,
+    ProjectDetail project,
+    bool archive,
+  ) async {
+    try {
+      final saved = await ref
+          .read(compterProvider)
+          .setArchived(id: project.id, archived: archive);
+      if (!context.mounted) return;
+      _show(ref, saved);
+      if (archive && !ref.read(archivedOnlyProvider)) {
+        context.go('/projects');
+        notify(
+          context,
+          'Archived ${project.name}: show archived from the list',
+        );
+      } else {
+        notify(context, '${archive ? 'Archived' : 'Restored'} ${project.name}');
+      }
+    } on ApiError catch (error) {
+      if (context.mounted) notify(context, error.message, error: true);
+    }
   }
 
   Future<void> _delete(

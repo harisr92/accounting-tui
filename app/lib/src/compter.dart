@@ -31,9 +31,25 @@ final compterProvider = Provider<CompterApp>(
   (ref) => throw UnimplementedError('compterProvider is overridden in main'),
 );
 
-/// The project list, from summaries. Invalidate it after a change.
+/// Whether the project list shows only the archived projects instead of only the others, like
+/// `H` in the terminal; the others until changed
+class ArchivedOnlyNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void toggle() => state = !state;
+
+  void choose(bool archivedOnly) => state = archivedOnly;
+}
+
+final archivedOnlyProvider = NotifierProvider<ArchivedOnlyNotifier, bool>(
+  ArchivedOnlyNotifier.new,
+);
+
+/// Every project, archived ones too, from summaries; the list shows the archived ones or the
+/// others, as [archivedOnlyProvider] says. Invalidate it after a change.
 final projectsProvider = FutureProvider<List<ProjectRow>>(
-  (ref) => ref.watch(compterProvider).projects(includeArchived: false),
+  (ref) => ref.watch(compterProvider).projects(includeArchived: true),
 );
 
 /// One opened project with its milestones

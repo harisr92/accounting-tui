@@ -73,22 +73,20 @@ impl<R> ProjectsView<R> {
             .iter()
             .filter_map(|&i| self.summaries.get(i))
             .map(|p| {
-                // Archived projects are only listed while `H` shows them; their names are dimmed
-                let name = if p.is_archived() {
-                    Line::styled(p.name(), theme.dim())
-                } else {
-                    Line::raw(p.name())
-                };
-                Row::new(vec![name, Line::from(status_span(p.status(), theme))])
+                Row::new(vec![
+                    Line::raw(p.name()),
+                    Line::from(status_span(p.status(), theme)),
+                ])
             });
-        let title = match (self.filter.is_empty(), self.show_archived) {
-            (true, false) => "Projects".to_owned(),
-            (true, true) => "Projects + archived".to_owned(),
-            (false, archived) => format!(
-                "Projects{} /{}",
-                if archived { " + archived" } else { "" },
-                self.filter.query()
-            ),
+        let list = if self.archived_only {
+            "Archived projects"
+        } else {
+            "Projects"
+        };
+        let title = if self.filter.is_empty() {
+            list.to_owned()
+        } else {
+            format!("{list} /{}", self.filter.query())
         };
         let widths = [Constraint::Fill(1), Constraint::Length(STATUS_WIDTH)];
         let table = Table::new(rows, widths)
@@ -105,8 +103,10 @@ impl<R> ProjectsView<R> {
                 "No projects yet. Press n to create one."
             } else if !self.filter.is_empty() && self.visible.is_empty() {
                 "No projects match the search. Esc clears it."
+            } else if self.visible.is_empty() && self.archived_only {
+                "No archived projects. Press H to go back to the list."
             } else if self.visible.is_empty() {
-                "Every project is archived. Press H to show them, or n to create one."
+                "Every project is archived. Press H to list them, or n to create one."
             } else {
                 "This project could not be loaded."
             };

@@ -62,6 +62,8 @@ pub struct ProjectDetail {
     pub by_amount: Vec<u32>,
     /// Nothing in it was invoiced, so it may be deleted
     pub deletable: bool,
+    /// Finished (nothing pending), so it may be archived
+    pub archivable: bool,
     /// The form, filled with this project, to edit it
     pub edit: ProjectInput,
 }
@@ -109,6 +111,7 @@ impl From<&Project> for ProjectDetail {
             by_name: order(MilestoneSort::Name, project),
             by_amount: order(MilestoneSort::Amount, project),
             deletable: project.ensure_deletable().is_ok(),
+            archivable: project.ensure_archivable().is_ok(),
             edit: ProjectInput::from(project),
         }
     }

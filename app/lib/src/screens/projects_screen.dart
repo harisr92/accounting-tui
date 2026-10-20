@@ -11,7 +11,8 @@ import '../ui/large_title.dart';
 import '../ui/record_tile.dart';
 import '../ui/search.dart';
 
-/// Every project that isn't archived, like the terminal's Projects tab
+/// Every project that isn't archived, or only the archived ones, like the terminal's Projects
+/// tab
 class ProjectsScreen extends ConsumerStatefulWidget {
   const ProjectsScreen({super.key});
 
@@ -24,34 +25,71 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
   @override
   Widget build(BuildContext context) {
     final projects = ref.watch(projectsProvider);
+    final archivedOnly = ref.watch(archivedOnlyProvider);
     return LargeTitleScope(
       child: FabScrollScope(
         child: Scaffold(
-          appBar: searchAppBar(title: 'Projects', hint: 'Name or client'),
+          appBar: searchAppBar(
+            title: archivedOnly ? 'Archived' : 'Projects',
+            hint: 'Name or client',
+            actions: [
+              IconButton(
+                tooltip: archivedOnly ? 'Show projects' : 'Show archived',
+                icon: Icon(
+                  archivedOnly ? Icons.inventory_2 : Icons.inventory_2_outlined,
+                ),
+                onPressed: ref.read(archivedOnlyProvider.notifier).toggle,
+              ),
+            ],
+          ),
           body: projects.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (error, _) => Center(child: Text('$error')),
-            data: (rows) => RefreshIndicator(
-              onRefresh: () => ref.refresh(projectsProvider.future),
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 96),
-                children: [
-                  const LargeTitle(
-                    icon: Icons.work,
-                    title: 'Projects',
-                    description: demoMode
-                        ? 'The demo business: nothing here is saved'
-                        : 'Clients, milestones and the time you bill',
-                  ),
-                  if (rows.isEmpty)
-                    const EmptyState(
-                      icon: Icons.work_outline,
-                      message: 'No projects yet. Add one to start billing.',
-                    ),
-                  ..._matching(query, rows),
-                ],
-              ),
-            ),
+            data: (rows) {
+              final listed = rows
+                  .where((row) => row.archived == archivedOnly)
+                  .toList();
+              return RefreshIndicator(
+                onRefresh: () => ref.refresh(projectsProvider.future),
+                child: ListView(
+                  padding: const EdgeInsets.only(bottom: 96),
+                  children: [
+                    if (archivedOnly)
+                      const LargeTitle(
+                        icon: Icons.inventory_2,
+                        title: 'Archived',
+                        description:
+                            'Finished projects put away; restore one to add work',
+                      )
+                    else
+                      const LargeTitle(
+                        icon: Icons.work,
+                        title: 'Projects',
+                        description: demoMode
+                            ? 'The demo business: nothing here is saved'
+                            : 'Clients, milestones and the time you bill',
+                      ),
+                    if (rows.isEmpty)
+                      const EmptyState(
+                        icon: Icons.work_outline,
+                        message: 'No projects yet. Add one to start billing.',
+                      )
+                    else if (listed.isEmpty && archivedOnly)
+                      const EmptyState(
+                        icon: Icons.inventory_2_outlined,
+                        message: 'No archived projects.',
+                      )
+                    else if (listed.isEmpty)
+                      const EmptyState(
+                        icon: Icons.inventory_2_outlined,
+                        message:
+                            'Every project is archived. Show archived to see them, or add one.',
+                      ),
+                    ..._matching(query, listed),
+                  ],
+                ),
+              );
+            },
           ),
           floatingActionButton: CollapsingFab(
             // Every tab stays mounted in one route, so their buttons would share the default hero tag
@@ -64,6 +102,8 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                 ref.read(compterProvider),
               );
               if (created == null || !context.mounted) return;
+              // A new project isn't archived: back on the list, show it
+              ref.read(archivedOnlyProvider.notifier).choose(false);
               ref.invalidate(projectsProvider);
               context.go('/projects/${created.id}');
             },
