@@ -187,6 +187,51 @@ fn a_project_with_nothing_invoiced_is_deleted() {
 }
 
 #[test]
+fn a_finished_project_is_archived_out_of_the_list_and_restored() {
+    let (_scratch, mut app) = demo();
+    let listed = |app: &CompterApp, include_archived: bool| -> Vec<String> {
+        app.projects(include_archived)
+            .unwrap()
+            .into_iter()
+            .map(|p| p.name)
+            .collect()
+    };
+    let audit = app
+        .projects(false)
+        .unwrap()
+        .into_iter()
+        .find(|p| p.name == "API Audit")
+        .unwrap();
+    assert!(app.project(audit.id.clone()).unwrap().archivable);
+
+    let archived = app.set_archived(audit.id.clone(), true).unwrap();
+
+    assert!(archived.archived);
+    assert!(!listed(&app, false).contains(&audit.name));
+    assert!(listed(&app, true).contains(&audit.name));
+
+    let restored = app.set_archived(audit.id, false).unwrap();
+    assert!(!restored.archived);
+    assert!(listed(&app, false).contains(&audit.name));
+}
+
+#[test]
+fn a_project_with_work_pending_is_not_archived() {
+    let (_scratch, mut app) = demo();
+    let created = app.create_project(project("Website", None)).unwrap();
+    let detail = app
+        .add_milestone(
+            created.id.clone(),
+            milestone("Design", "2026-11-01", Some("50,000")),
+        )
+        .unwrap();
+    assert!(!detail.archivable);
+
+    assert!(app.set_archived(created.id.clone(), true).is_err());
+    assert!(!app.project(created.id).unwrap().archived);
+}
+
+#[test]
 fn a_pending_milestone_is_edited_and_removed() {
     let (_scratch, mut app) = demo();
     let created = app.create_project(project("Website", None)).unwrap();
