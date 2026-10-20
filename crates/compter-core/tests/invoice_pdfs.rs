@@ -34,7 +34,7 @@ fn issued_invoice_pdf_is_written_and_restored() {
     store.repository().save(&project).unwrap();
 
     let issued = service
-        .issue(project.id(), project.milestones()[0].id(), date, None)
+        .issue(project.id(), &[project.milestones()[0].id()], date, None)
         .unwrap();
     let path = issued.pdf.unwrap().unwrap();
     assert_eq!(path, dir.path().join("invoices/2026-27/INV-26-27-001.pdf"));

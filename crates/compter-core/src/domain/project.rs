@@ -542,7 +542,8 @@ impl Project {
         Ok(())
     }
 
-    /// Record a credit note taking `amount` (before GST) off an invoiced or paid milestone
+    /// Record a credit note taking `amount` (before GST) off an invoiced or paid milestone; one
+    /// still invoiced and now credited in full becomes credited
     pub fn credit_milestone(
         &mut self,
         index: usize,
@@ -553,10 +554,66 @@ impl Project {
         Ok(())
     }
 
-    /// Mark a milestone whose invoice credit notes cancelled in full, with nothing paid
-    pub fn cancel_milestone(&mut self, index: usize) -> Result<(), DomainError> {
-        self.milestone_mut(index)?
-            .advance(MilestoneStatus::Credited)?;
+    /// Mark the pending milestones `ids` as billed together by invoice `number`. All or none:
+    /// one that can't be invoiced leaves every milestone as it was.
+    pub fn invoice_milestones(
+        &mut self,
+        ids: &[MilestoneId],
+        number: &str,
+    ) -> Result<(), DomainError> {
+        self.change_milestones(ids, |milestone| milestone.invoice(number.to_owned()))
+    }
+
+    /// Record a credit note taking each amount (before GST) off its invoiced or paid milestone;
+    /// each one still invoiced and now credited in full becomes credited. All or none.
+    pub fn credit_milestones(
+        &mut self,
+        credits: &[(MilestoneId, BigDecimal)],
+    ) -> Result<(), DomainError> {
+        let mut milestones = self.milestones.clone();
+        for (id, amount) in credits {
+            let milestone = milestones
+                .iter_mut()
+                .find(|m| m.id() == *id)
+                .ok_or(DomainError::NotOnInvoice)?;
+            milestone.credit(amount)?;
+        }
+        self.milestones = milestones;
+        self.refresh();
+        Ok(())
+    }
+
+    /// The invoice billing `ids` has nothing left to pay: each of its milestones still
+    /// invoiced becomes paid, or credited when `paid` is false (credit notes cancelled the
+    /// invoice and nothing was paid). One already paid or credited stays so. All or none.
+    pub fn settle_invoice(&mut self, ids: &[MilestoneId], paid: bool) -> Result<(), DomainError> {
+        let to = if paid {
+            MilestoneStatus::Paid
+        } else {
+            MilestoneStatus::Credited
+        };
+        self.change_milestones(ids, |milestone| match milestone.status() {
+            MilestoneStatus::Invoiced => milestone.advance(to),
+            _ => Ok(()),
+        })
+    }
+
+    /// Apply `change` to each milestone in `ids` on a copy, keeping it only if every change
+    /// succeeds
+    fn change_milestones(
+        &mut self,
+        ids: &[MilestoneId],
+        mut change: impl FnMut(&mut Milestone) -> Result<(), DomainError>,
+    ) -> Result<(), DomainError> {
+        let mut milestones = self.milestones.clone();
+        for id in ids {
+            let milestone = milestones
+                .iter_mut()
+                .find(|m| m.id() == *id)
+                .ok_or(DomainError::NotOnInvoice)?;
+            change(milestone)?;
+        }
+        self.milestones = milestones;
         self.refresh();
         Ok(())
     }

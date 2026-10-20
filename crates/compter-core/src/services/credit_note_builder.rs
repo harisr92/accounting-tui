@@ -11,8 +11,8 @@ use chrono::NaiveDate;
 use super::chart;
 use super::invoice_builder::InvoicingError;
 use crate::domain::{
-    CreditNote, CreditNoteParts, Currency, DomainError, Invoice, InvoiceAmounts, InvoiceKind,
-    InvoiceNumber, ReturnTerms,
+    CreditLine, CreditNote, CreditNoteParts, Currency, DomainError, Invoice, InvoiceAmounts,
+    InvoiceKind, InvoiceLine, InvoiceNumber, MilestoneId, ReturnTerms,
 };
 
 const TITLE: &str = "Credit Note";
@@ -27,13 +27,22 @@ pub struct BuiltCreditNote {
     pub warnings: Vec<String>,
 }
 
+/// What a credit note takes back from one invoice line, as entered
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreditLineDraft {
+    /// The milestone the line billed
+    pub milestone_id: MilestoneId,
+    /// Value taken back before GST, in the invoice's currency; GST on it is added at the line's
+    /// rate
+    pub taxable_value: BigDecimal,
+}
+
 /// What a credit note takes back, as entered
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreditDraft {
     pub date: NaiveDate,
-    /// Value taken back before GST, in the invoice's currency; GST on it is added at the
-    /// invoice's rate
-    pub taxable_value: BigDecimal,
+    /// The invoice lines taken back from, each once
+    pub lines: Vec<CreditLineDraft>,
     pub reason: String,
     /// What happens to the part of the note the client already paid: refunded or kept as an
     /// advance, less any TDS the client reverses. Ignored when the note takes off only what is
@@ -41,20 +50,24 @@ pub struct CreditDraft {
     pub returned: ReturnTerms,
 }
 
+/// A draft line matched to the invoice line it takes back from
+struct Taken<'a> {
+    /// Position of the line on the invoice: its print row and GST line item
+    position: usize,
+    line: &'a InvoiceLine,
+    taxable: BigDecimal,
+}
+
 /// Build credit note `number` against `invoice`. Notes on GST tax invoices go through
 /// accounting-core; notes on export and plain invoices carry no GST, so compter lays them out.
-/// Either way the note is at the invoice's exchange rate, and prints as the invoice did.
+/// Either way the note is at the invoice's exchange rate, and prints as the invoice did, a row
+/// per line taken back from.
 pub fn build(
     invoice: &Invoice,
     number: InvoiceNumber,
     draft: CreditDraft,
 ) -> Result<BuiltCreditNote, InvoicingError> {
-    let taxable = draft
-        .taxable_value
-        .with_scale_round(2, RoundingMode::HalfUp);
-    if taxable <= BigDecimal::zero() {
-        return Err(DomainError::NonPositiveAmount.into());
-    }
+    let taken = match_lines(invoice, &draft.lines)?;
     // Section 34(2): the last day is 30 November after the invoice's financial year. Plain
     // invoices are outside GST.
     if invoice.kind() != InvoiceKind::Plain {
@@ -64,9 +77,9 @@ pub fn build(
         }
     }
     let (amounts, gst, entries, warnings) = match invoice.kind() {
-        InvoiceKind::Tax => gst_credit(invoice, &number, &draft, taxable)?,
+        InvoiceKind::Tax => gst_credit(invoice, &number, &draft, &taken)?,
         InvoiceKind::Export | InvoiceKind::Plain => {
-            let amounts = InvoiceAmounts::untaxed(taxable);
+            let amounts = InvoiceAmounts::untaxed(taken.iter().map(|t| &t.taxable).sum());
             // A note that clears the balance takes the rest of the receivable, so no paisa of
             // rounding at the invoice's rate stays behind
             let inr = if amounts.total == invoice.balance() {
@@ -81,7 +94,15 @@ pub fn build(
             (amounts, None, entries, Vec::new())
         }
     };
-    let print = print(invoice, &number, &draft, &amounts);
+    let rows = rows(invoice, &draft, &taken, gst.as_ref())?;
+    let print = print(invoice, &number, &draft, &amounts, rows);
+    let lines = taken
+        .iter()
+        .map(|t| CreditLine {
+            milestone_id: t.line.milestone_id,
+            taxable_value: t.taxable.clone(),
+        })
+        .collect();
     let note = CreditNote::issue(CreditNoteParts {
         number,
         date: draft.date,
@@ -90,6 +111,7 @@ pub fn build(
         client_name: invoice.client_name().to_owned(),
         terms: terms(invoice, &draft),
         reason: draft.reason,
+        lines,
         currency: invoice.currency(),
         exchange_rate: invoice.exchange_rate().cloned(),
         amounts,
@@ -104,6 +126,53 @@ pub fn build(
     })
 }
 
+/// Each draft line on the invoice, once, for more than zero (rounded to paise), in the
+/// invoice's order
+fn match_lines<'a>(
+    invoice: &'a Invoice,
+    drafts: &[CreditLineDraft],
+) -> Result<Vec<Taken<'a>>, InvoicingError> {
+    if drafts.is_empty() {
+        return Err(DomainError::NoCreditLines.into());
+    }
+    let mut taken = Vec::with_capacity(drafts.len());
+    for (i, draft) in drafts.iter().enumerate() {
+        if drafts[..i]
+            .iter()
+            .any(|d| d.milestone_id == draft.milestone_id)
+        {
+            return Err(DomainError::DuplicateCreditLine.into());
+        }
+        let (position, line) = invoice
+            .lines()
+            .iter()
+            .enumerate()
+            .find(|(_, line)| line.milestone_id == draft.milestone_id)
+            .ok_or(DomainError::NotOnInvoice)?;
+        let taxable = credit_amount(&draft.taxable_value)?;
+        taken.push(Taken {
+            position,
+            line,
+            taxable,
+        });
+    }
+    taken.sort_by_key(|t| t.position);
+    Ok(taken)
+}
+
+/// What a credit note line takes off, before GST: more than zero and in whole paise. A fraction
+/// of a paisa is refused rather than rounded, so a mistyped amount is never taken as another.
+pub(super) fn credit_amount(amount: &BigDecimal) -> Result<BigDecimal, DomainError> {
+    let paise = amount.with_scale_round(2, RoundingMode::HalfUp);
+    if paise != *amount {
+        return Err(DomainError::FractionOfPaisa);
+    }
+    if paise <= BigDecimal::zero() {
+        return Err(DomainError::NonPositiveAmount);
+    }
+    Ok(paise)
+}
+
 type GstCredit = (
     InvoiceAmounts,
     Option<accounting_core::CreditNote>,
@@ -111,26 +180,31 @@ type GstCredit = (
     Vec<String>,
 );
 
-/// A GST credit note: one line at the invoice line's SAC and rate
+/// A GST credit note: a line per invoice line taken back from, at that line's SAC and rate
 fn gst_credit(
     invoice: &Invoice,
     number: &InvoiceNumber,
     draft: &CreditDraft,
-    taxable: BigDecimal,
+    taken: &[Taken<'_>],
 ) -> Result<GstCredit, InvoicingError> {
     let original = invoice.gst().ok_or(InvoicingError::MissingGstRecord)?;
-    let line = original
-        .line_items
-        .first()
-        .ok_or(InvoicingError::MissingGstRecord)?;
-    let item = GstLineItem::new(
-        line.hsn_sac.as_str(),
-        description(invoice, draft),
-        BigDecimal::from(1),
-        taxable,
-        line.gst_rate.clone(),
-    )?;
-    let note = accounting_core::CreditNote::new(original, number.as_str(), draft.date, vec![item])?;
+    let items = taken
+        .iter()
+        .map(|t| {
+            let line = original
+                .line_items
+                .get(t.position)
+                .ok_or(InvoicingError::MissingGstRecord)?;
+            Ok(GstLineItem::new(
+                line.hsn_sac.as_str(),
+                description(invoice, t, draft),
+                BigDecimal::from(1),
+                t.taxable.clone(),
+                line.gst_rate.clone(),
+            )?)
+        })
+        .collect::<Result<Vec<_>, InvoicingError>>()?;
+    let note = accounting_core::CreditNote::new(original, number.as_str(), draft.date, items)?;
     let report = validate_credit_note(&note, draft.date, HsnMaster::global());
     let errors: Vec<String> = report.errors().map(ToString::to_string).collect();
     if !errors.is_empty() {
@@ -150,26 +224,68 @@ fn gst_credit(
 }
 
 /// `Website - Design: rate corrected`
-fn description(invoice: &Invoice, draft: &CreditDraft) -> String {
+fn description(invoice: &Invoice, taken: &Taken<'_>, draft: &CreditDraft) -> String {
     let billed = invoice
         .print()
         .rows
-        .first()
-        .map_or(invoice.milestone_name(), |row| row.description.as_str());
+        .get(taken.position)
+        .map_or(taken.line.milestone_name.as_str(), |row| {
+            row.description.as_str()
+        });
     format!("{billed}: {}", draft.reason.trim())
 }
 
-/// The invoice's print, with the note's number, date, line and totals
+/// A printed row per line taken back from, with the invoice row's SAC and rate. Tax per row
+/// comes from the GST note's own lines; untaxed notes have none.
+fn rows(
+    invoice: &Invoice,
+    draft: &CreditDraft,
+    taken: &[Taken<'_>],
+    gst: Option<&accounting_core::CreditNote>,
+) -> Result<Vec<PrintRow>, InvoicingError> {
+    let currency = invoice.currency();
+    let format = |amount: &BigDecimal| currency.format(amount);
+    let inter_state = invoice.print().is_inter_state;
+    taken
+        .iter()
+        .zip(1..)
+        .map(|(t, serial)| {
+            let row = invoice.print().rows.get(t.position);
+            let item = gst.and_then(|note| note.line_items.get(serial - 1));
+            let (taxable, tax) = match item {
+                Some(item) => {
+                    let line = item.breakdown(inter_state)?;
+                    let tax = &line.total - &line.taxable_value;
+                    (line.taxable_value, tax)
+                }
+                None => (t.taxable.clone(), BigDecimal::zero()),
+            };
+            Ok(PrintRow {
+                serial,
+                hsn_sac: row.map(|r| r.hsn_sac.clone()).unwrap_or_default(),
+                description: description(invoice, t, draft),
+                quantity: "1".to_owned(),
+                rate: format(&taxable),
+                taxable_value: format(&taxable),
+                gst_rate: row.map_or_else(|| "-".to_owned(), |r| r.gst_rate.clone()),
+                tax: format(&tax),
+                amount: format(&(&taxable + &tax)),
+            })
+        })
+        .collect()
+}
+
+/// The invoice's print, with the note's number, date, rows and totals
 fn print(
     invoice: &Invoice,
     number: &InvoiceNumber,
     draft: &CreditDraft,
     amounts: &InvoiceAmounts,
+    rows: Vec<PrintRow>,
 ) -> accounting_core::InvoicePrint {
     let currency = invoice.currency();
     let format = |amount: &BigDecimal| currency.format(amount);
     let original = invoice.print();
-    let row = original.rows.first();
     let tax_lines = match invoice.kind() {
         InvoiceKind::Tax => [
             ("CGST", &amounts.cgst),
@@ -198,17 +314,7 @@ fn print(
         title: TITLE.to_owned(),
         invoice_number: number.to_string(),
         invoice_date: draft.date.format(PRINT_DATE_FORMAT).to_string(),
-        rows: vec![PrintRow {
-            serial: 1,
-            hsn_sac: row.map(|r| r.hsn_sac.clone()).unwrap_or_default(),
-            description: description(invoice, draft),
-            quantity: "1".to_owned(),
-            rate: format(&amounts.taxable_value),
-            taxable_value: format(&amounts.taxable_value),
-            gst_rate: row.map_or_else(|| "-".to_owned(), |r| r.gst_rate.clone()),
-            tax: format(&total_tax),
-            amount: format(&amounts.total),
-        }],
+        rows,
         taxable_value: format(&amounts.taxable_value),
         tax_lines,
         total_tax: format(&total_tax),

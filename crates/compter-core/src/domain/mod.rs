@@ -16,14 +16,14 @@ mod states;
 
 pub use appearance::Appearance;
 pub use billing::{Billing, MAX_ENTRY_MINUTES, TimeEntry, format_duration};
-pub use credit_note::{CREDIT_NOTE_PREFIX, CreditNote, CreditNoteParts};
+pub use credit_note::{CREDIT_NOTE_PREFIX, CreditLine, CreditNote, CreditNoteParts};
 pub use currency::{Currency, ExchangeRate};
 pub use error::DomainError;
 pub use expense::{Expense, ExpenseCategory, ExpenseId};
 pub use fiscal_year::{FiscalYear, Quarter};
 pub use invoice::{
-    Credit, Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber, InvoiceParts, InvoiceStatus,
-    InvoiceSummary, Payment, ReturnKind, ReturnTerms, Returned,
+    Credit, Invoice, InvoiceAmounts, InvoiceKind, InvoiceLine, InvoiceNumber, InvoiceParts,
+    InvoiceStatus, InvoiceSummary, Payment, ReturnKind, ReturnTerms, Returned,
 };
 pub use logo::{Logo, LogoFormat, LogoId, MAX_LOGO_BYTES};
 pub use milestone::{Milestone, MilestoneId, MilestoneSort, MilestoneStatus};

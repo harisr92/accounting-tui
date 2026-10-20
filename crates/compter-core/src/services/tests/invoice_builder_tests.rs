@@ -21,7 +21,7 @@ fn build(
     build_invoice(
         profile,
         project,
-        &project.milestones()[0],
+        &[&project.milestones()[0]],
         number(),
         date(),
         None,
@@ -193,7 +193,7 @@ fn foreign_currency_export_prints_in_that_currency_and_posts_rupees() {
     let built = build_invoice(
         &seller,
         &project,
-        &project.milestones()[0],
+        &[&project.milestones()[0]],
         number(),
         date(),
         Some(rate.clone()),
@@ -228,7 +228,7 @@ fn rupee_projects_ignore_a_rate() {
     let built = build_invoice(
         &seller,
         &project,
-        &project.milestones()[0],
+        &[&project.milestones()[0]],
         number(),
         date(),
         Some(rate),
@@ -236,4 +236,70 @@ fn rupee_projects_ignore_a_rate() {
     .unwrap();
     assert_eq!(built.invoice.currency(), Currency::Inr);
     assert!(built.invoice.exchange_rate().is_none());
+}
+
+#[test]
+fn each_milestone_is_a_line_of_its_own() {
+    let mut project = fixed_project(client(None, abroad(), &["1 Main St"]), 1_000);
+    project
+        .add_milestone("Build", date(), Some(rupees(2_500)))
+        .unwrap();
+    let milestones: Vec<_> = project.milestones().iter().collect();
+    let seller = profile(None, None);
+    let built = build_invoice(&seller, &project, &milestones, number(), date(), None).unwrap();
+    let invoice = &built.invoice;
+    assert_eq!(invoice.kind(), InvoiceKind::Plain);
+    assert_eq!(invoice.lines().len(), 2);
+    assert_eq!(invoice.amounts().total, rupees(3_500));
+    let rows = &invoice.print().rows;
+    assert_eq!(rows.iter().map(|r| r.serial).collect::<Vec<_>>(), [1, 2]);
+    assert_eq!(rows[1].description, "Website - Build");
+    assert_eq!(rows[1].amount, "2,500.00");
+    assert_eq!(invoice.print().total, "3,500.00");
+    for entry in &built.entries {
+        assert_eq!(entry.amount, rupees(3_500));
+    }
+
+    // Tax invoices: accounting-core computes GST line by line
+    let seller = profile(Some(SELLER_GSTIN), None);
+    let project = {
+        let mut p = fixed_project(client(Some(SAME_STATE_GSTIN), india(), &[]), 1_000);
+        p.add_milestone("Build", date(), Some(rupees(2_500)))
+            .unwrap();
+        p
+    };
+    let milestones: Vec<_> = project.milestones().iter().collect();
+    let built = build_invoice(&seller, &project, &milestones, number(), date(), None).unwrap();
+    let invoice = &built.invoice;
+    assert_eq!(invoice.gst().unwrap().line_items.len(), 2);
+    assert_eq!(invoice.print().rows.len(), 2);
+    assert_eq!(invoice.amounts().cgst, rupees(315));
+    assert_eq!(invoice.amounts().total, rupees(4_130));
+}
+
+#[test]
+fn nothing_selected_is_nothing_to_invoice() {
+    let project = fixed_project(client(Some(OTHER_STATE_GSTIN), india(), &[]), 1_000);
+    let seller = profile(Some(SELLER_GSTIN), None);
+    assert!(matches!(
+        build_invoice(&seller, &project, &[], number(), date(), None),
+        Err(InvoicingError::NothingSelected)
+    ));
+    let design = &project.milestones()[0];
+    assert!(matches!(
+        build_invoice(&seller, &project, &[design, design], number(), date(), None),
+        Err(InvoicingError::Domain(_))
+    ));
+    let other = fixed_project(client(None, india(), &[]), 1_000);
+    assert!(matches!(
+        build_invoice(
+            &seller,
+            &project,
+            &[&other.milestones()[0]],
+            number(),
+            date(),
+            None
+        ),
+        Err(InvoicingError::NotPending)
+    ));
 }

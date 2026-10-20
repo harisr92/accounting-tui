@@ -19,7 +19,8 @@ use crate::domain::Invoice;
 pub(super) type Migration = fn(&WriteTransaction) -> Result<(), StorageError>;
 
 /// `MIGRATIONS[i]` upgrades schema version `i + 1` to `i + 2`
-pub(super) const MIGRATIONS: &[Migration] = &[payments_list, credit_notes, credit_returns];
+pub(super) const MIGRATIONS: &[Migration] =
+    &[payments_list, credit_notes, credit_returns, invoice_lines];
 
 /// Run every step from `from` up to the current version, inside the caller's transaction
 pub(super) fn upgrade(txn: &WriteTransaction, from: u32) -> Result<(), StorageError> {
@@ -33,16 +34,7 @@ pub(super) fn upgrade(txn: &WriteTransaction, from: u32) -> Result<(), StorageEr
 /// v1 → v2: an invoice's single `status` (issued, or paid in full) becomes a list of payments.
 /// Every invoice is rewritten with its summary, which now carries status and balance.
 fn payments_list(txn: &WriteTransaction) -> Result<(), StorageError> {
-    let rows: Vec<(String, Vec<u8>)> = {
-        let table = txn.open_table(INVOICES)?;
-        let mut rows = Vec::new();
-        for row in table.iter()? {
-            let (key, value) = row?;
-            rows.push((key.value().to_owned(), value.value().to_vec()));
-        }
-        rows
-    };
-    for (key, bytes) in rows {
+    for (key, bytes) in invoice_rows(txn)? {
         let codec = |source| StorageError::Codec {
             table: INVOICES.name(),
             key: key.clone(),
@@ -68,6 +60,28 @@ fn credit_notes(_txn: &WriteTransaction) -> Result<(), StorageError> {
 /// reading a refunded invoice's credits as more than its total.
 fn credit_returns(_txn: &WriteTransaction) -> Result<(), StorageError> {
     Ok(())
+}
+
+/// v4 → v5: an invoice's single `milestone_id` and `milestone_name` become `lines`, so one
+/// invoice can bill several milestones. The domain still reads the old shape as one line; every
+/// invoice is rewritten in the new one, with its summary, which now lists its milestones.
+fn invoice_lines(txn: &WriteTransaction) -> Result<(), StorageError> {
+    for (key, bytes) in invoice_rows(txn)? {
+        let invoice: Invoice = decode(INVOICES.name(), &key, &bytes)?;
+        put_invoice(txn, &invoice)?;
+    }
+    Ok(())
+}
+
+/// Every invoice row as stored, read out so the table can be written while going through them
+fn invoice_rows(txn: &WriteTransaction) -> Result<Vec<(String, Vec<u8>)>, StorageError> {
+    let table = txn.open_table(INVOICES)?;
+    let mut rows = Vec::new();
+    for row in table.iter()? {
+        let (key, value) = row?;
+        rows.push((key.value().to_owned(), value.value().to_vec()));
+    }
+    Ok(rows)
 }
 
 /// `"status": {"state": "paid", date, received, tds}` → `"payments": [{date, received, tds}]`;

@@ -503,17 +503,17 @@ fn credits_come_off_what_is_paid_and_owed() {
         Err(DomainError::NotInvoiced)
     ));
     p.invoice_milestone(0, "T-1").unwrap();
-    // Only a milestone credited in full can be cancelled
+    // Credited in part, it is still invoiced
     p.credit_milestone(0, &BigDecimal::from(40)).unwrap();
-    assert!(p.cancel_milestone(0).is_err());
+    assert_eq!(p.milestones()[0].status(), MilestoneStatus::Invoiced);
     assert!(matches!(
         p.credit_milestone(0, &BigDecimal::from(61)),
         Err(DomainError::CreditExceedsMilestone)
     ));
     assert_eq!(p.outstanding_amount(), BigDecimal::from(60));
 
+    // Credited in full, it is credited
     p.credit_milestone(0, &BigDecimal::from(60)).unwrap();
-    p.cancel_milestone(0).unwrap();
     assert_eq!(p.milestones()[0].status(), MilestoneStatus::Credited);
     assert_eq!(p.paid_amount(), BigDecimal::zero());
     assert_eq!(p.outstanding_amount(), BigDecimal::zero());
@@ -540,4 +540,67 @@ fn milestone_ids_round_trip_through_text() {
     let id = MilestoneId::generate();
     assert_eq!(id.to_string().parse::<MilestoneId>().unwrap(), id);
     assert!("not-an-id".parse::<MilestoneId>().is_err());
+}
+
+#[test]
+fn milestones_billed_together_change_together_or_not_at_all() {
+    let mut p = fixed();
+    p.add_milestone("Design", date(), rupees(1000)).unwrap();
+    p.add_milestone("Build", date(), rupees(2000)).unwrap();
+    p.add_milestone("Extra", date(), rupees(500)).unwrap();
+    let ids: Vec<MilestoneId> = p.milestones().iter().map(|m| m.id()).collect();
+    p.invoice_milestones(&ids[2..], "INV/26-27/000").unwrap();
+
+    // Extra is already invoiced, so neither of the others is invoiced either
+    assert!(p.invoice_milestones(&ids, "INV/26-27/001").is_err());
+    assert_eq!(p.milestones()[0].status(), MilestoneStatus::Pending);
+    assert_eq!(p.milestones()[1].status(), MilestoneStatus::Pending);
+
+    p.invoice_milestones(&ids[..2], "INV/26-27/001").unwrap();
+    assert_eq!(p.milestones()[1].invoice_number(), Some("INV/26-27/001"));
+    assert!(matches!(
+        p.credit_milestones(&[
+            (ids[0], BigDecimal::from(1000)),
+            (ids[1], BigDecimal::from(2001))
+        ]),
+        Err(DomainError::CreditExceedsMilestone)
+    ));
+    assert!(p.milestones()[0].credited().is_zero());
+
+    // Design credited in full is credited at once, while Build is still due
+    p.credit_milestones(&[(ids[0], BigDecimal::from(1000))])
+        .unwrap();
+    assert_eq!(p.milestones()[0].status(), MilestoneStatus::Credited);
+    assert_eq!(p.milestones()[1].status(), MilestoneStatus::Invoiced);
+    // Nothing paid: the invoice can't be cancelled while Build still bills something
+    assert!(p.settle_invoice(&ids[..2], false).is_err());
+    // Paying the rest pays Build; Design stays credited
+    p.settle_invoice(&ids[..2], true).unwrap();
+    assert_eq!(p.milestones()[0].status(), MilestoneStatus::Credited);
+    assert_eq!(p.milestones()[1].status(), MilestoneStatus::Paid);
+    assert_eq!(p.paid_amount(), BigDecimal::from(2000));
+    // A milestone already paid stays paid
+    p.settle_invoice(&ids[..2], true).unwrap();
+    assert_eq!(p.milestones()[1].status(), MilestoneStatus::Paid);
+}
+
+#[test]
+fn an_invoice_cancelled_by_credit_notes_credits_every_milestone() {
+    let mut p = fixed();
+    p.add_milestone("Design", date(), rupees(1000)).unwrap();
+    p.add_milestone("Build", date(), rupees(2000)).unwrap();
+    let ids: Vec<MilestoneId> = p.milestones().iter().map(|m| m.id()).collect();
+    p.invoice_milestones(&ids, "INV/26-27/001").unwrap();
+    p.credit_milestones(&[
+        (ids[0], BigDecimal::from(1000)),
+        (ids[1], BigDecimal::from(2000)),
+    ])
+    .unwrap();
+    p.settle_invoice(&ids, false).unwrap();
+    assert!(
+        p.milestones()
+            .iter()
+            .all(|m| m.status() == MilestoneStatus::Credited)
+    );
+    assert_eq!(p.status(), ProjectStatus::Paid);
 }

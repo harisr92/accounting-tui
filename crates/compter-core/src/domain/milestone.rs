@@ -234,7 +234,8 @@ impl Milestone {
     }
 
     /// Record a credit note taking `amount` (before GST) off an invoiced or paid milestone's
-    /// billing
+    /// billing. An invoiced milestone whose billing is all taken back is credited at once, even
+    /// while other lines of its invoice are still due; a paid one stays paid.
     pub(super) fn credit(&mut self, amount: &BigDecimal) -> Result<(), DomainError> {
         if !matches!(
             self.status,
@@ -247,6 +248,9 @@ impl Milestone {
             return Err(DomainError::CreditExceedsMilestone);
         }
         self.credited = credited;
+        if self.status == MilestoneStatus::Invoiced && self.credited == self.amount {
+            self.advance(MilestoneStatus::Credited)?;
+        }
         Ok(())
     }
 

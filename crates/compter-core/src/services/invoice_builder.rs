@@ -1,4 +1,4 @@
-//! Turning a milestone into an invoice document and its ledger entries. Pure: no storage.
+//! Turning milestones into an invoice document and its ledger entries. Pure: no storage.
 
 use accounting_core::invoice::print::PRINT_DATE_FORMAT;
 use accounting_core::invoice::{PrintRow, Recipient, TAX_INVOICE_TITLE, TaxLine};
@@ -12,7 +12,8 @@ use chrono::NaiveDate;
 use super::chart;
 use crate::domain::{
     Billing, BusinessProfile, ClientRegion, Currency, DomainError, ExchangeRate, Invoice,
-    InvoiceAmounts, InvoiceKind, InvoiceNumber, InvoiceParts, Milestone, Project,
+    InvoiceAmounts, InvoiceKind, InvoiceLine, InvoiceNumber, InvoiceParts, Milestone,
+    MilestoneStatus, Project,
 };
 
 /// Taxable value from which an unregistered client's name and address must be printed (Rule 46)
@@ -38,6 +39,8 @@ pub enum InvoicingError {
     UnknownSac,
     #[error("only pending milestones can be invoiced")]
     NotPending,
+    #[error("select at least one milestone to invoice")]
+    NothingSelected,
     #[error("enter the exchange rate (rupees per {0}) to invoice in {0}")]
     MissingExchangeRate(Currency),
     #[error("a credit note on this invoice had to be issued by {0} (GST section 34)")]
@@ -64,19 +67,29 @@ pub struct BuiltInvoice {
     pub warnings: Vec<String>,
 }
 
-/// Build invoice `number` for `milestone`, choosing the kind from who is billing whom. A project
-/// billed in a foreign currency needs `rate`, the rupees per unit on `date`; rupee projects
-/// ignore it.
+/// Build invoice `number` billing `milestones` of `project`, a line each in the order given,
+/// choosing the kind from who is billing whom. A project billed in a foreign currency needs
+/// `rate`, the rupees per unit on `date`; rupee projects ignore it.
 pub fn build(
     profile: &BusinessProfile,
     project: &Project,
-    milestone: &Milestone,
+    milestones: &[&Milestone],
     number: InvoiceNumber,
     date: NaiveDate,
     rate: Option<ExchangeRate>,
 ) -> Result<BuiltInvoice, InvoicingError> {
-    if milestone.status() != crate::domain::MilestoneStatus::Pending {
-        return Err(InvoicingError::NotPending);
+    if milestones.is_empty() {
+        return Err(InvoicingError::NothingSelected);
+    }
+    for (i, milestone) in milestones.iter().enumerate() {
+        let on_project = project.milestone_index(milestone.id()).is_some();
+        let repeated = milestones[..i].iter().any(|m| m.id() == milestone.id());
+        if milestone.status() != MilestoneStatus::Pending || !on_project {
+            return Err(InvoicingError::NotPending);
+        }
+        if repeated {
+            return Err(DomainError::DuplicateInvoiceLine.into());
+        }
     }
     let currency = project.currency();
     let rate = if currency.is_inr() {
@@ -84,9 +97,12 @@ pub fn build(
     } else {
         Some(rate.ok_or(InvoicingError::MissingExchangeRate(currency))?)
     };
-    let line = Line::describe(project, milestone);
+    let lines: Vec<Line> = milestones
+        .iter()
+        .map(|milestone| Line::describe(project, milestone))
+        .collect();
     match (profile.gstin(), project.client_region()) {
-        (Some(_), ClientRegion::India { .. }) => tax_invoice(profile, project, line, number, date),
+        (Some(_), ClientRegion::India { .. }) => tax_invoice(profile, project, lines, number, date),
         (Some(_), ClientRegion::Abroad { .. }) => {
             let arn = profile.lut_arn().ok_or(InvoicingError::MissingLut)?;
             let terms = std::iter::once(format!(
@@ -97,7 +113,7 @@ pub fn build(
             untaxed_invoice(
                 profile,
                 project,
-                line,
+                lines,
                 Issue {
                     number,
                     date,
@@ -115,7 +131,7 @@ pub fn build(
             untaxed_invoice(
                 profile,
                 project,
-                line,
+                lines,
                 Issue {
                     number,
                     date,
@@ -137,12 +153,24 @@ struct Issue {
     terms: Vec<String>,
 }
 
-/// The single invoice line for a milestone
+/// The invoice line for one milestone
 struct Line {
     description: String,
     amount: BigDecimal,
     milestone_id: crate::domain::MilestoneId,
     milestone_name: String,
+}
+
+/// The lines as the invoice records them
+fn invoice_lines(lines: &[Line]) -> Vec<InvoiceLine> {
+    lines
+        .iter()
+        .map(|line| InvoiceLine {
+            milestone_id: line.milestone_id,
+            milestone_name: line.milestone_name.clone(),
+            taxable_value: line.amount.clone(),
+        })
+        .collect()
 }
 
 impl Line {
@@ -190,7 +218,7 @@ fn buyer_party(project: &Project) -> InvoiceParty {
 fn tax_invoice(
     profile: &BusinessProfile,
     project: &Project,
-    line: Line,
+    lines: Vec<Line>,
     number: InvoiceNumber,
     date: NaiveDate,
 ) -> Result<BuiltInvoice, InvoicingError> {
@@ -206,14 +234,19 @@ fn tax_invoice(
         .gst_rate()
         .ok_or(InvoicingError::UnknownSac)?
         .clone();
-    let item = GstLineItem::new(
-        profile.sac_code(),
-        line.description,
-        BigDecimal::from(1),
-        line.amount,
-        rate,
-    )?;
-    let gst = GstInvoice::new(number.as_str(), date, seller_gstin, recipient, vec![item])?;
+    let items = lines
+        .iter()
+        .map(|line| {
+            GstLineItem::new(
+                profile.sac_code(),
+                line.description.clone(),
+                BigDecimal::from(1),
+                line.amount.clone(),
+                rate.clone(),
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let gst = GstInvoice::new(number.as_str(), date, seller_gstin, recipient, items)?;
 
     let report = validate_invoice(&gst, date, HsnMaster::global());
     let errors: Vec<String> = report.errors().map(ToString::to_string).collect();
@@ -238,9 +271,8 @@ fn tax_invoice(
         date,
         kind: InvoiceKind::Tax,
         project_id: project.id(),
-        milestone_id: line.milestone_id,
         client_name: project.client_name().to_owned(),
-        milestone_name: line.milestone_name,
+        lines: invoice_lines(&lines),
         currency: Currency::Inr,
         exchange_rate: None,
         amounts,
@@ -261,7 +293,7 @@ fn tax_invoice(
 fn untaxed_invoice(
     profile: &BusinessProfile,
     project: &Project,
-    line: Line,
+    lines: Vec<Line>,
     issue: Issue,
 ) -> Result<BuiltInvoice, InvoicingError> {
     let Issue {
@@ -274,20 +306,20 @@ fn untaxed_invoice(
     // Same rule accounting-core applies to tax invoices: unregistered clients from the Rule 46
     // threshold up; exports always, as the recipient abroad has no GSTIN to identify them
     let abroad = project.client_region().is_abroad();
-    let unregistered_large =
-        project.client_gstin().is_none() && line.amount >= ADDRESS_REQUIRED_FROM;
+    let taxable: BigDecimal = lines.iter().map(|line| &line.amount).sum();
+    let unregistered_large = project.client_gstin().is_none() && taxable >= ADDRESS_REQUIRED_FROM;
     if (abroad || unregistered_large) && project.client_address().is_empty() {
         return Err(InvoicingError::MissingClientAddress);
     }
 
     let export = kind == InvoiceKind::Export;
     let currency = project.currency();
-    let amount = currency.format(&line.amount);
+    let total = currency.format(&taxable);
     let zero = currency.format(&BigDecimal::zero());
     // Rupees for the ledger, and the rate printed so the rupee value can be checked
     let inr = match &rate {
         Some(rate) => {
-            let inr = rate.to_inr(&line.amount);
+            let inr = rate.to_inr(&taxable);
             let code = currency.code();
             terms.insert(
                 0,
@@ -298,7 +330,7 @@ fn untaxed_invoice(
             );
             inr
         }
-        None => line.amount.clone(),
+        None => taxable.clone(),
     };
     let (title, gst_rate, tax_lines, place_of_supply) = if export {
         let tax_lines = vec![TaxLine {
@@ -331,22 +363,29 @@ fn untaxed_invoice(
         is_inter_state: export,
         seller: seller_party(profile),
         buyer: buyer_party(project),
-        rows: vec![PrintRow {
-            serial: 1,
-            hsn_sac: profile.sac_code().to_owned(),
-            description: line.description,
-            quantity: "1".to_owned(),
-            rate: amount.clone(),
-            taxable_value: amount.clone(),
-            gst_rate: gst_rate.to_owned(),
-            tax: zero.clone(),
-            amount: amount.clone(),
-        }],
-        taxable_value: amount.clone(),
+        rows: lines
+            .iter()
+            .zip(1..)
+            .map(|(line, serial)| {
+                let amount = currency.format(&line.amount);
+                PrintRow {
+                    serial,
+                    hsn_sac: profile.sac_code().to_owned(),
+                    description: line.description.clone(),
+                    quantity: "1".to_owned(),
+                    rate: amount.clone(),
+                    taxable_value: amount.clone(),
+                    gst_rate: gst_rate.to_owned(),
+                    tax: zero.clone(),
+                    amount,
+                }
+            })
+            .collect(),
+        taxable_value: total.clone(),
         tax_lines,
         total_tax: zero,
-        total: amount,
-        total_in_words: currency.in_words(&line.amount),
+        total,
+        total_in_words: currency.in_words(&taxable),
     };
     let revenue = if abroad {
         chart::EXPORT_REVENUE
@@ -362,12 +401,11 @@ fn untaxed_invoice(
         date,
         kind,
         project_id: project.id(),
-        milestone_id: line.milestone_id,
         client_name: project.client_name().to_owned(),
-        milestone_name: line.milestone_name,
+        lines: invoice_lines(&lines),
         currency,
         exchange_rate: rate,
-        amounts: InvoiceAmounts::untaxed(line.amount),
+        amounts: InvoiceAmounts::untaxed(taxable),
         print,
         terms,
         gst: None,

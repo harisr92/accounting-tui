@@ -24,7 +24,7 @@ pub struct IssueRecord<'a> {
     /// Must be the year's next sequence; refused if another invoice took it first
     pub sequence: u32,
     pub invoice: &'a Invoice,
-    /// The project with the milestone now invoiced
+    /// The project with the milestones now invoiced
     pub project: &'a Project,
     /// Ledger posting of the invoice
     pub transaction: &'a Transaction,
@@ -36,7 +36,7 @@ pub struct IssueRecord<'a> {
 pub struct PaymentRecord<'a> {
     /// The invoice with the payment added
     pub invoice: &'a Invoice,
-    /// The project, when this payment settled the invoice and its milestone is now paid
+    /// The project, when this payment settled the invoice and its milestones are now paid
     pub project: Option<&'a Project>,
     pub transaction: &'a Transaction,
     pub accounts: &'a [Account],
@@ -49,7 +49,7 @@ pub struct CreditRecord<'a> {
     pub note: &'a CreditNote,
     /// The invoice with the credit applied
     pub invoice: &'a Invoice,
-    /// The project, with the credit recorded on the invoice's milestone
+    /// The project, with the credit recorded on the invoice's milestones
     pub project: &'a Project,
     pub transaction: &'a Transaction,
     /// The posting that gives back money already paid (a refund, or an advance), if the note

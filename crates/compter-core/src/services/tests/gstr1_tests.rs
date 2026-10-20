@@ -7,7 +7,7 @@ use super::fixtures::{
 };
 use crate::demo;
 use crate::domain::{Currency, ExchangeRate, Quarter};
-use crate::services::{CreditDraft, InvoiceService, ReportService, ServiceError};
+use crate::services::{CreditDraft, CreditLineDraft, InvoiceService, ReportService, ServiceError};
 use crate::storage::{ProjectRepository, Store};
 
 fn quarter(year: i32, month: u32) -> Quarter {
@@ -79,7 +79,7 @@ fn months_of_a_quarter_merge_per_buyer() {
         store.repository().save(&project).unwrap();
         let day = NaiveDate::from_ymd_opt(2026, month, 10).unwrap();
         invoices
-            .issue(project.id(), project.milestones()[0].id(), day, None)
+            .issue(project.id(), &[project.milestones()[0].id()], day, None)
             .unwrap();
     }
     let json = gstr1(&store, quarter(2026, 7));
@@ -118,13 +118,16 @@ fn store_with_credited_quarter() -> Store {
         store.repository().save(&project).unwrap();
         let day = NaiveDate::from_ymd_opt(2026, month, 10).unwrap();
         let issued = invoices
-            .issue(project.id(), project.milestones()[0].id(), day, None)
+            .issue(project.id(), &[project.milestones()[0].id()], day, None)
             .unwrap();
         numbers.push(issued.invoice.number().clone());
     }
     let draft = CreditDraft {
         date: NaiveDate::from_ymd_opt(2026, 8, 20).unwrap(),
-        taxable_value: BigDecimal::from(1_000),
+        lines: vec![CreditLineDraft {
+            milestone_id: invoices.load(&numbers[0]).unwrap().lines()[0].milestone_id,
+            taxable_value: BigDecimal::from(1_000),
+        }],
         reason: "Discount".to_owned(),
         returned: crate::domain::ReturnTerms::default(),
     };
@@ -190,14 +193,22 @@ fn credit_notes_on_exports_are_cdnur_expwop() {
     let day = NaiveDate::from_ymd_opt(2026, 7, 10).unwrap();
     let rate = ExchangeRate::new(BigDecimal::from(90)).unwrap();
     let number = invoices
-        .issue(project.id(), project.milestones()[0].id(), day, Some(rate))
+        .issue(
+            project.id(),
+            &[project.milestones()[0].id()],
+            day,
+            Some(rate),
+        )
         .unwrap()
         .invoice
         .number()
         .clone();
     let draft = CreditDraft {
         date: day,
-        taxable_value: BigDecimal::from(100),
+        lines: vec![CreditLineDraft {
+            milestone_id: project.milestones()[0].id(),
+            taxable_value: BigDecimal::from(100),
+        }],
         reason: "Discount".to_owned(),
         returned: crate::domain::ReturnTerms::default(),
     };
@@ -213,4 +224,38 @@ fn credit_notes_on_exports_are_cdnur_expwop() {
     // €100 at the invoice's ₹90
     assert_eq!(note["val"], 9_000.0);
     assert_eq!(gstr1.json["hsn"]["hsn_b2c"][0]["txval"], 81_000.0);
+}
+
+#[test]
+fn invoices_of_several_milestones_are_returned_whole() {
+    let store = Store::in_memory().unwrap();
+    let mut invoices = InvoiceService::new(store.repository(), None);
+    invoices
+        .save_profile(profile_draft(Some(SELLER_GSTIN), Some("AD2904260000001")))
+        .unwrap();
+    let day = NaiveDate::from_ymd_opt(2026, 7, 10).unwrap();
+    for (client, rate) in [
+        (client(Some(OTHER_STATE_GSTIN), india(), &[]), None),
+        (
+            foreign_client(Currency::Eur),
+            Some(ExchangeRate::new(BigDecimal::from(90)).unwrap()),
+        ),
+    ] {
+        let mut project = fixed_project(client, 10_000);
+        project
+            .add_milestone("Build", day, Some(BigDecimal::from(5_000)))
+            .unwrap();
+        store.repository().save(&project).unwrap();
+        let ids: Vec<_> = project.milestones().iter().map(|m| m.id()).collect();
+        invoices.issue(project.id(), &ids, day, rate).unwrap();
+    }
+    let json = gstr1(&store, quarter(2026, 7));
+    let b2b = &json["b2b"][0]["inv"][0];
+    assert_eq!(b2b["val"], 17_700.0);
+    assert_eq!(b2b["itms"][0]["itm_det"]["txval"], 15_000.0);
+    // €15,000 at ₹90
+    assert_eq!(json["exp"][0]["inv"][0]["val"], 1_350_000.0);
+    assert_eq!(json["exp"][0]["inv"][0]["itms"][0]["txval"], 1_350_000.0);
+    assert_eq!(json["hsn"]["hsn_b2b"][0]["txval"], 15_000.0);
+    assert_eq!(json["hsn"]["hsn_b2c"][0]["txval"], 1_350_000.0);
 }

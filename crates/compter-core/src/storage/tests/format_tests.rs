@@ -27,6 +27,8 @@ const CREDITED_INVOICE_V3: &str = include_str!("fixtures/invoice_credited_v3.jso
 const RETURNED_INVOICE_V4: &str = include_str!("fixtures/invoice_returned_v4.json");
 const REFUNDED_EUR_INVOICE_V4: &str = include_str!("fixtures/invoice_refunded_eur_v4.json");
 const TDS_REVERSED_INVOICE_V4: &str = include_str!("fixtures/invoice_tds_reversed_v4.json");
+const LINES_INVOICE_V5: &str = include_str!("fixtures/invoice_lines_v5.json");
+const LINES_CREDIT_NOTE_V5: &str = include_str!("fixtures/credit_note_lines_v5.json");
 
 #[test]
 fn hourly_project_v1_still_loads() {
@@ -221,4 +223,34 @@ fn a_refund_with_tds_reversed_v4_still_loads() {
     assert_eq!(returned.tds_reversed, Some(BigDecimal::from(1_000)));
     assert_eq!(returned.cash(), BigDecimal::from(10_800));
     assert_eq!(invoice.balance(), BigDecimal::from(0));
+}
+
+#[test]
+fn invoice_of_several_milestones_v5_still_loads() {
+    let invoice: Invoice = decode("invoices", "fixture", LINES_INVOICE_V5.as_bytes()).unwrap();
+    let names: Vec<_> = invoice
+        .lines()
+        .iter()
+        .map(|l| l.milestone_name.as_str())
+        .collect();
+    assert_eq!(names, ["Design", "Build"]);
+    assert_eq!(invoice.amounts().taxable_value, BigDecimal::from(60_000));
+    assert_eq!(invoice.print().rows.len(), 2);
+    assert_eq!(invoice.credited(), BigDecimal::from(17_700));
+
+    let note: CreditNote =
+        decode("credit_notes", "fixture", LINES_CREDIT_NOTE_V5.as_bytes()).unwrap();
+    let taken: Vec<_> = note.lines().iter().map(|l| &l.taxable_value).collect();
+    assert_eq!(taken, [&BigDecimal::from(5_000), &BigDecimal::from(10_000)]);
+    assert_eq!(
+        note.lines()[1].milestone_id,
+        invoice.lines()[1].milestone_id
+    );
+    assert_eq!(note.print().rows.len(), 2);
+}
+
+#[test]
+fn credit_notes_from_before_lines_name_none() {
+    let note: CreditNote = decode("credit_notes", "fixture", CREDIT_NOTE_V3.as_bytes()).unwrap();
+    assert!(note.lines().is_empty());
 }

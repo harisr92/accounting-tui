@@ -123,6 +123,15 @@ impl InvoiceAmounts {
     }
 }
 
+/// One billed milestone on an invoice: a row of the printed document
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InvoiceLine {
+    pub milestone_id: MilestoneId,
+    pub milestone_name: String,
+    /// Before GST, in the invoice's currency: the milestone's amount when it was invoiced
+    pub taxable_value: BigDecimal,
+}
+
 /// One receipt against an invoice. A client may pay in parts; each part can have TDS withheld.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Payment {
@@ -255,9 +264,9 @@ pub struct Invoice {
     date: NaiveDate,
     kind: InvoiceKind,
     project_id: ProjectId,
-    milestone_id: MilestoneId,
     client_name: String,
-    milestone_name: String,
+    /// The milestones billed, one printed row each, in the order printed
+    lines: Vec<InvoiceLine>,
     #[serde(default)]
     currency: Currency,
     /// Rupees per unit of `currency`, on the invoice date; `None` for an invoice in rupees
@@ -288,9 +297,14 @@ struct RawInvoice {
     date: NaiveDate,
     kind: InvoiceKind,
     project_id: ProjectId,
-    milestone_id: MilestoneId,
     client_name: String,
-    milestone_name: String,
+    #[serde(default)]
+    lines: Vec<InvoiceLine>,
+    /// Before v5 an invoice billed one milestone, named by these two fields instead of `lines`
+    #[serde(default)]
+    milestone_id: Option<MilestoneId>,
+    #[serde(default)]
+    milestone_name: Option<String>,
     #[serde(default)]
     currency: Currency,
     #[serde(default)]
@@ -321,6 +335,15 @@ impl TryFrom<RawInvoice> for Invoice {
             return Err(DomainError::OutdatedInvoiceFormat);
         }
         check_currency(raw.currency, raw.exchange_rate.as_ref(), raw.kind)?;
+        let lines = match (raw.lines.is_empty(), raw.milestone_id, raw.milestone_name) {
+            (true, Some(milestone_id), Some(milestone_name)) => vec![InvoiceLine {
+                milestone_id,
+                milestone_name,
+                taxable_value: raw.amounts.taxable_value.clone(),
+            }],
+            _ => raw.lines,
+        };
+        check_lines(&lines, &raw.amounts)?;
         let mut paid = BigDecimal::zero();
         for payment in &raw.payments {
             check_payment(raw.date, raw.currency, payment)?;
@@ -365,9 +388,8 @@ impl TryFrom<RawInvoice> for Invoice {
             date: raw.date,
             kind: raw.kind,
             project_id: raw.project_id,
-            milestone_id: raw.milestone_id,
             client_name: raw.client_name,
-            milestone_name: raw.milestone_name,
+            lines,
             currency: raw.currency,
             exchange_rate: raw.exchange_rate,
             amounts: raw.amounts,
@@ -388,9 +410,8 @@ pub struct InvoiceParts {
     pub date: NaiveDate,
     pub kind: InvoiceKind,
     pub project_id: ProjectId,
-    pub milestone_id: MilestoneId,
     pub client_name: String,
-    pub milestone_name: String,
+    pub lines: Vec<InvoiceLine>,
     pub currency: Currency,
     /// Required for a foreign currency, `None` for rupees
     pub exchange_rate: Option<ExchangeRate>,
@@ -405,14 +426,14 @@ impl Invoice {
     /// A freshly issued, unpaid invoice
     pub fn issue(parts: InvoiceParts) -> Result<Self, DomainError> {
         check_currency(parts.currency, parts.exchange_rate.as_ref(), parts.kind)?;
+        check_lines(&parts.lines, &parts.amounts)?;
         Ok(Self {
             number: parts.number,
             date: parts.date,
             kind: parts.kind,
             project_id: parts.project_id,
-            milestone_id: parts.milestone_id,
             client_name: parts.client_name,
-            milestone_name: parts.milestone_name,
+            lines: parts.lines,
             currency: parts.currency,
             exchange_rate: parts.exchange_rate,
             amounts: parts.amounts,
@@ -445,16 +466,27 @@ impl Invoice {
         self.project_id
     }
 
-    pub fn milestone_id(&self) -> MilestoneId {
-        self.milestone_id
-    }
-
     pub fn client_name(&self) -> &str {
         &self.client_name
     }
 
-    pub fn milestone_name(&self) -> &str {
-        &self.milestone_name
+    /// The milestones billed, in the order printed
+    pub fn lines(&self) -> &[InvoiceLine] {
+        &self.lines
+    }
+
+    /// The line billing milestone `id`, if this invoice billed it
+    pub fn line(&self, id: MilestoneId) -> Option<&InvoiceLine> {
+        self.lines.iter().find(|line| line.milestone_id == id)
+    }
+
+    pub fn milestone_ids(&self) -> Vec<MilestoneId> {
+        self.lines.iter().map(|line| line.milestone_id).collect()
+    }
+
+    /// The milestones billed, for lists: `Design, Build`
+    pub fn milestones(&self) -> String {
+        milestone_names(&self.lines)
     }
 
     /// In the invoice's currency
@@ -535,9 +567,32 @@ impl Invoice {
             .sum()
     }
 
+    /// Nothing paid or credited yet: a credit note can only cancel what is still owed
+    pub fn untouched(&self) -> bool {
+        self.payments.is_empty() && self.credits.is_empty()
+    }
+
     /// What credit notes can still take off: the total less what they already took
     pub fn creditable(&self) -> BigDecimal {
         &self.amounts.total - self.credited()
+    }
+
+    /// What is due and what credit notes can still take off, and that any part beyond what is
+    /// due goes back to the client: `₹47,200.00 due · up to ₹59,000.00 incl. GST can be
+    /// credited; …`. Shown while picking the lines of a credit note, by every front end.
+    pub fn credit_guide(&self) -> String {
+        let currency = self.currency();
+        let balance = self.balance();
+        let creditable = self.creditable();
+        let mut guide = format!(
+            "{} due · up to {} incl. GST can be credited",
+            currency.display(&balance),
+            currency.display(&creditable)
+        );
+        if creditable > balance {
+            guide.push_str("; beyond what is due goes back to the client");
+        }
+        guide
     }
 
     /// Kept for the client as an advance by credit notes, in rupees at the invoice's rate
@@ -690,6 +745,38 @@ impl Invoice {
     }
 }
 
+/// An invoice bills at least one milestone, each once, and its lines add up to its taxable value
+fn check_lines(lines: &[InvoiceLine], amounts: &InvoiceAmounts) -> Result<(), DomainError> {
+    if lines.is_empty() {
+        return Err(DomainError::NoInvoiceLines);
+    }
+    for (i, line) in lines.iter().enumerate() {
+        require(&line.milestone_name, "milestone name")?;
+        if lines[..i]
+            .iter()
+            .any(|l| l.milestone_id == line.milestone_id)
+        {
+            return Err(DomainError::DuplicateInvoiceLine);
+        }
+    }
+    let sum: BigDecimal = lines.iter().map(|l| &l.taxable_value).sum();
+    if sum != amounts.taxable_value {
+        return Err(DomainError::LinesDontAddUp {
+            lines: sum.to_string(),
+            taxable: amounts.taxable_value.to_string(),
+        });
+    }
+    Ok(())
+}
+
+fn milestone_names(lines: &[InvoiceLine]) -> String {
+    lines
+        .iter()
+        .map(|l| l.milestone_name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn round(value: BigDecimal) -> BigDecimal {
     value.with_scale_round(2, bigdecimal::RoundingMode::HalfUp)
 }
@@ -800,7 +887,9 @@ pub struct InvoiceSummary {
     date: NaiveDate,
     kind: InvoiceKind,
     client_name: Box<str>,
-    milestone_name: Box<str>,
+    /// The milestones billed, joined: `Design, Build`
+    #[serde(alias = "milestone_name")]
+    milestones: Box<str>,
     #[serde(default)]
     currency: Currency,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -827,8 +916,9 @@ impl InvoiceSummary {
         &self.client_name
     }
 
-    pub fn milestone_name(&self) -> &str {
-        &self.milestone_name
+    /// The milestones billed, joined: `Design, Build`
+    pub fn milestones(&self) -> &str {
+        &self.milestones
     }
 
     pub fn total(&self) -> &BigDecimal {
@@ -873,7 +963,7 @@ impl From<&Invoice> for InvoiceSummary {
             date: invoice.date,
             kind: invoice.kind,
             client_name: invoice.client_name.as_str().into(),
-            milestone_name: invoice.milestone_name.as_str().into(),
+            milestones: milestone_names(&invoice.lines).into(),
             currency: invoice.currency,
             exchange_rate: invoice.exchange_rate.clone(),
             total: invoice.amounts.total.clone(),

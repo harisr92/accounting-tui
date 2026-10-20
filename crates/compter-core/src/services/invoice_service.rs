@@ -8,13 +8,13 @@ use accounting_core::{
 use bigdecimal::{BigDecimal, Zero};
 use chrono::NaiveDate;
 
-use super::credit_note_builder::{self, BuiltCreditNote, CreditDraft};
+use super::credit_note_builder::{self, BuiltCreditNote, CreditDraft, CreditLineDraft};
 use super::invoice_builder::{self, BuiltInvoice, InvoicingError};
 use super::{ServiceError, chart};
 use crate::domain::{
     BusinessProfile, CREDIT_NOTE_PREFIX, Credit, CreditNote, Currency, DomainError, ExchangeRate,
     FiscalYear, Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber, InvoiceStatus, InvoiceSummary,
-    Logo, LogoId, MilestoneId, MilestoneStatus, Payment, ProfileDraft, Project, ProjectId,
+    Logo, LogoId, MilestoneId, MilestoneSort, Payment, ProfileDraft, Project, ProjectId,
     ReturnKind, Returned,
 };
 use crate::storage::{
@@ -65,6 +65,31 @@ pub struct Credited {
     pub note: CreditNote,
     pub invoice: Invoice,
     pub pdf: Result<Option<PathBuf>, String>,
+}
+
+/// One line of an invoice and how much of it credit notes can still take back
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreditableLine {
+    pub milestone_id: MilestoneId,
+    pub name: String,
+    /// What the line billed, before GST, in the invoice's currency
+    pub billed: BigDecimal,
+    /// What credit notes have not taken back yet, before GST
+    pub creditable: BigDecimal,
+}
+
+impl CreditableLine {
+    /// `amount` (before GST) as a credit note would take it off this line: more than zero, in
+    /// whole paise, and no more than is left on it
+    pub fn check(&self, amount: &BigDecimal) -> Result<BigDecimal, DomainError> {
+        let amount = credit_note_builder::credit_amount(amount)?;
+        if amount > self.creditable {
+            return Err(DomainError::CreditExceedsLine {
+                left: self.creditable.to_string(),
+            });
+        }
+        Ok(amount)
+    }
 }
 
 /// Invoicing and payments. With a [`DataDir`], PDFs are written under it; without one (demo,
@@ -133,16 +158,17 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         Ok(self.repo.load_invoice(number)?)
     }
 
-    /// Build the invoice the milestone would get on `date`, without saving anything. `rate` is
-    /// needed for a project billed in a foreign currency (rupees per unit on `date`).
+    /// Build the invoice `milestones` of the project would get together on `date`, without
+    /// saving anything. `rate` is needed for a project billed in a foreign currency (rupees per
+    /// unit on `date`).
     pub fn preview(
         &self,
         project_id: ProjectId,
-        milestone_id: MilestoneId,
+        milestones: &[MilestoneId],
         date: NaiveDate,
         rate: Option<ExchangeRate>,
     ) -> Result<InvoicePreview, ServiceError> {
-        let (_, built, _) = self.build(project_id, milestone_id, date, rate)?;
+        let (_, built, _) = self.build(project_id, milestones, date, rate)?;
         let invoice = &built.invoice;
         Ok(InvoicePreview {
             number: invoice.number().clone(),
@@ -155,15 +181,16 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         })
     }
 
-    /// Issue the next invoice for a pending milestone, post it and write its PDF
+    /// Issue the next invoice billing pending `milestones` of a project, a line each, post it
+    /// and write its PDF
     pub fn issue(
         &mut self,
         project_id: ProjectId,
-        milestone_id: MilestoneId,
+        milestones: &[MilestoneId],
         date: NaiveDate,
         rate: Option<ExchangeRate>,
     ) -> Result<Issued, ServiceError> {
-        let (mut project, built, sequence) = self.build(project_id, milestone_id, date, rate)?;
+        let (mut project, built, sequence) = self.build(project_id, milestones, date, rate)?;
         let BuiltInvoice {
             invoice,
             entries,
@@ -172,10 +199,7 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         // Render before saving: a document that can't be printed is never issued
         let pdf = self.render(&invoice)?;
 
-        let index = project
-            .milestone_index(milestone_id)
-            .ok_or(InvoicingError::NotPending)?;
-        project.invoice_milestone(index, invoice.number().as_str())?;
+        project.invoice_milestones(&invoice.milestone_ids(), invoice.number().as_str())?;
         let transaction = entries
             .into_iter()
             .fold(
@@ -206,7 +230,7 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
     }
 
     /// Record all or part of what the client owes on an invoice in rupees: `received` reached
-    /// the bank, `tds` was withheld. The milestone becomes paid once nothing is left to pay.
+    /// the bank, `tds` was withheld. Its milestones become paid once nothing is left to pay.
     pub fn record_payment(
         &mut self,
         number: &InvoiceNumber,
@@ -234,7 +258,7 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         self.save_payment(invoice, &payment)
     }
 
-    /// Post `payment`, just added to `invoice`, and save both (with the milestone once paid)
+    /// Post `payment`, just added to `invoice`, and save both (with its milestones once paid)
     fn save_payment(
         &mut self,
         invoice: Invoice,
@@ -244,10 +268,9 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         let date = payment.date;
         let project = if invoice.is_settled() {
             let mut project = self.repo.load(invoice.project_id())?;
-            let index = project
-                .milestone_index(invoice.milestone_id())
-                .ok_or_else(|| ServiceError::MissingMilestone(number.to_string()))?;
-            project.record_payment(index)?;
+            project
+                .settle_invoice(&invoice.milestone_ids(), true)
+                .map_err(|e| missing_milestone(e, &number))?;
             Some(project)
         } else {
             None
@@ -308,6 +331,11 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         let terms = draft.returned.clone();
         let (mut invoice, built, _) = self.build_credit(number, draft)?;
         let credit = invoice.apply_credit(&built.note, terms)?;
+        // Refuse here what issuing would: a line credited beyond what it billed
+        let mut project = self.repo.load(invoice.project_id())?;
+        project
+            .credit_milestones(&line_credits(&built.note))
+            .map_err(|e| missing_milestone(e, number))?;
         let note = &built.note;
         Ok(CreditPreview {
             number: note.number().clone(),
@@ -320,8 +348,8 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         })
     }
 
-    /// Issue a credit note against invoice `number`, post it and write its PDF. A note that
-    /// leaves nothing due settles the invoice's milestone. The part of a note the client already
+    /// Issue a credit note against invoice `number`, post it and write its PDF. Each line's
+    /// credit is recorded on its milestone; a note that leaves nothing due settles them all. The part of a note the client already
     /// paid is posted back to them: refunded from the bank, or held as an advance.
     pub fn issue_credit(
         &mut self,
@@ -341,20 +369,17 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         };
         let credit = invoice.apply_credit(&note, terms)?;
         let mut project = self.repo.load(invoice.project_id())?;
-        let index = project
-            .milestone_index(invoice.milestone_id())
-            .ok_or_else(|| ServiceError::MissingMilestone(number.to_string()))?;
-        let was_invoiced = project
-            .milestones()
-            .get(index)
-            .is_some_and(|m| m.status() == MilestoneStatus::Invoiced);
-        project.credit_milestone(index, &note.amounts().taxable_value)?;
-        // A milestone already paid stays paid
-        match invoice.status() {
-            InvoiceStatus::Credited if was_invoiced => project.cancel_milestone(index)?,
-            InvoiceStatus::Paid if was_invoiced => project.record_payment(index)?,
-            _ => {}
-        }
+        let ids = invoice.milestone_ids();
+        let settle = |project: &mut Project| -> Result<(), DomainError> {
+            project.credit_milestones(&line_credits(&note))?;
+            // A milestone already paid stays paid
+            match invoice.status() {
+                InvoiceStatus::Credited => project.settle_invoice(&ids, false),
+                InvoiceStatus::Paid => project.settle_invoice(&ids, true),
+                InvoiceStatus::Issued | InvoiceStatus::PartlyPaid => Ok(()),
+            }
+        };
+        settle(&mut project).map_err(|e| missing_milestone(e, number))?;
         let transaction = entries
             .into_iter()
             .fold(
@@ -403,6 +428,47 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         Ok(held)
     }
 
+    /// Each line of `invoice` with what credit notes can still take back from it, read from the
+    /// milestones they are recorded on. Takes the invoice the caller already holds, so only its
+    /// project is loaded.
+    pub fn creditable_lines(&self, invoice: &Invoice) -> Result<Vec<CreditableLine>, ServiceError> {
+        let project = self.repo.load(invoice.project_id())?;
+        creditable_lines_of(invoice, &project)
+    }
+
+    /// Check the lines picked for a credit note on `invoice` before asking when and why: each
+    /// on the invoice, once, for more than zero in whole paise and no more than is left on it.
+    /// A refusal is [`ServiceError::CreditLine`], naming the line.
+    pub fn check_credit_lines(
+        &self,
+        invoice: &Invoice,
+        lines: &[CreditLineDraft],
+    ) -> Result<(), ServiceError> {
+        let creditable = self.creditable_lines(invoice)?;
+        for (i, draft) in lines.iter().enumerate() {
+            let line = creditable
+                .iter()
+                .find(|line| line.milestone_id == draft.milestone_id)
+                .ok_or(DomainError::NotOnInvoice)?;
+            let refused = |source| ServiceError::CreditLine {
+                milestone: line.milestone_id,
+                name: line.name.clone(),
+                source: Box::new(source),
+            };
+            if lines[..i]
+                .iter()
+                .any(|d| d.milestone_id == draft.milestone_id)
+            {
+                return Err(refused(DomainError::DuplicateCreditLine));
+            }
+            line.check(&draft.taxable_value).map_err(refused)?;
+        }
+        if lines.is_empty() {
+            return Err(DomainError::NoCreditLines.into());
+        }
+        Ok(())
+    }
+
     pub fn load_credit_note(&self, number: &InvoiceNumber) -> Result<CreditNote, ServiceError> {
         Ok(self.repo.load_credit_note(number)?)
     }
@@ -430,7 +496,12 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         if invoice.creditable() <= BigDecimal::zero() {
             return Err(DomainError::CreditExceedsInvoice {
                 remaining: invoice.creditable().to_string(),
-                got: draft.taxable_value.to_string(),
+                got: draft
+                    .lines
+                    .iter()
+                    .map(|line| &line.taxable_value)
+                    .sum::<BigDecimal>()
+                    .to_string(),
             }
             .into());
         }
@@ -457,24 +528,36 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         Ok(path)
     }
 
-    /// Load the project, take the year's next number and build the invoice
+    /// Load the project, take the year's next number and build the invoice, its lines in the
+    /// order the milestones are listed by default (due date)
     fn build(
         &self,
         project_id: ProjectId,
-        milestone_id: MilestoneId,
+        milestones: &[MilestoneId],
         date: NaiveDate,
         rate: Option<ExchangeRate>,
     ) -> Result<(Project, BuiltInvoice, u32), ServiceError> {
         let profile = self.repo.load_profile()?.ok_or(InvoicingError::NoProfile)?;
         let project = self.repo.load(project_id)?;
-        let milestone = project
-            .milestone_index(milestone_id)
-            .and_then(|i| project.milestones().get(i))
-            .ok_or(InvoicingError::NotPending)?;
+        if milestones
+            .iter()
+            .any(|&id| project.milestone_index(id).is_none())
+        {
+            return Err(InvoicingError::NotPending.into());
+        }
+        let selected: Vec<_> = MilestoneSort::default()
+            .positions(project.milestones())
+            .into_iter()
+            .filter_map(|i| project.milestones().get(i))
+            .filter(|m| milestones.contains(&m.id()))
+            .collect();
+        if selected.len() != milestones.len() {
+            return Err(DomainError::DuplicateInvoiceLine.into());
+        }
         let year = FiscalYear::containing(date);
         let sequence = self.repo.next_sequence(year)?;
         let number = InvoiceNumber::new(profile.invoice_prefix(), year, sequence);
-        let built = invoice_builder::build(&profile, &project, milestone, number, date, rate)?;
+        let built = invoice_builder::build(&profile, &project, &selected, number, date, rate)?;
         Ok((project, built, sequence))
     }
 
@@ -535,6 +618,46 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         write_file(&path, bytes)
             .map(|()| Some(path))
             .map_err(|e| e.to_string())
+    }
+}
+
+/// Each line of `invoice` with what credit notes can still take back from it, read from the
+/// milestones of `project` (the invoice's) they are recorded on
+pub fn creditable_lines_of(
+    invoice: &Invoice,
+    project: &Project,
+) -> Result<Vec<CreditableLine>, ServiceError> {
+    invoice
+        .lines()
+        .iter()
+        .map(|line| {
+            let milestone = project
+                .milestone_index(line.milestone_id)
+                .and_then(|i| project.milestones().get(i))
+                .ok_or_else(|| ServiceError::MissingMilestone(invoice.number().to_string()))?;
+            Ok(CreditableLine {
+                milestone_id: line.milestone_id,
+                name: line.milestone_name.clone(),
+                billed: line.taxable_value.clone(),
+                creditable: &line.taxable_value - milestone.credited(),
+            })
+        })
+        .collect()
+}
+
+/// What each line of `note` takes off its milestone, before GST
+fn line_credits(note: &CreditNote) -> Vec<(MilestoneId, BigDecimal)> {
+    note.lines()
+        .iter()
+        .map(|line| (line.milestone_id, line.taxable_value.clone()))
+        .collect()
+}
+
+/// An invoice line whose milestone is gone from the project: the records disagree
+fn missing_milestone(error: DomainError, number: &InvoiceNumber) -> ServiceError {
+    match error {
+        DomainError::NotOnInvoice => ServiceError::MissingMilestone(number.to_string()),
+        other => other.into(),
     }
 }
 

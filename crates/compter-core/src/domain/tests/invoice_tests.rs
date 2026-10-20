@@ -4,7 +4,8 @@ use chrono::NaiveDate;
 
 use crate::domain::{
     Currency, DomainError, ExchangeRate, FiscalYear, Invoice, InvoiceAmounts, InvoiceKind,
-    InvoiceNumber, InvoiceParts, InvoiceStatus, InvoiceSummary, LogoId, MilestoneId, ProjectId,
+    InvoiceLine, InvoiceNumber, InvoiceParts, InvoiceStatus, InvoiceSummary, LogoId, MilestoneId,
+    ProjectId,
 };
 
 fn date(day: u32) -> NaiveDate {
@@ -43,9 +44,12 @@ fn parts() -> InvoiceParts {
         date: date(1),
         kind: InvoiceKind::Plain,
         project_id: ProjectId::generate(),
-        milestone_id: MilestoneId::generate(),
         client_name: "Acme".to_owned(),
-        milestone_name: "Design".to_owned(),
+        lines: vec![InvoiceLine {
+            milestone_id: MilestoneId::generate(),
+            milestone_name: "Design".to_owned(),
+            taxable_value: BigDecimal::from(1000),
+        }],
         currency: Currency::Inr,
         exchange_rate: None,
         amounts: InvoiceAmounts::untaxed(BigDecimal::from(1000)),
@@ -352,4 +356,66 @@ fn tds_is_never_reversed_on_a_foreign_invoice() {
     let mut stored: serde_json::Value = serde_json::from_str(json).unwrap();
     stored["credits"][0]["returned"]["tds_reversed"] = "10.00".into();
     assert!(serde_json::from_value::<Invoice>(stored).is_err());
+}
+
+fn design_line(amount: i64) -> InvoiceLine {
+    InvoiceLine {
+        milestone_id: MilestoneId::generate(),
+        milestone_name: "Design".to_owned(),
+        taxable_value: BigDecimal::from(amount),
+    }
+}
+
+#[test]
+fn an_invoice_bills_each_milestone_once_and_its_lines_add_up() {
+    let two = InvoiceParts {
+        lines: vec![design_line(600), design_line(400)],
+        ..parts()
+    };
+    assert_eq!(Invoice::issue(two.clone()).unwrap().lines().len(), 2);
+
+    let none = InvoiceParts {
+        lines: Vec::new(),
+        ..parts()
+    };
+    assert!(matches!(
+        Invoice::issue(none),
+        Err(DomainError::NoInvoiceLines)
+    ));
+    let line = design_line(500);
+    let repeated = InvoiceParts {
+        lines: vec![line.clone(), line],
+        ..parts()
+    };
+    assert!(matches!(
+        Invoice::issue(repeated),
+        Err(DomainError::DuplicateInvoiceLine)
+    ));
+    let short = InvoiceParts {
+        lines: vec![design_line(600)],
+        ..parts()
+    };
+    assert!(matches!(
+        Invoice::issue(short),
+        Err(DomainError::LinesDontAddUp { .. })
+    ));
+
+    // The same rules hold for a stored record
+    let mut json = serde_json::to_value(Invoice::issue(two).unwrap()).unwrap();
+    json["lines"][1]["taxable_value"] = serde_json::json!("300");
+    assert!(serde_json::from_value::<Invoice>(json).is_err());
+}
+
+#[test]
+fn a_record_from_before_lines_bills_its_one_milestone() {
+    let inv = invoice();
+    let mut json = serde_json::to_value(&inv).unwrap();
+    let line = json["lines"][0].clone();
+    let fields = json.as_object_mut().unwrap();
+    fields.remove("lines");
+    fields.insert("milestone_id".to_owned(), line["milestone_id"].clone());
+    fields.insert("milestone_name".to_owned(), line["milestone_name"].clone());
+    let read = serde_json::from_value::<Invoice>(json).unwrap();
+    assert_eq!(read.lines(), inv.lines());
+    assert_eq!(InvoiceSummary::from(&read).milestones(), "Design");
 }

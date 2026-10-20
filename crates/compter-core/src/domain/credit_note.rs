@@ -7,11 +7,20 @@ use super::error::require;
 use super::invoice::check_currency;
 use super::{
     Currency, DomainError, ExchangeRate, FiscalYear, InvoiceAmounts, InvoiceKind, InvoiceNumber,
-    LogoId,
+    LogoId, MilestoneId,
 };
 
 /// Credit notes are numbered in their own series: `CN/26-27/001`
 pub const CREDIT_NOTE_PREFIX: &str = "CN";
+
+/// What a credit note takes back from one line of its invoice
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreditLine {
+    /// The milestone the invoice line billed
+    pub milestone_id: MilestoneId,
+    /// Before GST, in the note's currency
+    pub taxable_value: BigDecimal,
+}
 
 /// A credit note: takes all or part of an invoice back, reducing what the client owes. The way
 /// to correct an issued invoice, which is never edited. A billing record like an invoice:
@@ -27,6 +36,10 @@ pub struct CreditNote {
     kind: InvoiceKind,
     client_name: String,
     reason: String,
+    /// The invoice lines it takes back from. Empty on notes from before v5, which credited
+    /// their invoice's only line.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    lines: Vec<CreditLine>,
     /// The invoice's currency and rate: a note credits at the rate the invoice was issued at
     #[serde(default)]
     currency: Currency,
@@ -54,6 +67,8 @@ struct RawCreditNote {
     client_name: String,
     reason: String,
     #[serde(default)]
+    lines: Vec<CreditLine>,
+    #[serde(default)]
     currency: Currency,
     #[serde(default)]
     exchange_rate: Option<ExchangeRate>,
@@ -78,6 +93,7 @@ impl TryFrom<RawCreditNote> for CreditNote {
             kind: raw.kind,
             client_name: raw.client_name,
             reason: raw.reason,
+            lines: raw.lines,
             currency: raw.currency,
             exchange_rate: raw.exchange_rate,
             amounts: raw.amounts,
@@ -98,6 +114,7 @@ pub struct CreditNoteParts {
     pub kind: InvoiceKind,
     pub client_name: String,
     pub reason: String,
+    pub lines: Vec<CreditLine>,
     pub currency: Currency,
     pub exchange_rate: Option<ExchangeRate>,
     pub amounts: InvoiceAmounts,
@@ -115,6 +132,17 @@ impl CreditNote {
         if parts.amounts.total <= BigDecimal::zero() {
             return Err(DomainError::NonPositiveAmount);
         }
+        for (i, line) in parts.lines.iter().enumerate() {
+            if line.taxable_value <= BigDecimal::zero() {
+                return Err(DomainError::NonPositiveAmount);
+            }
+            if parts.lines[..i]
+                .iter()
+                .any(|l| l.milestone_id == line.milestone_id)
+            {
+                return Err(DomainError::DuplicateCreditLine);
+            }
+        }
         Ok(Self {
             number: parts.number,
             date: parts.date,
@@ -122,6 +150,7 @@ impl CreditNote {
             kind: parts.kind,
             client_name: parts.client_name,
             reason: parts.reason.trim().to_owned(),
+            lines: parts.lines,
             currency: parts.currency,
             exchange_rate: parts.exchange_rate,
             amounts: parts.amounts,
@@ -159,6 +188,11 @@ impl CreditNote {
 
     pub fn reason(&self) -> &str {
         &self.reason
+    }
+
+    /// The invoice lines taken back from; empty on a note from before v5
+    pub fn lines(&self) -> &[CreditLine] {
+        &self.lines
     }
 
     pub fn currency(&self) -> Currency {

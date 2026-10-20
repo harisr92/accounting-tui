@@ -13,12 +13,15 @@ mod project_service;
 mod report_service;
 pub mod reports;
 
-pub use credit_note_builder::{BuiltCreditNote, CreditDraft};
+pub use credit_note_builder::{BuiltCreditNote, CreditDraft, CreditLineDraft};
 pub use error::ServiceError;
 pub use expense_service::{ExpenseDraft, ExpenseService};
 pub use gstr1::{MonthlyIff, QuarterlyGstr1};
 pub use invoice_builder::{BuiltInvoice, InvoicingError, PLAIN_NOTE, build as build_invoice};
-pub use invoice_service::{CreditPreview, Credited, InvoicePreview, InvoiceService, Issued};
+pub use invoice_service::{
+    CreditPreview, CreditableLine, Credited, InvoicePreview, InvoiceService, Issued,
+    creditable_lines_of,
+};
 pub use preferences_service::PreferencesService;
 pub use project_service::{MilestoneDraft, ProjectDraft, ProjectService};
 pub use report_service::ReportService;

@@ -18,6 +18,14 @@ pub enum ServiceError {
     Pdf(#[from] PdfError),
     #[error(transparent)]
     Storage(#[from] StorageError),
+    #[error("{name}: {source}")]
+    CreditLine {
+        /// The milestone the refused line billed
+        milestone: crate::domain::MilestoneId,
+        name: String,
+        #[source]
+        source: Box<DomainError>,
+    },
     #[error("the milestone billed by invoice {0} no longer exists")]
     MissingMilestone(String),
     #[error("no project is named {0:?}")]

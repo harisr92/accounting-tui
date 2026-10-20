@@ -65,7 +65,11 @@ pub fn gap_minutes(from: DateTime<FixedOffset>, to: DateTime<FixedOffset>) -> u3
         .unwrap_or(u32::MAX)
         .max(1);
     if from.date_naive() == to.date_naive() {
-        minutes
+        if minutes > MAX_MULTI_DAY_MINUTES {
+            MAX_MULTI_DAY_MINUTES
+        } else {
+            minutes
+        }
     } else {
         minutes.min(MAX_MULTI_DAY_MINUTES)
     }

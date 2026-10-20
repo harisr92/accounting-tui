@@ -87,7 +87,10 @@ fn credit_notes_come_off_the_year_they_are_dated_in() {
     let number = crate::domain::InvoiceNumber::from_stored("NDC/26-27/004");
     let draft = crate::services::CreditDraft {
         date: NaiveDate::from_ymd_opt(2027, 1, 15).unwrap(),
-        taxable_value: rupees(10_000),
+        lines: vec![crate::services::CreditLineDraft {
+            milestone_id: invoices.load(&number).unwrap().lines()[0].milestone_id,
+            taxable_value: rupees(10_000),
+        }],
         reason: "Discount".to_owned(),
         returned: crate::domain::ReturnTerms::default(),
     };

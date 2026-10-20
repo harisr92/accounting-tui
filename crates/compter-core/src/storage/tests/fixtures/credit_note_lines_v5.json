@@ -1,0 +1,116 @@
+{
+  "number": "CN/26-27/001",
+  "date": "2026-10-15",
+  "invoice": "INV/26-27/001",
+  "kind": "tax",
+  "client_name": "Acme",
+  "reason": "Scope cut",
+  "lines": [
+    {
+      "milestone_id": "01a15835-3d31-718d-92bb-02cfd685beed",
+      "taxable_value": "5000.00"
+    },
+    {
+      "milestone_id": "01a15835-3d33-74f4-b66d-c26ea647859e",
+      "taxable_value": "10000.00"
+    }
+  ],
+  "currency": "INR",
+  "amounts": {
+    "taxable_value": "15000.00",
+    "cgst": "0",
+    "sgst": "0",
+    "igst": "2700.00",
+    "total": "17700.00"
+  },
+  "print": {
+    "title": "Credit Note",
+    "invoice_number": "CN/26-27/001",
+    "invoice_date": "15-10-2026",
+    "place_of_supply": "29",
+    "is_inter_state": true,
+    "seller": {
+      "name": "Harin Dev Studio",
+      "address": [
+        "12 MG Road",
+        "Pune 411001"
+      ],
+      "gstin": "27AAPFU0939F1ZV"
+    },
+    "buyer": {
+      "name": "Acme",
+      "address": [],
+      "gstin": "29AAPFU0939F1ZR"
+    },
+    "rows": [
+      {
+        "serial": 1,
+        "hsn_sac": "998314",
+        "description": "Website - Design: Scope cut",
+        "quantity": "1",
+        "rate": "5,000.00",
+        "taxable_value": "5,000.00",
+        "gst_rate": "18%",
+        "tax": "900.00",
+        "amount": "5,900.00"
+      },
+      {
+        "serial": 2,
+        "hsn_sac": "998314",
+        "description": "Website - Build: Scope cut",
+        "quantity": "1",
+        "rate": "10,000.00",
+        "taxable_value": "10,000.00",
+        "gst_rate": "18%",
+        "tax": "1,800.00",
+        "amount": "11,800.00"
+      }
+    ],
+    "taxable_value": "15,000.00",
+    "tax_lines": [
+      {
+        "label": "IGST",
+        "amount": "2,700.00"
+      }
+    ],
+    "total_tax": "2,700.00",
+    "total": "17,700.00",
+    "total_in_words": "Rupees Seventeen Thousand Seven Hundred Only"
+  },
+  "terms": [
+    "Credit note against invoice INV/26-27/001 dated 15-10-2026",
+    "Reason: Scope cut"
+  ],
+  "gst": {
+    "note_number": "CN/26-27/001",
+    "note_date": "2026-10-15",
+    "original": {
+      "number": "INV/26-27/001",
+      "date": "2026-10-15",
+      "kind": "B2b",
+      "value": "70800.00"
+    },
+    "seller_gstin": "27AAPFU0939F1ZV",
+    "buyer": {
+      "registered": "29AAPFU0939F1ZR"
+    },
+    "line_items": [
+      {
+        "hsn_sac": "998314",
+        "description": "Website - Design: Scope cut",
+        "quantity": "1",
+        "unit_price": "5000.00",
+        "gst_rate": "18",
+        "treatment": "taxable"
+      },
+      {
+        "hsn_sac": "998314",
+        "description": "Website - Build: Scope cut",
+        "quantity": "1",
+        "unit_price": "10000.00",
+        "gst_rate": "18",
+        "treatment": "taxable"
+      }
+    ]
+  }
+}
