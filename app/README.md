@@ -94,9 +94,9 @@ security assessment.
 2. OAuth consent screen: External, publishing status **Testing**, your account as a test
    user, scope `https://www.googleapis.com/auth/drive`.
 3. OAuth clients (Credentials → Create credentials → OAuth client ID):
-   - **iOS**, bundle ID `dev.compter.compter`. Copy `ios/Flutter/Google.xcconfig.example` to
+   - **iOS**, bundle ID `app.compter`. Copy `ios/Flutter/Google.xcconfig.example` to
      `ios/Flutter/Google.xcconfig` (gitignored) and fill in its client ID and reversed ID.
-   - **Android**, package `dev.compter.compter`, with the SHA-1 of each key that signs the
+   - **Android**, package `app.compter`, with the SHA-1 of each key that signs the
      app: the debug key (`keytool -list -v -keystore ~/.android/debug.keystore -storepass
      android`) and the upload key.
      Its ID goes nowhere: Google finds it by package and SHA-1.
@@ -128,7 +128,7 @@ git tag mobile-v0.3.0 && git push origin mobile-v0.3.0
 
 **Google Play** (developer account, $25 once)
 
-1. Create the app `dev.compter.compter` in Play Console.
+1. Create the app `app.compter` in Play Console.
 2. Make an upload key and keep it safe; losing it means asking Google to reset it:
    `keytool -genkeypair -keystore upload.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000`
 3. Upload the first app bundle by hand (Play requires it): put the key in
@@ -144,7 +144,7 @@ git tag mobile-v0.3.0 && git push origin mobile-v0.3.0
 
 **App Store** (Apple Developer Program, $99 a year)
 
-1. Register the bundle ID `dev.compter.compter` and create the app in App Store Connect.
+1. Register the bundle ID `app.compter` and create the app in App Store Connect.
 2. Create an Apple Distribution certificate (export it as a `.p12` with a password) and an
    App Store provisioning profile for the bundle ID.
 3. In App Store Connect, under Users and Access, Integrations, create an API key with the
