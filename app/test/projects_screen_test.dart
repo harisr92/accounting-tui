@@ -265,6 +265,39 @@ void main() {
     expect(find.text('Mobile App'), findsOneWidget);
     expect(find.text('Data Pipeline'), findsOneWidget);
   });
+
+  testWidgets('searching narrows the milestones by name or amount', (
+    tester,
+  ) async {
+    await launchDemo(tester);
+    await tester.tap(find.text('Website Revamp'));
+    await settle(tester);
+    await tester.tap(find.byTooltip('Search'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'front');
+    await tester.pumpAndSettle();
+    expect(find.text('Frontend'), findsOneWidget);
+    expect(find.text('Launch'), findsNothing);
+
+    // An amount matches as shown or typed without commas
+    for (final amount in ['40,000', '40000']) {
+      await tester.enterText(find.byType(TextField), amount);
+      await tester.pumpAndSettle();
+      expect(find.text('Launch'), findsOneWidget, reason: amount);
+      expect(find.text('Frontend'), findsNothing, reason: amount);
+    }
+
+    await tester.enterText(find.byType(TextField), 'nothing like this');
+    await tester.pumpAndSettle();
+    expect(find.text('Nothing matches “nothing like this”'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Close search'));
+    await tester.pumpAndSettle();
+    expect(find.text('Frontend'), findsOneWidget);
+    expect(find.text('Launch'), findsOneWidget);
+    expect(find.byTooltip('Sort milestones'), findsOneWidget);
+  });
 }
 
 /// Launch the demo and create a project called [name], landing on it

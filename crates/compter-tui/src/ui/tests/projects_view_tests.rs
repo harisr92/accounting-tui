@@ -527,3 +527,113 @@ fn the_last_pending_milestone_is_invoiced_without_a_picker() {
     let question = screen(&app, W, H);
     assert!(question.contains("Issue INV/26-27/002"), "{question}");
 }
+
+/// The milestone table's part of the screen: right of the project list
+fn milestone_panel(app: &crate::app::App) -> String {
+    screen(app, W, H)
+        .lines()
+        .map(|line| line.chars().skip(36).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn milestone_search_narrows_rows_by_name_or_amount() {
+    let (store, _) = store_with_three_milestones();
+    let mut app = projects_app(&store);
+    type_keys(&mut app, "\t/des\n");
+    let by_name = milestone_panel(&app);
+    assert!(
+        by_name.contains("Milestones · by due date /des"),
+        "{by_name}"
+    );
+    assert!(by_name.contains("Design"), "{by_name}");
+    assert!(
+        !by_name.contains("build") && !by_name.contains("launch"),
+        "{by_name}"
+    );
+
+    // An amount matches as typed plainly or as shown
+    for amount in ["700", "₹700.00"] {
+        app.handle_key(Key::Char('/'));
+        app.handle_key(Key::Ctrl('u'));
+        type_keys(&mut app, &format!("{amount}\n"));
+        let by_amount = milestone_panel(&app);
+        assert!(by_amount.contains("build"), "{amount}: {by_amount}");
+        assert!(!by_amount.contains("Design"), "{amount}: {by_amount}");
+    }
+
+    app.handle_key(Key::Char('/'));
+    app.handle_key(Key::Ctrl('u'));
+    type_keys(&mut app, "nothing\n");
+    let none = screen(&app, W, H);
+    assert!(none.contains("No milestones match the search"), "{none}");
+}
+
+#[test]
+fn milestone_actions_follow_the_filtered_rows() {
+    let (store, project) = store_with_three_milestones();
+    let mut app = projects_app(&store);
+    // The only row left is launch, stored first but listed last by due date
+    type_keys(&mut app, "\t/launch\nxy");
+    let names: Vec<String> = milestones(&store, &project)
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
+    assert_eq!(names, ["Design", "build"]);
+}
+
+#[test]
+fn invoicing_a_filtered_milestone_still_offers_every_pending_one() {
+    let (store, _) = store_with_three_milestones();
+    let mut app = projects_app(&store);
+    type_keys(&mut app, "\t/build\ni");
+    let picker = screen(&app, W, H);
+    assert!(picker.contains("Milestones to invoice"), "{picker}");
+    assert!(
+        picker.contains("Design") && picker.contains("launch"),
+        "{picker}"
+    );
+    assert!(picker.contains("1 picked"), "{picker}");
+}
+
+#[test]
+fn esc_clears_the_milestone_search_and_keeps_the_cursor() {
+    let (store, _) = store_with_three_milestones();
+    let mut app = projects_app(&store);
+    type_keys(&mut app, "\t/launch\n");
+    app.handle_key(Key::Esc);
+    let cleared = milestone_panel(&app);
+    assert!(
+        cleared.contains("Design") && cleared.contains("build"),
+        "{cleared}"
+    );
+    assert!(cleared.contains("> launch"), "{cleared}");
+}
+
+#[test]
+fn selecting_another_project_clears_the_milestone_search() {
+    let store = store_with_finished_project();
+    let mut app = projects_app(&store);
+    type_keys(&mut app, "\t/nothing\n");
+    assert!(screen(&app, W, H).contains("No milestones match the search"));
+    type_keys(&mut app, "\tj");
+    let other = screen(&app, W, H);
+    assert!(!other.contains("No milestones match"), "{other}");
+    assert!(!other.contains("/nothing"), "{other}");
+}
+
+#[test]
+fn a_renamed_milestone_the_search_hides_clears_the_search() {
+    let (store, _) = store_with_three_milestones();
+    let mut app = projects_app(&store);
+    type_keys(&mut app, "\t/build\ne");
+    app.handle_key(Key::Ctrl('u'));
+    type_keys(&mut app, "Backend\n");
+    let renamed = milestone_panel(&app);
+    assert!(renamed.contains("> Backend"), "{renamed}");
+    assert!(
+        renamed.contains("Design") && renamed.contains("launch"),
+        "{renamed}"
+    );
+}

@@ -41,6 +41,7 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.searching,
     required this.onOpen,
     required this.onClose,
+    this.actions = const [],
   });
 
   final String title;
@@ -52,6 +53,9 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onOpen;
   final VoidCallback onClose;
 
+  /// Shown before the search button while the box is closed
+  final List<Widget> actions;
+
   @override
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
@@ -61,6 +65,7 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
       return TitleBar(
         title: title,
         actions: [
+          ...actions,
           IconButton(
             tooltip: 'Search',
             icon: const Icon(Icons.search),
@@ -107,18 +112,22 @@ mixin Searching<W extends StatefulWidget> on State<W> {
     super.dispose();
   }
 
-  SearchAppBar searchAppBar({required String title, required String hint}) =>
-      SearchAppBar(
-        title: title,
-        hint: hint,
-        controller: searchController,
-        searching: searching,
-        onOpen: () => setState(() => searching = true),
-        onClose: () => setState(() {
-          searching = false;
-          searchController.clear();
-        }),
-      );
+  SearchAppBar searchAppBar({
+    required String title,
+    required String hint,
+    List<Widget> actions = const [],
+  }) => SearchAppBar(
+    title: title,
+    hint: hint,
+    actions: actions,
+    controller: searchController,
+    searching: searching,
+    onOpen: () => setState(() => searching = true),
+    onClose: () => setState(() {
+      searching = false;
+      searchController.clear();
+    }),
+  );
 }
 
 /// Shown instead of the rows when a search matches none of them
