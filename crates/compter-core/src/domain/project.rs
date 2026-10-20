@@ -364,11 +364,18 @@ impl Project {
     /// Hide a finished project from the list. Only finished work is archived: every milestone
     /// invoiced, so nothing is left to bill.
     pub fn archive(&mut self) -> Result<(), DomainError> {
-        if self.status == ProjectStatus::Active {
-            return Err(DomainError::ProjectNotFinished);
-        }
+        self.ensure_archivable()?;
         self.archived = true;
         Ok(())
+    }
+
+    /// Whether `archive` would accept the project: nothing pending is left to bill
+    pub fn ensure_archivable(&self) -> Result<(), DomainError> {
+        if self.status == ProjectStatus::Active {
+            Err(DomainError::ProjectNotFinished)
+        } else {
+            Ok(())
+        }
     }
 
     /// Bring an archived project back to the list
