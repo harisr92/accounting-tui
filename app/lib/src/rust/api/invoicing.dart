@@ -7,16 +7,16 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'rows.dart';
 
-// These functions are ignored because they are not marked as `pub`: `return_detail`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`
+// These functions are ignored because they are not marked as `pub`: `new`, `return_detail`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`
 
 /// A credit note as typed
 class CreditInput {
   /// `YYYY-MM-DD`; blank means today
   final String date;
 
-  /// Value taken back before GST, in the invoice's currency
-  final String amount;
+  /// The invoice lines taken back from, each once
+  final List<CreditLineInput> lines;
   final String reason;
 
   /// What happens to the part already paid: kept as an advance for the client, or refunded
@@ -32,7 +32,7 @@ class CreditInput {
 
   const CreditInput({
     required this.date,
-    required this.amount,
+    required this.lines,
     required this.reason,
     required this.keepAsAdvance,
     required this.refundedInr,
@@ -42,7 +42,7 @@ class CreditInput {
   @override
   int get hashCode =>
       date.hashCode ^
-      amount.hashCode ^
+      lines.hashCode ^
       reason.hashCode ^
       keepAsAdvance.hashCode ^
       refundedInr.hashCode ^
@@ -54,11 +54,34 @@ class CreditInput {
       other is CreditInput &&
           runtimeType == other.runtimeType &&
           date == other.date &&
-          amount == other.amount &&
+          lines == other.lines &&
           reason == other.reason &&
           keepAsAdvance == other.keepAsAdvance &&
           refundedInr == other.refundedInr &&
           tdsReversed == other.tdsReversed;
+}
+
+/// What a credit note takes back from one invoice line, as typed
+class CreditLineInput {
+  /// The milestone the line billed (`InvoiceLineRow::milestone_id`)
+  final String milestoneId;
+
+  /// Value taken back before GST, in the invoice's currency. An error in it names the field
+  /// `line:<milestone_id>`.
+  final String amount;
+
+  const CreditLineInput({required this.milestoneId, required this.amount});
+
+  @override
+  int get hashCode => milestoneId.hashCode ^ amount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CreditLineInput &&
+          runtimeType == other.runtimeType &&
+          milestoneId == other.milestoneId &&
+          amount == other.amount;
 }
 
 /// A credit note as it would be issued, shown for confirmation
@@ -201,7 +224,13 @@ class InvoiceDetail {
   final String date;
   final String kind;
   final String clientName;
-  final String milestoneName;
+
+  /// The milestones billed: `Design, Build`
+  final String milestones;
+
+  /// A line per milestone billed, in the order printed, with what credit notes can still
+  /// take back from it
+  final List<InvoiceLineRow> lines;
   final String currency;
 
   /// `₹83.50 per USD`, for an invoice in a foreign currency
@@ -222,6 +251,10 @@ class InvoiceDetail {
   /// Credit notes haven't yet taken off the whole total, so one can be added, even once paid
   final bool creditable;
 
+  /// Shown while picking the lines of a credit note: `₹47,200.00 due · up to ₹59,000.00 incl.
+  /// GST can be credited`, and that any part beyond what is due goes back to the client
+  final String creditGuide;
+
   /// Rupees credit notes hold for this client as an advance, when there are any
   final String? clientAdvance;
 
@@ -238,16 +271,13 @@ class InvoiceDetail {
   /// The TDS a client usually withholds, as a hint on rupee invoices
   final String? usualTds;
 
-  /// To prefill the credit note form: the whole taxable value, while nothing has been paid
-  /// or credited (cancelling the invoice); otherwise left for the user
-  final String? creditValue;
-
   const InvoiceDetail({
     required this.number,
     required this.date,
     required this.kind,
     required this.clientName,
-    required this.milestoneName,
+    required this.milestones,
+    required this.lines,
     required this.currency,
     this.exchangeRate,
     required this.total,
@@ -257,13 +287,13 @@ class InvoiceDetail {
     required this.status,
     required this.settled,
     required this.creditable,
+    required this.creditGuide,
     this.clientAdvance,
     required this.tdsWithheld,
     required this.foreign,
     required this.history,
     required this.balanceValue,
     this.usualTds,
-    this.creditValue,
   });
 
   @override
@@ -272,7 +302,8 @@ class InvoiceDetail {
       date.hashCode ^
       kind.hashCode ^
       clientName.hashCode ^
-      milestoneName.hashCode ^
+      milestones.hashCode ^
+      lines.hashCode ^
       currency.hashCode ^
       exchangeRate.hashCode ^
       total.hashCode ^
@@ -282,13 +313,13 @@ class InvoiceDetail {
       status.hashCode ^
       settled.hashCode ^
       creditable.hashCode ^
+      creditGuide.hashCode ^
       clientAdvance.hashCode ^
       tdsWithheld.hashCode ^
       foreign.hashCode ^
       history.hashCode ^
       balanceValue.hashCode ^
-      usualTds.hashCode ^
-      creditValue.hashCode;
+      usualTds.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -299,7 +330,8 @@ class InvoiceDetail {
           date == other.date &&
           kind == other.kind &&
           clientName == other.clientName &&
-          milestoneName == other.milestoneName &&
+          milestones == other.milestones &&
+          lines == other.lines &&
           currency == other.currency &&
           exchangeRate == other.exchangeRate &&
           total == other.total &&
@@ -309,12 +341,69 @@ class InvoiceDetail {
           status == other.status &&
           settled == other.settled &&
           creditable == other.creditable &&
+          creditGuide == other.creditGuide &&
           clientAdvance == other.clientAdvance &&
           tdsWithheld == other.tdsWithheld &&
           foreign == other.foreign &&
           history == other.history &&
           balanceValue == other.balanceValue &&
-          usualTds == other.usualTds &&
+          usualTds == other.usualTds;
+}
+
+/// One milestone billed on an invoice
+class InvoiceLineRow {
+  final String milestoneId;
+  final String name;
+
+  /// What it billed, before GST
+  final String amount;
+
+  /// What credit notes can still take back from it, before GST
+  final String creditable;
+
+  /// Something is left to credit, so the line can be picked for a credit note
+  final bool canCredit;
+
+  /// All that is left to credit, as a plain number: what picking the line fills an empty
+  /// amount with
+  final String leftValue;
+
+  /// To prefill a credit note's amount for this line: all that is left, as a plain number,
+  /// while nothing has been paid or credited on the invoice (cancelling it); otherwise left
+  /// to type, so nothing is refunded by default
+  final String? creditValue;
+
+  const InvoiceLineRow({
+    required this.milestoneId,
+    required this.name,
+    required this.amount,
+    required this.creditable,
+    required this.canCredit,
+    required this.leftValue,
+    this.creditValue,
+  });
+
+  @override
+  int get hashCode =>
+      milestoneId.hashCode ^
+      name.hashCode ^
+      amount.hashCode ^
+      creditable.hashCode ^
+      canCredit.hashCode ^
+      leftValue.hashCode ^
+      creditValue.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is InvoiceLineRow &&
+          runtimeType == other.runtimeType &&
+          milestoneId == other.milestoneId &&
+          name == other.name &&
+          amount == other.amount &&
+          creditable == other.creditable &&
+          canCredit == other.canCredit &&
+          leftValue == other.leftValue &&
           creditValue == other.creditValue;
 }
 
@@ -338,7 +427,7 @@ class InvoiceList {
           invoices == other.invoices;
 }
 
-/// The invoice a milestone would get today, shown for confirmation before issuing
+/// The invoice milestones would get today, shown for confirmation before issuing
 class InvoicePreviewRow {
   final String number;
   final String clientName;
@@ -389,7 +478,9 @@ class InvoiceRow {
   /// `YYYY-MM-DD`
   final String date;
   final String clientName;
-  final String milestoneName;
+
+  /// The milestones billed: `Design, Build`
+  final String milestones;
 
   /// `TAX`, `EXPORT` or `PLAIN`
   final String kind;
@@ -405,7 +496,7 @@ class InvoiceRow {
     required this.number,
     required this.date,
     required this.clientName,
-    required this.milestoneName,
+    required this.milestones,
     required this.kind,
     required this.total,
     this.due,
@@ -417,7 +508,7 @@ class InvoiceRow {
       number.hashCode ^
       date.hashCode ^
       clientName.hashCode ^
-      milestoneName.hashCode ^
+      milestones.hashCode ^
       kind.hashCode ^
       total.hashCode ^
       due.hashCode ^
@@ -431,14 +522,14 @@ class InvoiceRow {
           number == other.number &&
           date == other.date &&
           clientName == other.clientName &&
-          milestoneName == other.milestoneName &&
+          milestones == other.milestones &&
           kind == other.kind &&
           total == other.total &&
           due == other.due &&
           status == other.status;
 }
 
-/// What issuing did: the invoice, the project with its milestone now invoiced, and whether
+/// What issuing did: the invoice, the project with its milestones now invoiced, and whether
 /// the PDF was written
 class IssuedRow {
   final InvoiceDetail invoice;

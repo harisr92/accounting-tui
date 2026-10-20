@@ -71,7 +71,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -1742015729;
+  int get rustContentHash => 1782505248;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -92,6 +92,12 @@ abstract class RustLibApi extends BaseApi {
     required CompterApp that,
     required String projectId,
     required MilestoneInput input,
+  });
+
+  Future<void> crateApiAppCompterAppCheckCreditLines({
+    required CompterApp that,
+    required String number,
+    required List<CreditLineInput> lines,
   });
 
   Future<ProjectDetail> crateApiAppCompterAppCreateProject({
@@ -175,7 +181,7 @@ abstract class RustLibApi extends BaseApi {
   Future<IssuedRow> crateApiAppCompterAppIssueInvoice({
     required CompterApp that,
     required String projectId,
-    required String milestoneId,
+    required List<String> milestoneIds,
     String? rate,
   });
 
@@ -207,7 +213,7 @@ abstract class RustLibApi extends BaseApi {
   Future<InvoicePreviewRow> crateApiAppCompterAppPreviewInvoice({
     required CompterApp that,
     required String projectId,
-    required String milestoneId,
+    required List<String> milestoneIds,
     String? rate,
   });
 
@@ -377,6 +383,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiAppCompterAppCheckCreditLines({
+    required CompterApp that,
+    required String number,
+    required List<CreditLineInput> lines,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(number, serializer);
+          sse_encode_list_credit_line_input(lines, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppCheckCreditLinesConstMeta,
+        argValues: [that, number, lines],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppCheckCreditLinesConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_check_credit_lines",
+        argNames: ["that", "number", "lines"],
+      );
+
+  @override
   Future<ProjectDetail> crateApiAppCompterAppCreateProject({
     required CompterApp that,
     required ProjectInput input,
@@ -393,7 +439,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 4,
             port: port_,
           );
         },
@@ -431,7 +477,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 5,
             port: port_,
           );
         },
@@ -469,7 +515,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 6,
             port: port_,
           );
         },
@@ -507,7 +553,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 7,
             port: port_,
           );
         },
@@ -538,7 +584,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 8,
             port: port_,
           );
         },
@@ -578,7 +624,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 9,
             port: port_,
           );
         },
@@ -620,7 +666,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 10,
             port: port_,
           );
         },
@@ -660,7 +706,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 11,
             port: port_,
           );
         },
@@ -698,7 +744,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 12,
             port: port_,
           );
         },
@@ -742,7 +788,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 13,
             port: port_,
           );
         },
@@ -788,7 +834,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 14,
             port: port_,
           );
         },
@@ -826,7 +872,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 15,
             port: port_,
           );
         },
@@ -864,7 +910,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 16,
             port: port_,
           );
         },
@@ -900,7 +946,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 17,
             port: port_,
           );
         },
@@ -937,7 +983,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 18,
             port: port_,
           );
         },
@@ -962,7 +1008,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Future<IssuedRow> crateApiAppCompterAppIssueInvoice({
     required CompterApp that,
     required String projectId,
-    required String milestoneId,
+    required List<String> milestoneIds,
     String? rate,
   }) {
     return handler.executeNormal(
@@ -974,12 +1020,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(projectId, serializer);
-          sse_encode_String(milestoneId, serializer);
+          sse_encode_list_String(milestoneIds, serializer);
           sse_encode_opt_String(rate, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 19,
             port: port_,
           );
         },
@@ -988,7 +1034,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_api_error,
         ),
         constMeta: kCrateApiAppCompterAppIssueInvoiceConstMeta,
-        argValues: [that, projectId, milestoneId, rate],
+        argValues: [that, projectId, milestoneIds, rate],
         apiImpl: this,
       ),
     );
@@ -997,7 +1043,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiAppCompterAppIssueInvoiceConstMeta =>
       const TaskConstMeta(
         debugName: "CompterApp_issue_invoice",
-        argNames: ["that", "projectId", "milestoneId", "rate"],
+        argNames: ["that", "projectId", "milestoneIds", "rate"],
       );
 
   @override
@@ -1017,7 +1063,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 20,
             port: port_,
           );
         },
@@ -1055,7 +1101,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 21,
             port: port_,
           );
         },
@@ -1097,7 +1143,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 22,
             port: port_,
           );
         },
@@ -1128,7 +1174,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 23,
             port: port_,
           );
         },
@@ -1166,7 +1212,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 24,
             port: port_,
           );
         },
@@ -1191,7 +1237,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Future<InvoicePreviewRow> crateApiAppCompterAppPreviewInvoice({
     required CompterApp that,
     required String projectId,
-    required String milestoneId,
+    required List<String> milestoneIds,
     String? rate,
   }) {
     return handler.executeNormal(
@@ -1203,12 +1249,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_String(projectId, serializer);
-          sse_encode_String(milestoneId, serializer);
+          sse_encode_list_String(milestoneIds, serializer);
           sse_encode_opt_String(rate, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 25,
             port: port_,
           );
         },
@@ -1217,7 +1263,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_api_error,
         ),
         constMeta: kCrateApiAppCompterAppPreviewInvoiceConstMeta,
-        argValues: [that, projectId, milestoneId, rate],
+        argValues: [that, projectId, milestoneIds, rate],
         apiImpl: this,
       ),
     );
@@ -1226,7 +1272,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiAppCompterAppPreviewInvoiceConstMeta =>
       const TaskConstMeta(
         debugName: "CompterApp_preview_invoice",
-        argNames: ["that", "projectId", "milestoneId", "rate"],
+        argNames: ["that", "projectId", "milestoneIds", "rate"],
       );
 
   @override
@@ -1242,7 +1288,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 26,
             port: port_,
           );
         },
@@ -1275,7 +1321,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 27,
             port: port_,
           );
         },
@@ -1313,7 +1359,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 28,
             port: port_,
           );
         },
@@ -1351,7 +1397,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1389,7 +1435,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1429,7 +1475,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 31,
             port: port_,
           );
         },
@@ -1469,7 +1515,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 32,
             port: port_,
           );
         },
@@ -1507,7 +1553,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 33,
             port: port_,
           );
         },
@@ -1545,7 +1591,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 34,
             port: port_,
           );
         },
@@ -1585,7 +1631,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 34,
+            funcId: 35,
             port: port_,
           );
         },
@@ -1627,7 +1673,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 35,
+            funcId: 36,
             port: port_,
           );
         },
@@ -1663,7 +1709,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 36,
+            funcId: 37,
             port: port_,
           );
         },
@@ -1703,7 +1749,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 37,
+            funcId: 38,
             port: port_,
           );
         },
@@ -1730,7 +1776,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_i_32,
@@ -1752,7 +1798,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 40)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
@@ -1906,11 +1952,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return CreditInput(
       date: dco_decode_String(arr[0]),
-      amount: dco_decode_String(arr[1]),
+      lines: dco_decode_list_credit_line_input(arr[1]),
       reason: dco_decode_String(arr[2]),
       keepAsAdvance: dco_decode_bool(arr[3]),
       refundedInr: dco_decode_String(arr[4]),
       tdsReversed: dco_decode_String(arr[5]),
+    );
+  }
+
+  @protected
+  CreditLineInput dco_decode_credit_line_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return CreditLineInput(
+      milestoneId: dco_decode_String(arr[0]),
+      amount: dco_decode_String(arr[1]),
     );
   }
 
@@ -2040,30 +2098,48 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   InvoiceDetail dco_decode_invoice_detail(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 21)
-      throw Exception('unexpected arr length: expect 21 but see ${arr.length}');
+    if (arr.length != 22)
+      throw Exception('unexpected arr length: expect 22 but see ${arr.length}');
     return InvoiceDetail(
       number: dco_decode_String(arr[0]),
       date: dco_decode_String(arr[1]),
       kind: dco_decode_String(arr[2]),
       clientName: dco_decode_String(arr[3]),
-      milestoneName: dco_decode_String(arr[4]),
-      currency: dco_decode_String(arr[5]),
-      exchangeRate: dco_decode_opt_String(arr[6]),
-      total: dco_decode_String(arr[7]),
-      breakdown: dco_decode_String(arr[8]),
-      totalInr: dco_decode_opt_String(arr[9]),
-      balance: dco_decode_String(arr[10]),
-      status: dco_decode_String(arr[11]),
-      settled: dco_decode_bool(arr[12]),
-      creditable: dco_decode_bool(arr[13]),
-      clientAdvance: dco_decode_opt_String(arr[14]),
-      tdsWithheld: dco_decode_bool(arr[15]),
-      foreign: dco_decode_bool(arr[16]),
-      history: dco_decode_list_history_row(arr[17]),
-      balanceValue: dco_decode_String(arr[18]),
-      usualTds: dco_decode_opt_String(arr[19]),
-      creditValue: dco_decode_opt_String(arr[20]),
+      milestones: dco_decode_String(arr[4]),
+      lines: dco_decode_list_invoice_line_row(arr[5]),
+      currency: dco_decode_String(arr[6]),
+      exchangeRate: dco_decode_opt_String(arr[7]),
+      total: dco_decode_String(arr[8]),
+      breakdown: dco_decode_String(arr[9]),
+      totalInr: dco_decode_opt_String(arr[10]),
+      balance: dco_decode_String(arr[11]),
+      status: dco_decode_String(arr[12]),
+      settled: dco_decode_bool(arr[13]),
+      creditable: dco_decode_bool(arr[14]),
+      creditGuide: dco_decode_String(arr[15]),
+      clientAdvance: dco_decode_opt_String(arr[16]),
+      tdsWithheld: dco_decode_bool(arr[17]),
+      foreign: dco_decode_bool(arr[18]),
+      history: dco_decode_list_history_row(arr[19]),
+      balanceValue: dco_decode_String(arr[20]),
+      usualTds: dco_decode_opt_String(arr[21]),
+    );
+  }
+
+  @protected
+  InvoiceLineRow dco_decode_invoice_line_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return InvoiceLineRow(
+      milestoneId: dco_decode_String(arr[0]),
+      name: dco_decode_String(arr[1]),
+      amount: dco_decode_String(arr[2]),
+      creditable: dco_decode_String(arr[3]),
+      canCredit: dco_decode_bool(arr[4]),
+      leftValue: dco_decode_String(arr[5]),
+      creditValue: dco_decode_opt_String(arr[6]),
     );
   }
 
@@ -2106,7 +2182,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       number: dco_decode_String(arr[0]),
       date: dco_decode_String(arr[1]),
       clientName: dco_decode_String(arr[2]),
-      milestoneName: dco_decode_String(arr[3]),
+      milestones: dco_decode_String(arr[3]),
       kind: dco_decode_String(arr[4]),
       total: dco_decode_String(arr[5]),
       due: dco_decode_opt_String(arr[6]),
@@ -2140,6 +2216,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<CreditLineInput> dco_decode_list_credit_line_input(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_credit_line_input).toList();
+  }
+
+  @protected
   List<ExpenseRow> dco_decode_list_expense_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_expense_row).toList();
@@ -2155,6 +2237,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<HistoryRow> dco_decode_list_history_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_history_row).toList();
+  }
+
+  @protected
+  List<InvoiceLineRow> dco_decode_list_invoice_line_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_invoice_line_row).toList();
   }
 
   @protected
@@ -2616,19 +2704,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   CreditInput sse_decode_credit_input(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_date = sse_decode_String(deserializer);
-    var var_amount = sse_decode_String(deserializer);
+    var var_lines = sse_decode_list_credit_line_input(deserializer);
     var var_reason = sse_decode_String(deserializer);
     var var_keepAsAdvance = sse_decode_bool(deserializer);
     var var_refundedInr = sse_decode_String(deserializer);
     var var_tdsReversed = sse_decode_String(deserializer);
     return CreditInput(
       date: var_date,
-      amount: var_amount,
+      lines: var_lines,
       reason: var_reason,
       keepAsAdvance: var_keepAsAdvance,
       refundedInr: var_refundedInr,
       tdsReversed: var_tdsReversed,
     );
+  }
+
+  @protected
+  CreditLineInput sse_decode_credit_line_input(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_milestoneId = sse_decode_String(deserializer);
+    var var_amount = sse_decode_String(deserializer);
+    return CreditLineInput(milestoneId: var_milestoneId, amount: var_amount);
   }
 
   @protected
@@ -2762,7 +2858,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_date = sse_decode_String(deserializer);
     var var_kind = sse_decode_String(deserializer);
     var var_clientName = sse_decode_String(deserializer);
-    var var_milestoneName = sse_decode_String(deserializer);
+    var var_milestones = sse_decode_String(deserializer);
+    var var_lines = sse_decode_list_invoice_line_row(deserializer);
     var var_currency = sse_decode_String(deserializer);
     var var_exchangeRate = sse_decode_opt_String(deserializer);
     var var_total = sse_decode_String(deserializer);
@@ -2772,19 +2869,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_status = sse_decode_String(deserializer);
     var var_settled = sse_decode_bool(deserializer);
     var var_creditable = sse_decode_bool(deserializer);
+    var var_creditGuide = sse_decode_String(deserializer);
     var var_clientAdvance = sse_decode_opt_String(deserializer);
     var var_tdsWithheld = sse_decode_bool(deserializer);
     var var_foreign = sse_decode_bool(deserializer);
     var var_history = sse_decode_list_history_row(deserializer);
     var var_balanceValue = sse_decode_String(deserializer);
     var var_usualTds = sse_decode_opt_String(deserializer);
-    var var_creditValue = sse_decode_opt_String(deserializer);
     return InvoiceDetail(
       number: var_number,
       date: var_date,
       kind: var_kind,
       clientName: var_clientName,
-      milestoneName: var_milestoneName,
+      milestones: var_milestones,
+      lines: var_lines,
       currency: var_currency,
       exchangeRate: var_exchangeRate,
       total: var_total,
@@ -2794,12 +2892,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       status: var_status,
       settled: var_settled,
       creditable: var_creditable,
+      creditGuide: var_creditGuide,
       clientAdvance: var_clientAdvance,
       tdsWithheld: var_tdsWithheld,
       foreign: var_foreign,
       history: var_history,
       balanceValue: var_balanceValue,
       usualTds: var_usualTds,
+    );
+  }
+
+  @protected
+  InvoiceLineRow sse_decode_invoice_line_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_milestoneId = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_amount = sse_decode_String(deserializer);
+    var var_creditable = sse_decode_String(deserializer);
+    var var_canCredit = sse_decode_bool(deserializer);
+    var var_leftValue = sse_decode_String(deserializer);
+    var var_creditValue = sse_decode_opt_String(deserializer);
+    return InvoiceLineRow(
+      milestoneId: var_milestoneId,
+      name: var_name,
+      amount: var_amount,
+      creditable: var_creditable,
+      canCredit: var_canCredit,
+      leftValue: var_leftValue,
       creditValue: var_creditValue,
     );
   }
@@ -2841,7 +2960,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_number = sse_decode_String(deserializer);
     var var_date = sse_decode_String(deserializer);
     var var_clientName = sse_decode_String(deserializer);
-    var var_milestoneName = sse_decode_String(deserializer);
+    var var_milestones = sse_decode_String(deserializer);
     var var_kind = sse_decode_String(deserializer);
     var var_total = sse_decode_String(deserializer);
     var var_due = sse_decode_opt_String(deserializer);
@@ -2850,7 +2969,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       number: var_number,
       date: var_date,
       clientName: var_clientName,
-      milestoneName: var_milestoneName,
+      milestones: var_milestones,
       kind: var_kind,
       total: var_total,
       due: var_due,
@@ -2896,6 +3015,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<CreditLineInput> sse_decode_list_credit_line_input(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <CreditLineInput>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_credit_line_input(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<ExpenseRow> sse_decode_list_expense_row(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -2927,6 +3060,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <HistoryRow>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_history_row(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<InvoiceLineRow> sse_decode_list_invoice_line_row(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <InvoiceLineRow>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_invoice_line_row(deserializer));
     }
     return ans_;
   }
@@ -3484,11 +3631,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_credit_input(CreditInput self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.date, serializer);
-    sse_encode_String(self.amount, serializer);
+    sse_encode_list_credit_line_input(self.lines, serializer);
     sse_encode_String(self.reason, serializer);
     sse_encode_bool(self.keepAsAdvance, serializer);
     sse_encode_String(self.refundedInr, serializer);
     sse_encode_String(self.tdsReversed, serializer);
+  }
+
+  @protected
+  void sse_encode_credit_line_input(
+    CreditLineInput self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.milestoneId, serializer);
+    sse_encode_String(self.amount, serializer);
   }
 
   @protected
@@ -3583,7 +3740,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.date, serializer);
     sse_encode_String(self.kind, serializer);
     sse_encode_String(self.clientName, serializer);
-    sse_encode_String(self.milestoneName, serializer);
+    sse_encode_String(self.milestones, serializer);
+    sse_encode_list_invoice_line_row(self.lines, serializer);
     sse_encode_String(self.currency, serializer);
     sse_encode_opt_String(self.exchangeRate, serializer);
     sse_encode_String(self.total, serializer);
@@ -3593,12 +3751,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.status, serializer);
     sse_encode_bool(self.settled, serializer);
     sse_encode_bool(self.creditable, serializer);
+    sse_encode_String(self.creditGuide, serializer);
     sse_encode_opt_String(self.clientAdvance, serializer);
     sse_encode_bool(self.tdsWithheld, serializer);
     sse_encode_bool(self.foreign, serializer);
     sse_encode_list_history_row(self.history, serializer);
     sse_encode_String(self.balanceValue, serializer);
     sse_encode_opt_String(self.usualTds, serializer);
+  }
+
+  @protected
+  void sse_encode_invoice_line_row(
+    InvoiceLineRow self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.milestoneId, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.amount, serializer);
+    sse_encode_String(self.creditable, serializer);
+    sse_encode_bool(self.canCredit, serializer);
+    sse_encode_String(self.leftValue, serializer);
     sse_encode_opt_String(self.creditValue, serializer);
   }
 
@@ -3630,7 +3803,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.number, serializer);
     sse_encode_String(self.date, serializer);
     sse_encode_String(self.clientName, serializer);
-    sse_encode_String(self.milestoneName, serializer);
+    sse_encode_String(self.milestones, serializer);
     sse_encode_String(self.kind, serializer);
     sse_encode_String(self.total, serializer);
     sse_encode_opt_String(self.due, serializer);
@@ -3667,6 +3840,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_credit_line_input(
+    List<CreditLineInput> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_credit_line_input(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_expense_row(
     List<ExpenseRow> self,
     SseSerializer serializer,
@@ -3699,6 +3884,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_history_row(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_invoice_line_row(
+    List<InvoiceLineRow> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_invoice_line_row(item, serializer);
     }
   }
 
@@ -4029,6 +4226,18 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
     input: input,
   );
 
+  /// Check the lines picked for a credit note against invoice `number` before asking when and
+  /// why: each amount is a number, more than zero and no more than is left on its line. A
+  /// refusal names the line's field, `line:<milestone_id>`.
+  Future<void> checkCreditLines({
+    required String number,
+    required List<CreditLineInput> lines,
+  }) => RustLib.instance.api.crateApiAppCompterAppCheckCreditLines(
+    that: this,
+    number: number,
+    lines: lines,
+  );
+
   Future<ProjectDetail> createProject({required ProjectInput input}) => RustLib
       .instance
       .api
@@ -4128,15 +4337,16 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
     input: input,
   );
 
-  /// Issue today's invoice for a pending milestone and write its PDF
+  /// Issue today's invoice billing pending milestones of a project, a line each, and write
+  /// its PDF
   Future<IssuedRow> issueInvoice({
     required String projectId,
-    required String milestoneId,
+    required List<String> milestoneIds,
     String? rate,
   }) => RustLib.instance.api.crateApiAppCompterAppIssueInvoice(
     that: this,
     projectId: projectId,
-    milestoneId: milestoneId,
+    milestoneIds: milestoneIds,
     rate: rate,
   );
 
@@ -4174,16 +4384,17 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
     input: input,
   );
 
-  /// The invoice a pending milestone would get today, without saving anything. `rate` (rupees
-  /// per unit) is needed when the project is billed in a foreign currency.
+  /// The invoice pending milestones of a project would get together today, without saving
+  /// anything. `rate` (rupees per unit) is needed when the project is billed in a foreign
+  /// currency.
   Future<InvoicePreviewRow> previewInvoice({
     required String projectId,
-    required String milestoneId,
+    required List<String> milestoneIds,
     String? rate,
   }) => RustLib.instance.api.crateApiAppCompterAppPreviewInvoice(
     that: this,
     projectId: projectId,
-    milestoneId: milestoneId,
+    milestoneIds: milestoneIds,
     rate: rate,
   );
 

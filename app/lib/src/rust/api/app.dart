@@ -13,7 +13,7 @@ import 'profile.dart';
 import 'reports.dart';
 import 'rows.dart';
 
-// These functions are ignored because they are not marked as `pub`: `closed`, `credit_draft`, `date`, `detail`, `exchange_rate`, `expense_draft`, `expense_id`, `index_of`, `milestone_draft`, `milestone_id`, `optional_money`, `over`, `project_draft`, `project_id`, `today`
+// These functions are ignored because they are not marked as `pub`: `checked_draft`, `closed`, `credit_draft`, `credit_lines`, `date`, `detail_in`, `detail`, `exchange_rate`, `expense_draft`, `expense_id`, `index_of`, `milestone_draft`, `milestone_id`, `milestone_ids_of`, `optional_money`, `over`, `project_draft`, `project_id`, `today`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>>
 abstract class CompterApp implements RustOpaqueInterface {
@@ -23,6 +23,14 @@ abstract class CompterApp implements RustOpaqueInterface {
   Future<ProjectDetail> addMilestone({
     required String projectId,
     required MilestoneInput input,
+  });
+
+  /// Check the lines picked for a credit note against invoice `number` before asking when and
+  /// why: each amount is a number, more than zero and no more than is left on its line. A
+  /// refusal names the line's field, `line:<milestone_id>`.
+  Future<void> checkCreditLines({
+    required String number,
+    required List<CreditLineInput> lines,
   });
 
   Future<ProjectDetail> createProject({required ProjectInput input});
@@ -89,10 +97,11 @@ abstract class CompterApp implements RustOpaqueInterface {
     required CreditInput input,
   });
 
-  /// Issue today's invoice for a pending milestone and write its PDF
+  /// Issue today's invoice billing pending milestones of a project, a line each, and write
+  /// its PDF
   Future<IssuedRow> issueInvoice({
     required String projectId,
-    required String milestoneId,
+    required List<String> milestoneIds,
     String? rate,
   });
 
@@ -122,11 +131,12 @@ abstract class CompterApp implements RustOpaqueInterface {
     required CreditInput input,
   });
 
-  /// The invoice a pending milestone would get today, without saving anything. `rate` (rupees
-  /// per unit) is needed when the project is billed in a foreign currency.
+  /// The invoice pending milestones of a project would get together today, without saving
+  /// anything. `rate` (rupees per unit) is needed when the project is billed in a foreign
+  /// currency.
   Future<InvoicePreviewRow> previewInvoice({
     required String projectId,
-    required String milestoneId,
+    required List<String> milestoneIds,
     String? rate,
   });
 

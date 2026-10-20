@@ -5,6 +5,7 @@ import '../rust/api/app.dart';
 import '../rust/api/error.dart';
 import '../rust/api/invoicing.dart';
 import '../rust/api/rows.dart';
+import '../ui/check_list.dart';
 import 'form_dialog.dart';
 
 const _amount = TextInputType.numberWithOptions(decimal: true);
@@ -12,22 +13,49 @@ const _date = FieldSpec('date', 'Date', date: true);
 const _refund = 'Refund';
 const _advance = 'Keep as advance';
 
-/// Show the invoice [milestone] would get today and issue it on a yes, like `i` in the
-/// terminal. A project billed in a foreign currency first asks for today's exchange rate.
-/// `null` when cancelled or refused (the refusal is shown).
+/// How Rust names the amount of one credit note line in `ApiError.field`: `line:<milestone id>`
+const _line = 'line:';
+
+/// Pick which pending milestones of [project] to invoice together, starting from [milestone],
+/// then show the invoice they would get today and issue it on a yes, like `i` in the terminal.
+/// With only [milestone] pending there is nothing to pick. A project billed in a foreign
+/// currency first asks for today's exchange rate. `null` when cancelled or refused (the refusal
+/// is shown).
 Future<IssuedRow?> issueInvoice(
   BuildContext context,
   CompterApp app,
   ProjectDetail project,
   MilestoneRow milestone,
 ) async {
+  final pending = [
+    for (final i in project.byDue)
+      if (project.milestones[i].status == 'PENDING') project.milestones[i],
+  ];
+  var milestoneIds = [milestone.id];
+  if (pending.length > 1) {
+    final picked = await showCheckList(
+      context,
+      title: 'Milestones to invoice',
+      items: [
+        for (final m in pending)
+          CheckItem(
+            key: m.id,
+            title: m.name,
+            subtitle: '${m.amount} · due ${m.dueDate}',
+            checked: m.id == milestone.id,
+          ),
+      ],
+    );
+    if (picked == null || !context.mounted) return null;
+    milestoneIds = [for (final (id, _) in picked) id];
+  }
   String? rate;
   InvoicePreviewRow? preview;
   if (project.currency == 'INR') {
     try {
       preview = await app.previewInvoice(
         projectId: project.id,
-        milestoneId: milestone.id,
+        milestoneIds: milestoneIds,
       );
     } on ApiError catch (error) {
       if (context.mounted) notify(context, error.message, error: true);
@@ -50,7 +78,7 @@ Future<IssuedRow?> issueInvoice(
         values['rate']!,
         await app.previewInvoice(
           projectId: project.id,
-          milestoneId: milestone.id,
+          milestoneIds: milestoneIds,
           rate: values['rate'],
         ),
       ),
@@ -65,6 +93,7 @@ Future<IssuedRow?> issueInvoice(
     yes: 'Issue',
     lines: [
       '${preview.clientName} · ${preview.kind}',
+      if (milestoneIds.length > 1) '${milestoneIds.length} milestones',
       '${preview.total} (${preview.breakdown})',
       if (preview.totalInr != null) '${preview.totalInr} in INR',
       for (final warning in preview.warnings) 'Note: $warning',
@@ -74,7 +103,7 @@ Future<IssuedRow?> issueInvoice(
   try {
     return await app.issueInvoice(
       projectId: project.id,
-      milestoneId: milestone.id,
+      milestoneIds: milestoneIds,
       rate: rate,
     );
   } on ApiError catch (error) {
@@ -132,28 +161,126 @@ Future<InvoiceDetail?> recordPayment(
   );
 }
 
-/// Ask what to take off the invoice, show the credit note it makes, and issue it on a yes.
-/// Prefilled to cancel the whole invoice while nothing has been paid or credited. A note beyond
-/// what is due gives the rest back to the client: refunded (in rupees, on a foreign invoice) or
-/// kept as an advance.
+/// Pick the invoice lines to take back and how much of each (all that is left, unless lowered),
+/// then when and why; show the credit note it makes, and issue it on a yes. A note beyond what
+/// is due gives the rest back to the client: refunded (in rupees, on a foreign invoice) or kept
+/// as an advance.
 Future<CreditedRow?> issueCreditNote(
   BuildContext context,
   CompterApp app,
   InvoiceDetail invoice,
 ) async {
-  final asked = await FormDialog.show<(CreditInput, CreditPreviewRow)>(
+  final names = {for (final line in invoice.lines) line.milestoneId: line.name};
+  // What was picked and typed, kept when the next form is cancelled to come back to the lines
+  Map<String, String>? kept;
+  while (true) {
+    if (!context.mounted) return null;
+    final picked = await _pickCreditLines(context, app, invoice, kept);
+    if (picked == null || !context.mounted) return null;
+    final asked = await _creditTerms(context, app, invoice, picked, names);
+    if (!context.mounted) return null;
+    if (asked == null) {
+      kept = {for (final (id, amount) in picked) id: amount};
+      continue;
+    }
+    final (input, preview) = asked;
+    final yes = await confirm(
+      context,
+      title: 'Issue ${preview.number}?',
+      yes: 'Issue',
+      lines: [
+        'Against ${preview.invoice} for ${preview.total}'
+            '${preview.gst == null ? '' : ' incl. GST ${preview.gst}'}',
+        '${preview.balanceAfter} will still be due.',
+        if (preview.returned != null) '${preview.returned}.',
+        for (final warning in preview.warnings) 'Note: $warning',
+      ],
+    );
+    if (!yes) return null;
+    try {
+      return await app.issueCredit(number: invoice.number, input: input);
+    } on ApiError catch (error) {
+      if (context.mounted) {
+        notify(context, _naming(error, names).message, error: true);
+      }
+      return null;
+    }
+  }
+}
+
+/// The lines of [invoice] a credit note takes back and how much of each, checked by Rust before
+/// the sheet closes; [kept] restores what was picked before, when coming back from the next step
+Future<List<(String, String)>?> _pickCreditLines(
+  BuildContext context,
+  CompterApp app,
+  InvoiceDetail invoice,
+  Map<String, String>? kept,
+) {
+  final single = invoice.lines.length == 1;
+  return showCheckList(
+    context,
+    title: 'Lines to credit',
+    note: invoice.creditGuide,
+    amountLabel: 'Credit, before GST, in ${invoice.currency}',
+    // Prefilled (and the one line picked) only while nothing is paid or credited, so nothing
+    // is refunded by default
+    items: [
+      for (final line in invoice.lines)
+        CheckItem(
+          key: line.milestoneId,
+          title: line.name,
+          subtitle: 'Billed ${line.amount} · ${line.creditable} left',
+          amount: line.canCredit
+              ? (kept == null
+                    ? (line.creditValue ?? '')
+                    : (kept[line.milestoneId] ?? ''))
+              : null,
+          // Picking a line fills in all that is left, to lower if need be
+          fill: line.leftValue,
+          enabled: line.canCredit,
+          checked: kept == null
+              ? single && line.creditValue != null
+              : kept.containsKey(line.milestoneId),
+        ),
+    ],
+    fieldPrefix: _line,
+    check: (picked) => app.checkCreditLines(
+      number: invoice.number,
+      lines: _creditLines(picked),
+    ),
+  );
+}
+
+List<CreditLineInput> _creditLines(List<(String, String)> picked) => [
+  for (final (id, amount) in picked)
+    CreditLineInput(milestoneId: id, amount: amount),
+];
+
+/// [error] with the line it is about named, when it is about one: `Build: …`
+ApiError _naming(ApiError error, Map<String, String> names) {
+  final field = error.field;
+  if (field == null || !field.startsWith(_line)) return error;
+  final name = names[field.substring(_line.length)] ?? 'A line';
+  // A line Rust checked names itself already
+  if (error.message.startsWith('$name: ')) return error;
+  return ApiError(message: '$name: ${error.message}');
+}
+
+/// When and why the credit note takes back [picked], previewed; `null` when cancelled
+Future<(CreditInput, CreditPreviewRow)?> _creditTerms(
+  BuildContext context,
+  CompterApp app,
+  InvoiceDetail invoice,
+  List<(String, String)> picked,
+  Map<String, String> names,
+) {
+  final lines = _creditLines(picked);
+  return FormDialog.show<(CreditInput, CreditPreviewRow)>(
     context,
     title: 'Credit note',
     submitLabel: 'Preview',
     fields: [
       _date,
-      FieldSpec(
-        'amount',
-        'Amount',
-        hint: 'before GST, in ${invoice.currency}; ${invoice.balance} due',
-        keyboardType: _amount,
-        initial: invoice.creditValue ?? '',
-      ),
       const FieldSpec(
         'reason',
         'Reason',
@@ -185,39 +312,23 @@ Future<CreditedRow?> issueCreditNote(
     submit: (values) async {
       final input = CreditInput(
         date: values['date']!,
-        amount: values['amount']!,
+        lines: lines,
         reason: values['reason']!,
         keepAsAdvance: values['returned'] == _advance,
         refundedInr: values['refunded_inr'] ?? '',
         tdsReversed: values['tds_reversed'] ?? '',
       );
-      return (
-        input,
-        await app.previewCredit(number: invoice.number, input: input),
-      );
+      try {
+        return (
+          input,
+          await app.previewCredit(number: invoice.number, input: input),
+        );
+      } on ApiError catch (error) {
+        // An amount picked on the previous sheet: say which line it was
+        throw _naming(error, names);
+      }
     },
   );
-  if (asked == null || !context.mounted) return null;
-  final (input, preview) = asked;
-  final yes = await confirm(
-    context,
-    title: 'Issue ${preview.number}?',
-    yes: 'Issue',
-    lines: [
-      'Against ${preview.invoice} for ${preview.total}'
-          '${preview.gst == null ? '' : ' incl. GST ${preview.gst}'}',
-      '${preview.balanceAfter} will still be due.',
-      if (preview.returned != null) '${preview.returned}.',
-      for (final warning in preview.warnings) 'Note: $warning',
-    ],
-  );
-  if (!yes) return null;
-  try {
-    return await app.issueCredit(number: invoice.number, input: input);
-  } on ApiError catch (error) {
-    if (context.mounted) notify(context, error.message, error: true);
-    return null;
-  }
 }
 
 /// Time worked on a pending milestone of an hourly project

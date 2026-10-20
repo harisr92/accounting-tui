@@ -1,9 +1,16 @@
+import 'dart:io';
+
 import 'package:compter/src/compter.dart';
+import 'package:compter/src/rust/api/app.dart';
+import 'package:compter/src/rust/api/rows.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support.dart';
+
+/// The amount field of a line picked for a credit note on a rupee invoice
+const _creditAmount = 'Credit, before GST, in INR';
 
 /// Issuing, payments, credit notes and the profile, on the demo business against the real Rust
 /// core: run `cargo build -p compter-mobile` first, then `flutter test`.
@@ -44,6 +51,73 @@ void main() {
     expect(find.textContaining('Issued NDC/'), findsOneWidget);
   });
 
+  testWidgets(
+    'several milestones go on one invoice and are credited together',
+    (tester) async {
+      final compter = await tester.runAsync(() async {
+        final scratch = await Directory.systemTemp.createTemp('compter_test');
+        final app = await CompterApp.demo(scratchDir: scratch.path);
+        final website = (await app.projects(
+          includeArchived: false,
+        )).firstWhere((p) => p.name == 'Website Revamp');
+        await app.addMilestone(
+          projectId: website.id,
+          input: const MilestoneInput(
+            name: 'Support',
+            dueDate: '2026-12-01',
+            amount: '10,000',
+          ),
+        );
+        return app;
+      });
+      await launchWith(tester, compter!);
+      await tester.tap(find.text('Website Revamp'));
+      await settle(tester);
+      await tester.ensureVisible(find.text('Launch'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Launch'));
+      await settle(tester);
+      await tester.tap(find.text('Issue invoice'));
+      await settle(tester);
+
+      // Launch is picked; Select all adds Support
+      expect(find.text('Milestones to invoice'), findsOneWidget);
+      await tester.tap(find.text('Select all'));
+      await tester.pump();
+      await tester.tap(find.text('Next'));
+      await settle(tester);
+      expect(find.text('2 milestones'), findsOneWidget);
+      // ₹50,000 + 18% GST
+      expect(find.textContaining('₹59,000.00'), findsOneWidget);
+      await tester.tap(find.text('Issue'));
+      await pumpUntil(tester, find.byTooltip('Share PDF'));
+      expect(find.textContaining('Launch, Support'), findsWidgets);
+
+      // Nothing is picked on an invoice of several lines until asked
+      await tester.tap(find.byTooltip('Credit note'));
+      await settle(tester);
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Next'))
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.text('Select all'));
+      await tester.pump();
+      await tester.tap(find.text('Next'));
+      await settle(tester);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Reason'),
+        'Project cancelled',
+      );
+      await tester.tap(find.text('Preview'));
+      await settle(tester);
+      expect(find.text('₹0.00 will still be due.'), findsOneWidget);
+      await tester.tap(find.text('Issue'));
+      await pumpUntil(tester, find.text('CREDITED'));
+    },
+  );
+
   testWidgets('a part payment leaves the rest due', (tester) async {
     await launchDemo(tester);
     await openInvoice(tester, 'Frontend');
@@ -81,7 +155,11 @@ void main() {
     await launchDemo(tester);
     await openInvoice(tester, 'Dashboards');
 
+    // The one line is picked, for all of it
     await tester.tap(find.byTooltip('Credit note'));
+    await settle(tester);
+    expect(find.text('35000.00'), findsOneWidget);
+    await tester.tap(find.text('Next'));
     await settle(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Reason'),
@@ -104,9 +182,21 @@ void main() {
     await openInvoice(tester, 'Design');
     expect(find.text('PAID'), findsOneWidget);
 
+    // Paid: nothing is picked or prefilled, and the guide says what is due
     await tester.tap(find.byTooltip('Credit note'));
     await settle(tester);
-    await tester.enterText(find.widgetWithText(TextField, 'Amount'), '10000');
+    expect(
+      find.textContaining('₹0.00 due · up to ₹59,000.00 incl. GST'),
+      findsOneWidget,
+    );
+    await tester.tap(find.widgetWithText(CheckboxListTile, 'Design'));
+    await tester.pump();
+    await tester.enterText(
+      find.widgetWithText(TextField, _creditAmount),
+      '10000',
+    );
+    await tester.tap(find.text('Next'));
+    await settle(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Reason'),
       'Discount',
@@ -131,7 +221,35 @@ void main() {
     await openInvoice(tester, 'Design');
     await tester.tap(find.byTooltip('Credit note'));
     await settle(tester);
-    await tester.enterText(find.widgetWithText(TextField, 'Amount'), '50000');
+    await tester.tap(find.widgetWithText(CheckboxListTile, 'Design'));
+    await tester.pump();
+    // Picking the line fills in all that is left on it
+    expect(find.text('50000.00'), findsOneWidget);
+    // More than the line has left is refused under it, before the sheet closes
+    await tester.enterText(
+      find.widgetWithText(TextField, _creditAmount),
+      '50001',
+    );
+    await tester.tap(find.text('Next'));
+    await settle(tester);
+    expect(find.textContaining('left to credit on this line'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextField, _creditAmount),
+      '49999',
+    );
+    await tester.tap(find.text('Next'));
+    await settle(tester);
+    // Cancelling the next step comes back to the lines, with the amount still typed
+    await tester.tap(find.text('Cancel'));
+    await settle(tester);
+    expect(find.text('Lines to credit'), findsOneWidget);
+    expect(find.text('49999'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextField, _creditAmount),
+      '50000',
+    );
+    await tester.tap(find.text('Next'));
+    await settle(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Reason'),
       'Cancelled',
