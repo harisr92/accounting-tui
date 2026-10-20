@@ -12,7 +12,7 @@ use std::collections::BTreeSet;
 use chrono::Local;
 
 use crate::ui::filter::Filter;
-use crate::ui::form::{Confirm, Form};
+use crate::ui::form::{Checklist, ChecklistItem, Confirm, Form};
 use crate::ui::selection::{Nav, Selection};
 use crate::ui::theme::Theme;
 use crate::ui::view::{Action, KeyHint, Notice, View};
@@ -49,7 +49,7 @@ const MILESTONE_HINTS: &[KeyHint] = &[
     KeyHint::new("t", "log time"),
     KeyHint::new("o", "time log"),
     KeyHint::new("u", "undo time"),
-    KeyHint::new("i", "invoice"),
+    KeyHint::new("i", "invoice (pick)"),
     KeyHint::new("p", "paid"),
     KeyHint::new("s", "sort"),
 ];
@@ -73,8 +73,8 @@ enum FormKind {
     LogTime(usize),
     /// Payment for the invoice that billed a milestone
     Payment(InvoiceNumber),
-    /// The exchange rate to invoice a milestone of a foreign-currency project at
-    IssueRate(ProjectId, MilestoneId),
+    /// The exchange rate to invoice milestones of a foreign-currency project at
+    IssueRate(ProjectId, Vec<MilestoneId>),
     Search,
 }
 
@@ -84,13 +84,19 @@ enum ConfirmAction {
     DeleteProject(ProjectId),
     DeleteMilestone(ProjectId, usize),
     UndoTime(ProjectId, usize),
-    /// With the exchange rate for a foreign-currency project
-    Issue(ProjectId, MilestoneId, Option<ExchangeRate>),
+    /// The milestones billed together, with the exchange rate for a foreign-currency project
+    Issue(ProjectId, Vec<MilestoneId>, Option<ExchangeRate>),
 }
 
 enum Modal {
     Form(FormKind, Form),
     Confirm(ConfirmAction, Confirm),
+    /// The pending milestones of a project to invoice together, a row each in `ids` order
+    Pick {
+        project: ProjectId,
+        ids: Vec<MilestoneId>,
+        list: Checklist,
+    },
 }
 
 /// Project list on the left, the selected project's milestones on the right
@@ -359,6 +365,24 @@ impl<R: Repository> ProjectsView<R> {
                     Action::Handled
                 }
             },
+            Modal::Pick { project, ids, list } => {
+                let (list, action) = list.step(key, |list| {
+                    let picked: Vec<MilestoneId> = list
+                        .checked()
+                        .iter()
+                        .filter_map(|&row| ids.get(row).copied())
+                        .collect();
+                    if picked.is_empty() {
+                        return Err("Pick at least one milestone (Space, or a for all)".to_owned());
+                    }
+                    self.start_issue(project, picked).map(Notice::info)
+                });
+                // A good submit opened the rate form or the confirm in its place
+                if let Some(list) = list {
+                    self.modal = Some(Modal::Pick { project, ids, list });
+                }
+                action
+            }
         }
     }
 
@@ -379,7 +403,9 @@ impl<R: Repository> ProjectsView<R> {
                 .remove_last_time_entry(id, index)
                 .and_then(|p| self.refresh(Some(p)))
                 .map(|()| "Time entry removed"),
-            ConfirmAction::Issue(id, milestone, rate) => return self.issue(id, milestone, rate),
+            ConfirmAction::Issue(id, milestones, rate) => {
+                return self.issue(id, &milestones, rate);
+            }
         };
         Action::Notify(match result {
             Ok(done) => Notice::success(done),
@@ -390,11 +416,11 @@ impl<R: Repository> ProjectsView<R> {
     fn issue(
         &mut self,
         id: ProjectId,
-        milestone: MilestoneId,
+        milestones: &[MilestoneId],
         rate: Option<ExchangeRate>,
     ) -> Action {
         let today = Local::now().date_naive();
-        let issued = match self.invoices.issue(id, milestone, today, rate) {
+        let issued = match self.invoices.issue(id, milestones, today, rate) {
             Ok(issued) => issued,
             Err(error) => return Action::Notify(Notice::error(error.to_string())),
         };
@@ -405,40 +431,79 @@ impl<R: Repository> ProjectsView<R> {
         })
     }
 
-    /// `i`: show what the invoice will be and ask before issuing it. A project billed in a
-    /// foreign currency first asks for the day's exchange rate.
-    fn confirm_issue(&mut self, id: ProjectId, milestone: MilestoneId) -> Action {
+    /// `i` on a pending milestone: with other milestones of the project pending too, pick which
+    /// to invoice together (`a` picks them all), starting from this one; otherwise go straight
+    /// to the invoice
+    fn pick_to_invoice(&mut self, id: ProjectId, milestone: MilestoneId) -> Action {
+        let Some(project) = &self.selected else {
+            return Action::Notify(Notice::info("Select a project first"));
+        };
+        let currency = project.currency();
+        let pending: Vec<&Milestone> = self
+            .milestone_order()
+            .into_iter()
+            .filter_map(|i| project.milestones().get(i))
+            .filter(|m| m.status() == MilestoneStatus::Pending)
+            .collect();
+        if pending.len() < 2 {
+            return match self.start_issue(id, vec![milestone]) {
+                Ok(_) => Action::Handled,
+                Err(error) => Action::Notify(Notice::error(error)),
+            };
+        }
+        let items = pending
+            .iter()
+            .map(|m| {
+                ChecklistItem::new(m.name(), money_in(m.amount(), currency))
+                    .checked(m.id() == milestone)
+            })
+            .collect();
+        let ids = pending.iter().map(|m| m.id()).collect();
+        self.modal = Some(Modal::Pick {
+            project: id,
+            ids,
+            list: Checklist::new("Milestones to invoice", ["Milestone", "Amount", ""], items),
+        });
+        Action::Handled
+    }
+
+    /// Show what the invoice billing `milestones` will be and ask before issuing it. A project
+    /// billed in a foreign currency first asks for the day's exchange rate. Returns what to do
+    /// next, for the footer.
+    fn start_issue(
+        &mut self,
+        id: ProjectId,
+        milestones: Vec<MilestoneId>,
+    ) -> Result<&'static str, String> {
         let currency = self
             .selected
             .as_ref()
             .map_or(Currency::Inr, Project::currency);
         if !currency.is_inr() {
             self.modal = Some(Modal::Form(
-                FormKind::IssueRate(id, milestone),
+                FormKind::IssueRate(id, milestones),
                 forms::rate_form(currency),
             ));
-            return Action::Handled;
+            return Ok("Enter today's exchange rate");
         }
-        match self.preview_issue(id, milestone, None) {
-            Ok(()) => Action::Handled,
-            Err(error) => Action::Notify(Notice::error(error)),
-        }
+        self.preview_issue(id, milestones, None)?;
+        Ok("Check the invoice before issuing it")
     }
 
-    /// Open the confirm showing the invoice `milestone` would get today
+    /// Open the confirm showing the invoice `milestones` would get today
     fn preview_issue(
         &mut self,
         id: ProjectId,
-        milestone: MilestoneId,
+        milestones: Vec<MilestoneId>,
         rate: Option<ExchangeRate>,
     ) -> Result<(), String> {
         let today = Local::now().date_naive();
         let preview = self
             .invoices
-            .preview(id, milestone, today, rate.clone())
+            .preview(id, &milestones, today, rate.clone())
             .map_err(|e| e.to_string())?;
-        let message = issue_question(&preview);
-        self.ask(ConfirmAction::Issue(id, milestone, rate), message);
+        let message = issue_question(&preview, milestones.len());
+        self.ask(ConfirmAction::Issue(id, milestones, rate), message);
         Ok(())
     }
 
@@ -465,7 +530,7 @@ impl<R: Repository> ProjectsView<R> {
             let why = match milestone.status() {
                 MilestoneStatus::Paid => "This milestone is already paid",
                 MilestoneStatus::Credited => {
-                    "This milestone's invoice was cancelled by credit notes"
+                    "Credit notes took back all of this milestone; nothing is due on it"
                 }
                 _ => "Invoice the milestone first (i)",
             };
@@ -573,7 +638,7 @@ impl<R: Repository> ProjectsView<R> {
         }
         if key == 'i' && milestone.status() == MilestoneStatus::Pending {
             let milestone = milestone.id();
-            return self.confirm_issue(id, milestone);
+            return self.pick_to_invoice(id, milestone);
         }
         if milestone.status() != MilestoneStatus::Pending {
             return Action::Notify(Notice::info(
@@ -625,6 +690,7 @@ impl<R: Repository> View for ProjectsView<R> {
         match &self.modal {
             Some(Modal::Form(_, form)) => form.render(frame, theme),
             Some(Modal::Confirm(_, confirm)) => confirm.render(frame, theme),
+            Some(Modal::Pick { list, .. }) => list.render(frame, theme),
             None => {}
         }
     }
@@ -655,22 +721,29 @@ impl<R: Repository> View for ProjectsView<R> {
         match (&self.modal, self.focus) {
             (Some(Modal::Form(..)), _) => Form::HINTS,
             (Some(Modal::Confirm(..)), _) => Confirm::HINTS,
+            (Some(Modal::Pick { list, .. }), _) => list.hints(),
             (None, Focus::Projects) => PROJECT_HINTS,
             (None, Focus::Milestones) => MILESTONE_HINTS,
         }
     }
 }
 
-/// "Issue INV/26-27/004 to Acme for ₹59,000.00 (50,000.00 + IGST 9,000.00)?"
-fn issue_question(preview: &InvoicePreview) -> String {
+/// "Issue INV/26-27/004 to Acme for ₹59,000.00 (50,000.00 + IGST 9,000.00)?", naming how many
+/// milestones it bills when more than one
+fn issue_question(preview: &InvoicePreview, milestones: usize) -> String {
     let a = &preview.amounts;
     let in_rupees = preview
         .total_inr
         .as_ref()
         .map(|inr| format!(", {} in INR", money(inr)))
         .unwrap_or_default();
+    let lines = if milestones > 1 {
+        format!(" billing {milestones} milestones")
+    } else {
+        String::new()
+    };
     let mut question = format!(
-        "Issue {} to {} for {} ({}{in_rupees})?",
+        "Issue {}{lines} to {} for {} ({}{in_rupees})?",
         preview.number,
         preview.client_name,
         money_in(&a.total, preview.currency),

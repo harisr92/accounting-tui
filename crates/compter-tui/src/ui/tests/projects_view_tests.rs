@@ -406,7 +406,12 @@ fn invoicing_after_sorting_bills_the_highlighted_milestone() {
     type_keys(&mut app, "\tjs");
     let sorted = screen(&app, W, H);
     assert!(sorted.contains("> build"), "{sorted}");
-    type_keys(&mut app, "iy");
+    // Three are pending, so i opens the picker with the highlighted one picked
+    app.handle_key(Key::Char('i'));
+    let picker = screen(&app, W, H);
+    assert!(picker.contains("Milestones to invoice"), "{picker}");
+    assert!(picker.contains("1 picked"), "{picker}");
+    type_keys(&mut app, "\ny");
     assert_eq!(
         milestones(&store, &project),
         [
@@ -468,4 +473,57 @@ fn a_new_milestone_is_selected_where_the_sort_lists_it() {
     type_keys(&mut app, "\tjjaKickoff\t2026-10-01\t100\n");
     let added = screen(&app, W, H);
     assert!(added.contains("> Kickoff"), "{added}");
+}
+
+#[test]
+fn a_picks_every_pending_milestone_for_one_invoice() {
+    let (store, project) = store_with_three_milestones();
+    let mut app = projects_app(&store);
+    type_keys(&mut app, "\ti");
+    // Picking none is refused, with the list kept open
+    type_keys(&mut app, " \n");
+    let refused = screen(&app, W, H);
+    assert!(refused.contains("Pick at least one milestone"), "{refused}");
+
+    type_keys(&mut app, "a\n");
+    let question = screen(&app, W, H);
+    assert!(question.contains("billing 3 milestones"), "{question}");
+    // ₹2,100 + IGST 18%
+    assert!(question.contains("₹2,478.00"), "{question}");
+    app.handle_key(Key::Char('y'));
+    assert!(
+        milestones(&store, &project)
+            .iter()
+            .all(|(_, status)| *status == MilestoneStatus::Invoiced)
+    );
+    let project = store.repository().load(project.id()).unwrap();
+    assert!(
+        project
+            .milestones()
+            .iter()
+            .all(|m| m.invoice_number() == Some("INV/26-27/001"))
+    );
+}
+
+#[test]
+fn the_last_pending_milestone_is_invoiced_without_a_picker() {
+    let (store, project) = store_with_three_milestones();
+    let mut app = projects_app(&store);
+    // Invoice two of them together, leaving launch
+    type_keys(&mut app, "\tia ");
+    // a picked all three; Space on the cursor's row (Design) unpicks it
+    let picker = screen(&app, W, H);
+    assert!(picker.contains("2 picked"), "{picker}");
+    type_keys(&mut app, "\ny");
+    assert_eq!(
+        milestones(&store, &project),
+        [
+            ("launch".to_owned(), MilestoneStatus::Invoiced),
+            ("Design".to_owned(), MilestoneStatus::Pending),
+            ("build".to_owned(), MilestoneStatus::Invoiced),
+        ]
+    );
+    type_keys(&mut app, "i");
+    let question = screen(&app, W, H);
+    assert!(question.contains("Issue INV/26-27/002"), "{question}");
 }

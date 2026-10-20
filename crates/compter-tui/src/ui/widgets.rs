@@ -118,7 +118,7 @@ impl Toned for MilestoneStatus {
             Self::Pending => Tone::Neutral,
             Self::Invoiced => Tone::Warning,
             Self::Paid => Tone::Success,
-            Self::Credited => Tone::Neutral,
+            Self::Credited => Tone::Credited,
         }
     }
 }
@@ -133,7 +133,7 @@ impl Toned for InvoiceStatus {
             Self::Issued => Tone::Warning,
             Self::PartlyPaid => Tone::Info,
             Self::Paid => Tone::Success,
-            Self::Credited => Tone::Neutral,
+            Self::Credited => Tone::Credited,
         }
     }
 }

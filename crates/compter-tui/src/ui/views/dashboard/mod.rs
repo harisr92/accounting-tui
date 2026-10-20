@@ -119,7 +119,7 @@ impl<R: Repository> View for DashboardView<R> {
             Row::new(vec![
                 Line::raw(s.number().as_str()),
                 Line::raw(s.client_name()),
-                Line::raw(s.milestone_name()),
+                Line::raw(s.milestones()),
                 Line::raw(money_in(s.balance(), s.currency())).right_aligned(),
                 Line::styled(format!("{days} days"), theme.tone(tone)).right_aligned(),
             ])
@@ -133,7 +133,7 @@ impl<R: Repository> View for DashboardView<R> {
         ];
         let table = Table::new(rows, widths)
             .header(header(
-                &["Invoice", "Client", "Milestone", "Due", "Waiting"],
+                &["Invoice", "Client", "Milestones", "Due", "Waiting"],
                 &[3, 4],
                 theme,
             ))
