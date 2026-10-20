@@ -3,6 +3,19 @@ import 'package:flutter/material.dart';
 /// compter's green, the seed of every colour in the app
 const _seed = Color(0xFF2E6B5E);
 
+/// Purple, for what credit notes took back: settled, but not by payment
+const _creditedSeed = Color(0xFF7B4FA0);
+
+/// Background and text of a CREDITED status chip, from its own seed so it is unlike any other
+/// status
+(Color, Color) creditedColors(Brightness brightness) {
+  final scheme = ColorScheme.fromSeed(
+    seedColor: _creditedSeed,
+    brightness: brightness,
+  );
+  return (scheme.primaryContainer, scheme.onPrimaryContainer);
+}
+
 /// Side gutter of every screen, and the gap between sections
 const gutter = 16.0;
 const sectionGap = 24.0;

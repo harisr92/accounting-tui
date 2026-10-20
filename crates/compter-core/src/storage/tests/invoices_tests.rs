@@ -49,7 +49,7 @@ fn issue(
     let built = build_invoice(
         &profile(),
         project,
-        &project.milestones()[0],
+        &[&project.milestones()[0]],
         number,
         date(),
         None,

@@ -95,6 +95,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CreditInput dco_decode_credit_input(dynamic raw);
 
   @protected
+  CreditLineInput dco_decode_credit_line_input(dynamic raw);
+
+  @protected
   CreditPreviewRow dco_decode_credit_preview_row(dynamic raw);
 
   @protected
@@ -125,6 +128,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   InvoiceDetail dco_decode_invoice_detail(dynamic raw);
 
   @protected
+  InvoiceLineRow dco_decode_invoice_line_row(dynamic raw);
+
+  @protected
   InvoiceList dco_decode_invoice_list(dynamic raw);
 
   @protected
@@ -143,6 +149,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ClientRow> dco_decode_list_client_row(dynamic raw);
 
   @protected
+  List<CreditLineInput> dco_decode_list_credit_line_input(dynamic raw);
+
+  @protected
   List<ExpenseRow> dco_decode_list_expense_row(dynamic raw);
 
   @protected
@@ -150,6 +159,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<HistoryRow> dco_decode_list_history_row(dynamic raw);
+
+  @protected
+  List<InvoiceLineRow> dco_decode_list_invoice_line_row(dynamic raw);
 
   @protected
   List<InvoiceRow> dco_decode_list_invoice_row(dynamic raw);
@@ -306,6 +318,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CreditInput sse_decode_credit_input(SseDeserializer deserializer);
 
   @protected
+  CreditLineInput sse_decode_credit_line_input(SseDeserializer deserializer);
+
+  @protected
   CreditPreviewRow sse_decode_credit_preview_row(SseDeserializer deserializer);
 
   @protected
@@ -336,6 +351,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   InvoiceDetail sse_decode_invoice_detail(SseDeserializer deserializer);
 
   @protected
+  InvoiceLineRow sse_decode_invoice_line_row(SseDeserializer deserializer);
+
+  @protected
   InvoiceList sse_decode_invoice_list(SseDeserializer deserializer);
 
   @protected
@@ -356,6 +374,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ClientRow> sse_decode_list_client_row(SseDeserializer deserializer);
 
   @protected
+  List<CreditLineInput> sse_decode_list_credit_line_input(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<ExpenseRow> sse_decode_list_expense_row(SseDeserializer deserializer);
 
   @protected
@@ -363,6 +386,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<HistoryRow> sse_decode_list_history_row(SseDeserializer deserializer);
+
+  @protected
+  List<InvoiceLineRow> sse_decode_list_invoice_line_row(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<InvoiceRow> sse_decode_list_invoice_row(SseDeserializer deserializer);
@@ -543,6 +571,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_credit_input(CreditInput self, SseSerializer serializer);
 
   @protected
+  void sse_encode_credit_line_input(
+    CreditLineInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_credit_preview_row(
     CreditPreviewRow self,
     SseSerializer serializer,
@@ -576,6 +610,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_invoice_detail(InvoiceDetail self, SseSerializer serializer);
 
   @protected
+  void sse_encode_invoice_line_row(
+    InvoiceLineRow self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_invoice_list(InvoiceList self, SseSerializer serializer);
 
   @protected
@@ -600,6 +640,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_credit_line_input(
+    List<CreditLineInput> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_expense_row(
     List<ExpenseRow> self,
     SseSerializer serializer,
@@ -614,6 +660,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_history_row(
     List<HistoryRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_invoice_line_row(
+    List<InvoiceLineRow> self,
     SseSerializer serializer,
   );
 

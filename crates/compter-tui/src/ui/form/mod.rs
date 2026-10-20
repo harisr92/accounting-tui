@@ -1,10 +1,13 @@
-//! Modal input: a vertical list of fields, a yes/no confirmation, and a folder picker
+//! Modal input: a vertical list of fields, a yes/no confirmation, a checklist to pick rows from,
+//! and a folder picker
 
+mod checklist;
 mod confirm;
 mod field;
 mod folder_picker;
 pub mod parse;
 
+pub use checklist::{Checklist, ChecklistItem};
 pub use confirm::Confirm;
 pub use field::{Field, Preview};
 pub use folder_picker::{FolderPicker, PickerEvent};

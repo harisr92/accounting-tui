@@ -138,9 +138,9 @@ impl<R: Repository> ProjectsView<R> {
                 (project, notice)
             }
             // Opens the confirm; nothing changes until it is answered
-            FormKind::IssueRate(id, milestone) => {
+            FormKind::IssueRate(id, milestones) => {
                 let rate = ExchangeRate::new(parse::money(form.value(0))?).map_err(fail)?;
-                self.preview_issue(id, milestone, Some(rate))?;
+                self.preview_issue(id, milestones, Some(rate))?;
                 return Ok(Notice::info("Check the invoice before issuing it"));
             }
             FormKind::Search => return self.search(form),

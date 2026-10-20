@@ -1,4 +1,5 @@
 mod alignment_tests;
+mod checklist_tests;
 mod draw_tests;
 mod filter_tests;
 mod folder_picker_tests;

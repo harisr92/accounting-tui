@@ -1,3 +1,4 @@
+use crate::app::App;
 use crate::ui::key::Key;
 use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
@@ -331,6 +332,15 @@ fn a_logo_waits_for_the_business_details() {
     assert!(shown.contains("before a logo"), "{shown}");
 }
 
+/// `c`, then type `amount` over what is prefilled on the invoice's one line, and go on to the
+/// credit form
+fn credit_lines(app: &mut App, amount: &str) {
+    app.handle_key(Key::Char('c'));
+    app.handle_key(Key::Ctrl('u'));
+    type_keys(app, amount);
+    app.handle_key(Key::Enter);
+}
+
 #[test]
 fn a_credit_note_is_confirmed_then_cancels_the_invoice() {
     let (store, project) = store_with_milestone(true);
@@ -338,14 +348,18 @@ fn a_credit_note_is_confirmed_then_cancels_the_invoice() {
     type_keys(&mut app, "\tiy");
     app.handle_key(Key::Char('2'));
 
-    // A reason is required
+    // The one line is picked, for all of it
     app.handle_key(Key::Char('c'));
+    let lines = screen(&app, W, H);
+    assert!(lines.contains("[x]"), "{lines}");
+    assert!(lines.contains("50000"), "{lines}");
+    app.handle_key(Key::Enter);
+
+    // A reason is required
     app.handle_key(Key::Enter);
     let missing = screen(&app, W, H);
     assert!(missing.contains("reason for the credit note"), "{missing}");
-
-    // Prefilled with the whole taxable value
-    type_keys(&mut app, "\t\tBilled in error\n");
+    type_keys(&mut app, "\tBilled in error\n");
     let question = screen(&app, W, H);
     assert!(question.contains("Issue CN/"), "{question}");
     assert!(question.contains("₹59,000.00"), "{question}");
@@ -391,8 +405,8 @@ fn a_credit_note_on_a_paid_invoice_refunds_or_keeps_the_rest() {
     assert!(store.repository().list_invoices().unwrap()[0].is_paid());
 
     // ₹10,000 + IGST, refunded
-    app.handle_key(Key::Char('c'));
-    type_keys(&mut app, "\t10000\tDiscount\n");
+    credit_lines(&mut app, "10000");
+    type_keys(&mut app, "\tDiscount\n");
     let question = screen(&app, W, H);
     assert!(
         question.contains("₹11,800.00 already paid will be refunded"),
@@ -405,8 +419,8 @@ fn a_credit_note_on_a_paid_invoice_refunds_or_keeps_the_rest() {
     assert!(after.contains("-₹11,800.00"), "{after}");
 
     // ₹5,000 + IGST, kept as an advance for the client
-    app.handle_key(Key::Char('c'));
-    type_keys(&mut app, "\t5000\tGoodwill\t ");
+    credit_lines(&mut app, "5000");
+    type_keys(&mut app, "\tGoodwill\t ");
     app.handle_key(Key::Enter);
     let question = screen(&app, W, H);
     assert!(
@@ -420,11 +434,21 @@ fn a_credit_note_on_a_paid_invoice_refunds_or_keeps_the_rest() {
     assert!(after.contains("PAID"), "{after}");
     assert_eq!(milestone_status(&store, &project), MilestoneStatus::Paid);
 
-    // Notes together can't take off more than the invoice
+    // Once paid, the picker says what is due and that the rest goes back to the client
     app.handle_key(Key::Char('c'));
-    type_keys(&mut app, "\t40000\tMore\n");
+    let guide = screen(&app, W, H);
+    assert!(
+        guide.contains("₹0.00 due · up to ₹41,300.00 incl. GST"),
+        "{guide}"
+    );
+    assert!(guide.contains("[ ] Design"), "{guide}");
+    // More than the line has left is refused while it can still be changed
+    type_keys(&mut app, "40000\n");
     let refused = screen(&app, W, H);
-    assert!(refused.contains("but credit notes can take"), "{refused}");
+    assert!(
+        refused.contains("Design: only 35000.00 is left to credit"),
+        "{refused}"
+    );
 }
 
 #[test]
@@ -442,17 +466,24 @@ fn cancelling_after_a_tds_payment_asks_for_the_tds_reversed() {
     type_keys(&mut app, "5000\n");
     assert!(store.repository().list_invoices().unwrap()[0].is_paid());
 
-    // Refunding it all would hand back more cash than was received
-    app.handle_key(Key::Char('c'));
+    // Refunding it all would hand back more cash than was received. Once paid, nothing is
+    // prefilled: typing the amount picks the line.
+    type_keys(&mut app, "c");
+    assert!(screen(&app, W, H).contains("0 picked"));
+    type_keys(&mut app, "50000\n");
     let form = screen(&app, W, H);
     assert!(form.contains("TDS reversed"), "{form}");
-    type_keys(&mut app, "\t50000\tCancelled\n");
+    type_keys(&mut app, "\tCancelled\n");
     let refused = screen(&app, W, H);
     assert!(refused.contains("would go back to the client"), "{refused}");
+    // Esc goes back to the lines, with the amount still typed
     app.handle_key(Key::Esc);
+    let back = screen(&app, W, H);
+    assert!(back.contains("lines to take back"), "{back}");
+    assert!(back.contains("1 picked"), "{back}");
+    assert!(back.contains("50000"), "{back}");
 
-    app.handle_key(Key::Char('c'));
-    type_keys(&mut app, "\t50000\tCancelled\t\t5000\n");
+    type_keys(&mut app, "\n\tCancelled\t\t5000\n");
     let question = screen(&app, W, H);
     assert!(question.contains("₹5,000.00 TDS reversed"), "{question}");
     app.handle_key(Key::Char('y'));
@@ -542,4 +573,73 @@ fn settings_picks_the_sync_folder_for_the_next_start() {
     assert!(SyncDir::saved(&data_dir).unwrap().is_none());
     app.handle_key(Key::Char('x'));
     assert!(screen(&app, W, H).contains("already off"));
+}
+
+#[test]
+fn a_credit_note_takes_back_the_lines_picked() {
+    let (store, mut project) = store_with_milestone(true);
+    let due = NaiveDate::from_ymd_opt(2026, 10, 2).unwrap();
+    project
+        .add_milestone("Build", due, Some(BigDecimal::from(20_000)))
+        .unwrap();
+    store.repository().save(&project).unwrap();
+    let mut app = invoicing_app(&store);
+    type_keys(&mut app, "\tia\ny");
+    app.handle_key(Key::Char('2'));
+    let listed = screen(&app, W, H);
+    assert!(listed.contains("Design, Build"), "{listed}");
+
+    // Nothing is picked on an invoice of several lines
+    app.handle_key(Key::Char('c'));
+    let lines = screen(&app, W, H);
+    assert!(lines.contains("0 picked"), "{lines}");
+    // Build in part: ₹5,000 of its ₹20,000
+    app.handle_key(Key::Char('j'));
+    app.handle_key(Key::Ctrl('u'));
+    type_keys(&mut app, "5000\n\tScope cut\n");
+    let question = screen(&app, W, H);
+    assert!(question.contains("₹5,900.00"), "{question}");
+    app.handle_key(Key::Char('y'));
+    let after = screen(&app, W, H);
+    assert!(after.contains("Issued credit note CN/"), "{after}");
+
+    let status = |name: &str| {
+        let project = store.repository().load(project.id()).unwrap();
+        let m = project.milestones().iter().find(|m| m.name() == name);
+        m.map(|m| m.status())
+    };
+    assert_eq!(status("Build"), Some(MilestoneStatus::Invoiced));
+
+    // The rest of Build, typed now the invoice has a credit: taken back in full, Build is
+    // credited while Design is still due
+    type_keys(&mut app, "cj15000\n\tScope cut\n");
+    let question = screen(&app, W, H);
+    assert!(question.contains("₹17,700.00"), "{question}");
+    app.handle_key(Key::Char('y'));
+    assert_eq!(status("Build"), Some(MilestoneStatus::Credited));
+    assert_eq!(status("Design"), Some(MilestoneStatus::Invoiced));
+    app.handle_key(Key::Char('1'));
+    let projects = screen(&app, W, H);
+    assert!(projects.contains("CREDITED"), "{projects}");
+    assert!(projects.contains("INVOICED"), "{projects}");
+    app.handle_key(Key::Char('2'));
+
+    // Then all of Design: Build has nothing left to pick, so a picks only Design
+    // Picking it fills in all that is left on it
+    type_keys(&mut app, "ca");
+    let picked = screen(&app, W, H);
+    assert!(picked.contains("1 picked"), "{picked}");
+    assert!(picked.contains("50000.00"), "{picked}");
+    type_keys(&mut app, "\n\tCancelled\n");
+    let question = screen(&app, W, H);
+    assert!(question.contains("₹59,000.00"), "{question}");
+    assert!(question.contains("₹0.00 will still"), "{question}");
+    app.handle_key(Key::Char('y'));
+    let project = store.repository().load(project.id()).unwrap();
+    assert!(
+        project
+            .milestones()
+            .iter()
+            .all(|m| m.status() == MilestoneStatus::Credited)
+    );
 }

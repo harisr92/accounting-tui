@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 /// 1: first release · 2: invoices record a list of payments instead of a single paid status ·
 /// 3: credit notes, and the CREDITED milestone status
-pub(super) const SCHEMA_VERSION: u32 = 4;
+pub(super) const SCHEMA_VERSION: u32 = 5;
 pub(super) const SCHEMA_KEY: &str = "schema_version";
 
 pub(super) const META: TableDefinition<&str, u32> = TableDefinition::new("meta");

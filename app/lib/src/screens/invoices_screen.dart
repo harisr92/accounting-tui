@@ -40,7 +40,7 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen>
               (row) => [
                 row.number,
                 row.clientName,
-                row.milestoneName,
+                row.milestones,
                 row.kind,
                 row.status,
               ],
@@ -73,7 +73,7 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen>
                   for (final row in matches)
                     RecordTile(
                       title: row.clientName,
-                      supporting: [row.number, row.milestoneName].join(' · '),
+                      supporting: [row.number, row.milestones].join(' · '),
                       amount: row.due ?? row.total,
                       status: row.status,
                       onTap: () => context.go(invoicePath(row.number)),

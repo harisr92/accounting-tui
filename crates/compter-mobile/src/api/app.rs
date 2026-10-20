@@ -11,8 +11,8 @@ use compter_core::domain::{
 };
 use compter_core::input;
 use compter_core::services::{
-    CreditDraft, ExpenseDraft, ExpenseService, InvoiceService, MilestoneDraft, ProjectDraft,
-    ProjectService, ReportService, ServiceError,
+    CreditDraft, CreditLineDraft, ExpenseDraft, ExpenseService, InvoiceService, MilestoneDraft,
+    ProjectDraft, ProjectService, ReportService, ServiceError, creditable_lines_of,
 };
 use compter_core::storage::sync::{self, Lease, Resolution, SyncDir, SyncError};
 use compter_core::storage::{DataDir, RedbRepository, Store};
@@ -21,9 +21,9 @@ use super::expenses::{category, fiscal_year};
 use super::profile::currency;
 use super::reports::month_label;
 use super::{
-    ApiError, CreditInput, CreditPreviewRow, CreditedRow, ExpenseInput, ExpenseList, ExpenseRow,
-    ExportRow, InvoiceDetail, InvoiceList, InvoicePreviewRow, InvoiceRow, IssuedRow,
-    MilestoneInput, PaymentInput, ProfileInput, ProfileRow, ProjectDetail, ProjectInput,
+    ApiError, CreditInput, CreditLineInput, CreditPreviewRow, CreditedRow, ExpenseInput,
+    ExpenseList, ExpenseRow, ExportRow, InvoiceDetail, InvoiceList, InvoicePreviewRow, InvoiceRow,
+    IssuedRow, MilestoneInput, PaymentInput, ProfileInput, ProfileRow, ProjectDetail, ProjectInput,
     ProjectRow, ReceivedRow, ReportRow, SentRow, SyncStatusRow, TimeInput,
 };
 
@@ -268,41 +268,45 @@ impl CompterApp {
         self.detail(&self.invoices.load(&InvoiceNumber::from_stored(&number))?)
     }
 
-    /// The invoice a pending milestone would get today, without saving anything. `rate` (rupees
-    /// per unit) is needed when the project is billed in a foreign currency.
+    /// The invoice pending milestones of a project would get together today, without saving
+    /// anything. `rate` (rupees per unit) is needed when the project is billed in a foreign
+    /// currency.
     pub fn preview_invoice(
         &self,
         project_id: String,
-        milestone_id: String,
+        milestone_ids: Vec<String>,
         rate: Option<String>,
     ) -> Result<InvoicePreviewRow, ApiError> {
         let preview = self.invoices.preview(
             self::project_id(&project_id)?,
-            self::milestone_id(&milestone_id)?,
+            &milestone_ids_of(&milestone_ids)?,
             today(),
             exchange_rate(rate.as_deref())?,
         )?;
         Ok(InvoicePreviewRow::from(&preview))
     }
 
-    /// Issue today's invoice for a pending milestone and write its PDF
+    /// Issue today's invoice billing pending milestones of a project, a line each, and write
+    /// its PDF
     pub fn issue_invoice(
         &mut self,
         project_id: String,
-        milestone_id: String,
+        milestone_ids: Vec<String>,
         rate: Option<String>,
     ) -> Result<IssuedRow, ApiError> {
         let id = self::project_id(&project_id)?;
         let issued = self.invoices.issue(
             id,
-            self::milestone_id(&milestone_id)?,
+            &milestone_ids_of(&milestone_ids)?,
             today(),
             exchange_rate(rate.as_deref())?,
         )?;
+        // The service returns only the invoice; the milestones it invoiced are in the project,
+        // read once for both
+        let project = self.projects.load(id)?;
         Ok(IssuedRow {
-            invoice: self.detail(&issued.invoice)?,
-            // The service returns only the invoice; the milestone it invoiced is in the project
-            project: ProjectDetail::from(&self.projects.load(id)?),
+            invoice: self.detail_in(&issued.invoice, &project)?,
+            project: ProjectDetail::from(&project),
             pdf_error: issued.pdf.err(),
         })
     }
@@ -335,10 +339,37 @@ impl CompterApp {
         number: String,
         input: CreditInput,
     ) -> Result<CreditPreviewRow, ApiError> {
-        let preview = self
-            .invoices
-            .preview_credit(&InvoiceNumber::from_stored(&number), credit_draft(input)?)?;
+        let number = InvoiceNumber::from_stored(&number);
+        let draft = self.checked_draft(&number, input)?;
+        let preview = self.invoices.preview_credit(&number, draft)?;
         Ok(CreditPreviewRow::from(&preview))
+    }
+
+    /// Check the lines picked for a credit note against invoice `number` before asking when and
+    /// why: each amount is a number, more than zero and no more than is left on its line. A
+    /// refusal names the line's field, `line:<milestone_id>`.
+    pub fn check_credit_lines(
+        &self,
+        number: String,
+        lines: Vec<CreditLineInput>,
+    ) -> Result<(), ApiError> {
+        let invoice = self.invoices.load(&InvoiceNumber::from_stored(&number))?;
+        Ok(self
+            .invoices
+            .check_credit_lines(&invoice, &credit_lines(&lines)?)?)
+    }
+
+    /// `input` as a credit note draft, its lines checked first so a refusal names its line
+    /// even when issuing (another device may have credited it since the preview)
+    fn checked_draft(
+        &self,
+        number: &InvoiceNumber,
+        input: CreditInput,
+    ) -> Result<CreditDraft, ApiError> {
+        let draft = credit_draft(input)?;
+        let invoice = self.invoices.load(number)?;
+        self.invoices.check_credit_lines(&invoice, &draft.lines)?;
+        Ok(draft)
     }
 
     /// Issue a credit note against invoice `number` and write its PDF
@@ -347,9 +378,9 @@ impl CompterApp {
         number: String,
         input: CreditInput,
     ) -> Result<CreditedRow, ApiError> {
-        let credited = self
-            .invoices
-            .issue_credit(&InvoiceNumber::from_stored(&number), credit_draft(input)?)?;
+        let number = InvoiceNumber::from_stored(&number);
+        let draft = self.checked_draft(&number, input)?;
+        let credited = self.invoices.issue_credit(&number, draft)?;
         Ok(CreditedRow {
             note_number: credited.note.number().to_string(),
             invoice: self.detail(&credited.invoice)?,
@@ -357,12 +388,20 @@ impl CompterApp {
         })
     }
 
-    /// An invoice as the invoice screen shows it, with the advance its client holds
+    /// An invoice as the invoice screen shows it, with what is left to credit on each line and
+    /// the advance its client holds
     fn detail(&self, invoice: &Invoice) -> Result<InvoiceDetail, ApiError> {
+        let project = self.projects.load(invoice.project_id())?;
+        self.detail_in(invoice, &project)
+    }
+
+    /// [`Self::detail`], with the invoice's `project` already loaded
+    fn detail_in(&self, invoice: &Invoice, project: &Project) -> Result<InvoiceDetail, ApiError> {
         let held = self.invoices.client_advance(invoice.client_name())?;
+        let lines = creditable_lines_of(invoice, project)?;
         Ok(InvoiceDetail {
             client_advance: (!held.is_zero()).then(|| Currency::Inr.display(&held)),
-            ..InvoiceDetail::from(invoice)
+            ..InvoiceDetail::new(invoice, &lines)
         })
     }
 
@@ -592,6 +631,10 @@ fn milestone_id(id: &str) -> Result<MilestoneId, ApiError> {
         .map_err(|_| ApiError::invalid("milestone_id", "not a milestone id"))
 }
 
+fn milestone_ids_of(ids: &[String]) -> Result<Vec<MilestoneId>, ApiError> {
+    ids.iter().map(|id| milestone_id(id)).collect()
+}
+
 /// Where milestone `id` is in `project`, as the project service takes it
 fn index_of(project: &Project, id: &str) -> Result<usize, ApiError> {
     project
@@ -663,10 +706,28 @@ fn exchange_rate(rate: Option<&str>) -> Result<Option<ExchangeRate>, ApiError> {
         .transpose()
 }
 
+/// Credit note lines as typed; a refused one names its field, `line:<milestone_id>`
+fn credit_lines(lines: &[CreditLineInput]) -> Result<Vec<CreditLineDraft>, ApiError> {
+    lines
+        .iter()
+        .map(|line| {
+            let field = || format!("line:{}", line.milestone_id);
+            Ok(CreditLineDraft {
+                milestone_id: line
+                    .milestone_id
+                    .parse()
+                    .map_err(|_| ApiError::invalid(&field(), "not a milestone id"))?,
+                taxable_value: input::money(&line.amount)
+                    .map_err(|e| ApiError::invalid(&field(), e))?,
+            })
+        })
+        .collect()
+}
+
 fn credit_draft(input: CreditInput) -> Result<CreditDraft, ApiError> {
     Ok(CreditDraft {
         date: date(&input.date, "date")?,
-        taxable_value: input::money(&input.amount).map_err(|e| ApiError::invalid("amount", e))?,
+        lines: credit_lines(&input.lines)?,
         reason: input.reason.trim().to_owned(),
         returned: ReturnTerms {
             kind: if input.keep_as_advance {

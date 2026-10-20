@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'theme.dart';
+
 /// A status label from Rust (`PENDING`, `INVOICED`, `PAID`, ...) as a chip coloured by the
 /// theme, the same height for every label. The labels themselves are never written in Dart;
 /// only their tone is chosen here.
@@ -17,7 +19,7 @@ class StatusChip extends StatelessWidget {
       'INVOICED' ||
       'ISSUED' ||
       'COMPLETED' => (scheme.tertiaryContainer, scheme.onTertiaryContainer),
-      'CREDITED' => (scheme.surfaceContainerHighest, scheme.onSurfaceVariant),
+      'CREDITED' => creditedColors(theme.brightness),
       _ => (scheme.secondaryContainer, scheme.onSecondaryContainer),
     };
     return Container(

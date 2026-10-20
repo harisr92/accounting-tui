@@ -19,9 +19,14 @@ impl ApiError {
 }
 
 impl From<ServiceError> for ApiError {
+    /// A refused credit note line names its field, `line:<milestone_id>`, as typed input does
     fn from(error: ServiceError) -> Self {
+        let field = match &error {
+            ServiceError::CreditLine { milestone, .. } => Some(format!("line:{milestone}")),
+            _ => None,
+        };
         Self {
-            field: None,
+            field,
             message: error.to_string(),
         }
     }

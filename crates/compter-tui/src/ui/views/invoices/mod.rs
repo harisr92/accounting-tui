@@ -12,7 +12,7 @@ use ratatui::text::Line;
 use ratatui::widgets::{Paragraph, Row, Table};
 
 use crate::ui::filter::Filter;
-use crate::ui::form::{Confirm, Field, Form, parse};
+use crate::ui::form::{Checklist, ChecklistItem, Confirm, Field, Form, parse};
 use crate::ui::selection::{Nav, Selection};
 use crate::ui::theme::Theme;
 use crate::ui::view::{Action, KeyHint, Notice, View};
@@ -20,7 +20,10 @@ use crate::ui::views::payment::{payment_form, submit_payment};
 use crate::ui::widgets::{header, money, money_in, panel, status_span};
 use crate::viewer;
 use compter_core::domain::{Invoice, InvoiceNumber, InvoiceSummary, ReturnKind, ReturnTerms};
-use compter_core::services::{CreditDraft, CreditPreview, Credited, InvoiceService, ServiceError};
+use compter_core::services::{
+    CreditDraft, CreditLineDraft, CreditPreview, CreditableLine, Credited, InvoiceService,
+    ServiceError,
+};
 use compter_core::storage::Repository;
 
 const HINTS: &[KeyHint] = &[
@@ -34,12 +37,11 @@ const HINTS: &[KeyHint] = &[
 ];
 
 const CREDIT_DATE: usize = 0;
-const CREDIT_AMOUNT: usize = 1;
-const CREDIT_REASON: usize = 2;
-const CREDIT_RETURN: usize = 3;
+const CREDIT_REASON: usize = 1;
+const CREDIT_RETURN: usize = 2;
 /// Last, and only on some invoices: the rupees refunded on a foreign invoice, or the TDS the
 /// client reverses on a rupee invoice that had TDS withheld
-const CREDIT_EXTRA: usize = 4;
+const CREDIT_EXTRA: usize = 3;
 
 /// Options of the credit form's `CREDIT_RETURN` choice, in `ReturnKind` order
 const RETURN_OPTIONS: &[&str] = &["Refund", "Keep as advance"];
@@ -48,8 +50,18 @@ const RETURN_OPTIONS: &[&str] = &["Refund", "Keep as advance"];
 enum Modal {
     /// Payment for the selected invoice
     Payment(Form),
-    /// A credit note against the selected invoice
-    Credit(Form),
+    /// The lines of the selected invoice a credit note takes back from, and how much of each;
+    /// a row each in `lines` order
+    CreditLines {
+        lines: Vec<CreditableLine>,
+        list: Checklist,
+    },
+    /// When and why the credit note takes back `lines`; Esc goes back to `picker`, as it was
+    Credit {
+        lines: Vec<CreditLineDraft>,
+        form: Form,
+        picker: Box<(Vec<CreditableLine>, Checklist)>,
+    },
     /// The credit note as it will be issued, waiting for a yes
     ConfirmCredit(CreditDraft, Confirm),
     Search(Form),
@@ -100,7 +112,7 @@ impl<R: Repository> InvoicesView<R> {
             [
                 s.number().as_str(),
                 s.client_name(),
-                s.milestone_name(),
+                s.milestones(),
                 s.kind().label(),
                 s.status().label(),
             ]
@@ -171,23 +183,97 @@ impl<R: Repository> InvoicesView<R> {
         }
     }
 
-    /// `c`: what to take off the selected invoice, and why. Paid invoices can be credited too,
-    /// until credit notes have taken off their whole total.
+    /// `c`: which lines to take off the selected invoice and how much of each, then when and
+    /// why. Paid invoices can be credited too, until credit notes have taken off their whole
+    /// total.
     fn open_credit(&mut self) -> Action {
-        match &self.current {
-            None => Action::Notify(Notice::info("No invoice selected")),
-            Some(invoice) if invoice.creditable().is_zero() => Action::Notify(Notice::info(
-                "Credit notes already take off this whole invoice",
-            )),
-            Some(invoice) => {
-                self.modal = Some(Modal::Credit(credit_form(invoice)));
-                Action::Handled
+        let invoice = match &self.current {
+            None => return Action::Notify(Notice::info("No invoice selected")),
+            Some(invoice) if invoice.creditable().is_zero() => {
+                return Action::Notify(Notice::info(
+                    "Credit notes already take off this whole invoice",
+                ));
             }
+            Some(invoice) => invoice,
+        };
+        let currency = invoice.currency();
+        let lines = match self.service.creditable_lines(invoice) {
+            Ok(lines) => lines,
+            Err(error) => return Action::Notify(Notice::error(error.to_string())),
+        };
+        // Cancelling an unpaid invoice is the usual case, so it is prefilled; once anything was
+        // paid or credited, the amount is left to type, so nothing is refunded by default
+        let untouched = invoice.untouched();
+        let single = lines.len() == 1;
+        let items = lines
+            .iter()
+            .map(|line| {
+                let item = ChecklistItem::new(line.name.as_str(), money_in(&line.billed, currency));
+                if line.creditable.is_zero() {
+                    item.disabled()
+                } else if untouched {
+                    item.with_amount(line.creditable.to_string())
+                        .checked(single)
+                } else {
+                    // Picking the line fills in all that is left, to lower if need be
+                    item.with_amount("").with_fill(line.creditable.to_string())
+                }
+            })
+            .collect();
+        let list = Checklist::new(
+            "Credit note: lines to take back",
+            ["Milestone", "Billed", "Credit excl. GST"],
+            items,
+        )
+        .with_note(invoice.credit_guide());
+        self.modal = Some(Modal::CreditLines { lines, list });
+        Action::Handled
+    }
+
+    /// Read the lines picked, then ask when and why
+    fn pick_credit_lines(
+        &mut self,
+        creditable: &[CreditableLine],
+        list: &Checklist,
+    ) -> Result<Notice, String> {
+        let mut lines = Vec::with_capacity(creditable.len());
+        for row in list.checked() {
+            let Some(line) = creditable.get(row) else {
+                continue;
+            };
+            let amount = parse::money(list.amount(row))
+                .map_err(|error| format!("{}: {error}", line.name))?;
+            lines.push(CreditLineDraft {
+                milestone_id: line.milestone_id,
+                taxable_value: amount,
+            });
         }
+        if lines.is_empty() {
+            return Err("Pick at least one line (Space, or a for all)".to_owned());
+        }
+        let invoice = self.selected_invoice()?;
+        // Refused here, while the amounts can still be changed
+        self.service
+            .check_credit_lines(invoice, &lines)
+            .map_err(|e| e.to_string())?;
+        let form = credit_form(invoice);
+        self.modal = Some(Modal::Credit {
+            lines,
+            form,
+            picker: Box::new((creditable.to_vec(), list.clone())),
+        });
+        Ok(Notice::info("When and why the credit note is issued"))
+    }
+
+    /// The selected invoice in full
+    fn selected_invoice(&self) -> Result<&Invoice, String> {
+        self.current
+            .as_ref()
+            .ok_or_else(|| "No invoice selected".to_owned())
     }
 
     /// Read the credit form and show the note it makes for confirmation
-    fn preview_credit(&mut self, form: &Form) -> Result<Notice, String> {
+    fn preview_credit(&mut self, lines: &[CreditLineDraft], form: &Form) -> Result<Notice, String> {
         let number = self.current_number()?;
         let foreign = self
             .current
@@ -195,7 +281,7 @@ impl<R: Repository> InvoicesView<R> {
             .is_some_and(|i| !i.currency().is_inr());
         let draft = CreditDraft {
             date: parse::date_or(form.value(CREDIT_DATE), Local::now().date_naive())?,
-            taxable_value: parse::money(form.value(CREDIT_AMOUNT))?,
+            lines: lines.to_vec(),
             reason: form.value(CREDIT_REASON).trim().to_owned(),
             returned: return_terms(form, foreign)?,
         };
@@ -206,7 +292,7 @@ impl<R: Repository> InvoicesView<R> {
         let client = self.current.as_ref().map_or("", Invoice::client_name);
         self.modal = Some(Modal::ConfirmCredit(
             draft,
-            Confirm::new(credit_question(&preview, client)),
+            Confirm::new(credit_question(&preview, client, lines.len())),
         ));
         Ok(Notice::info("Check the credit note before issuing it"))
     }
@@ -286,11 +372,35 @@ impl<R: Repository> InvoicesView<R> {
                 }
                 action
             }
-            Modal::Credit(form) => {
-                let (form, action) = form.step(key, |form| self.preview_credit(form));
-                // A good submit opened the confirm in its place
-                if let Some(form) = form {
-                    self.modal = Some(Modal::Credit(form));
+            Modal::CreditLines { lines, list } => {
+                let (list, action) = list.step(key, |list| self.pick_credit_lines(&lines, list));
+                // A good submit opened the credit form in its place
+                if let Some(list) = list {
+                    self.modal = Some(Modal::CreditLines { lines, list });
+                }
+                action
+            }
+            Modal::Credit {
+                lines,
+                form,
+                picker,
+            } => {
+                let (form, action) = form.step(key, |form| self.preview_credit(&lines, form));
+                match (form, &action) {
+                    (Some(form), _) => {
+                        self.modal = Some(Modal::Credit {
+                            lines,
+                            form,
+                            picker,
+                        });
+                    }
+                    // Esc: back to the lines, with what was picked and typed
+                    (None, Action::Handled) => {
+                        let (lines, list) = *picker;
+                        self.modal = Some(Modal::CreditLines { lines, list });
+                    }
+                    // A good submit opened the confirm in its place
+                    (None, _) => {}
                 }
                 action
             }
@@ -341,29 +451,13 @@ impl<R: Repository> InvoicesView<R> {
     }
 }
 
-/// Prefilled to cancel the whole invoice while nothing has been paid or credited; otherwise left
-/// for the amount, with what is due as a guide. A note beyond what is due gives the rest back to
+/// When and why, after the lines were picked. A note beyond what is due gives the rest back to
 /// the client: refunded (in rupees, on a foreign invoice) or kept as an advance.
 fn credit_form(invoice: &Invoice) -> Form {
     let tds_withheld = invoice.payments().iter().any(|p| !p.tds.is_zero());
     let currency = invoice.currency();
-    let untouched = invoice.payments().is_empty() && invoice.credits().is_empty();
-    let amount = Field::text(
-        "Amount",
-        format!(
-            "before GST, in {currency}; {} due, up to {} incl. GST",
-            money_in(&invoice.balance(), currency),
-            money_in(&invoice.creditable(), currency)
-        ),
-    );
-    let amount = if untouched {
-        amount.with_value(invoice.amounts().taxable_value.to_string())
-    } else {
-        amount
-    };
     let mut fields = vec![
         Field::text("Date", "YYYY-MM-DD, blank for today"),
-        amount,
         Field::text("Reason", "e.g. Discount agreed, billed in error"),
         Field::choice("If already paid", RETURN_OPTIONS),
     ];
@@ -402,16 +496,22 @@ fn return_terms(form: &Form, foreign: bool) -> Result<ReturnTerms, String> {
     })
 }
 
-/// "Issue CN/26-27/001 against INV/26-27/004 for ₹11,800.00 (10,000.00 + IGST 1,800.00)? …"
-fn credit_question(preview: &CreditPreview, client: &str) -> String {
+/// "Issue CN/26-27/001 against INV/26-27/004 for ₹11,800.00 (10,000.00 + IGST 1,800.00)? …",
+/// naming how many of its lines it takes back from when more than one
+fn credit_question(preview: &CreditPreview, client: &str, lines: usize) -> String {
     let a = &preview.amounts;
     let tax = if a.total_tax().is_zero() {
         String::new()
     } else {
         format!(" incl. GST {}", preview.currency.format(&a.total_tax()))
     };
+    let from = if lines > 1 {
+        format!(" ({lines} lines)")
+    } else {
+        String::new()
+    };
     let mut question = format!(
-        "Issue {} against {} for {}{tax}? {} will still be due.",
+        "Issue {} against {}{from} for {}{tax}? {} will still be due.",
         preview.number,
         preview.invoice,
         money_in(&a.total, preview.currency),
@@ -519,7 +619,7 @@ impl<R: Repository> View for InvoicesView<R> {
                         Line::raw(s.number().as_str()),
                         Line::raw(s.date().format("%d-%m-%Y").to_string()),
                         Line::raw(s.client_name()),
-                        Line::raw(s.milestone_name()),
+                        Line::raw(s.milestones()),
                         Line::raw(s.kind().label()),
                         Line::raw(money_in(s.total(), s.currency())).right_aligned(),
                         Line::raw(due).right_aligned(),
@@ -542,7 +642,7 @@ impl<R: Repository> View for InvoicesView<R> {
                         "Number",
                         "Date",
                         "Client",
-                        "Milestone",
+                        "Milestones",
                         "Kind",
                         "Total",
                         "Due",
@@ -559,9 +659,10 @@ impl<R: Repository> View for InvoicesView<R> {
             frame.render_stateful_widget(table, area, &mut state);
         }
         match &self.modal {
-            Some(Modal::Payment(form) | Modal::Credit(form) | Modal::Search(form)) => {
+            Some(Modal::Payment(form) | Modal::Credit { form, .. } | Modal::Search(form)) => {
                 form.render(frame, theme);
             }
+            Some(Modal::CreditLines { list, .. }) => list.render(frame, theme),
             Some(Modal::ConfirmCredit(_, confirm)) => confirm.render(frame, theme),
             None => {}
         }
@@ -577,6 +678,7 @@ impl<R: Repository> View for InvoicesView<R> {
     fn key_hints(&self) -> &'static [KeyHint] {
         match &self.modal {
             Some(Modal::ConfirmCredit(..)) => Confirm::HINTS,
+            Some(Modal::CreditLines { list, .. }) => list.hints(),
             Some(_) => Form::HINTS,
             None => HINTS,
         }

@@ -10,6 +10,8 @@ pub enum Tone {
     Warning,
     Success,
     Error,
+    /// Taken back by credit notes: settled, but not by payment
+    Credited,
 }
 
 /// The single source of colours and styles for the whole UI
@@ -26,6 +28,7 @@ pub struct Theme {
     warning: Color,
     success: Color,
     error: Color,
+    credited: Color,
 }
 
 impl Theme {
@@ -46,6 +49,7 @@ impl Theme {
             Tone::Warning => self.warning,
             Tone::Success => self.success,
             Tone::Error => self.error,
+            Tone::Credited => self.credited,
         };
         Style::new().fg(fg).add_modifier(Modifier::BOLD)
     }
@@ -72,6 +76,7 @@ impl Theme {
             warning: Color::Yellow,
             success: Color::Green,
             error: Color::Red,
+            credited: Color::Magenta,
         }
     }
 
@@ -92,6 +97,7 @@ impl Theme {
             warning: Color::Indexed(130),
             success: Color::Indexed(28),
             error: Color::Red,
+            credited: Color::Indexed(127),
         }
     }
 
@@ -108,6 +114,7 @@ impl Theme {
             warning: Color::Reset,
             success: Color::Reset,
             error: Color::Reset,
+            credited: Color::Reset,
         }
     }
 }

@@ -80,8 +80,24 @@ pub enum DomainError {
     NotInvoiced,
     #[error("credit notes can take back at most what the milestone billed")]
     CreditExceedsMilestone,
+    #[error("an amount has at most two decimal places (paise)")]
+    FractionOfPaisa,
+    #[error("only {left} is left to credit on this line")]
+    CreditExceedsLine { left: String },
     #[error("received plus TDS is {got}, more than the {balance} still due")]
     PaymentExceedsBalance { balance: String, got: String },
+    #[error("an invoice bills at least one milestone")]
+    NoInvoiceLines,
+    #[error("an invoice bills each milestone once")]
+    DuplicateInvoiceLine,
+    #[error("invoice lines add up to {lines}, not its taxable value {taxable}")]
+    LinesDontAddUp { lines: String, taxable: String },
+    #[error("a credit note takes back at least one line")]
+    NoCreditLines,
+    #[error("a credit note takes back each line once")]
+    DuplicateCreditLine,
+    #[error("that milestone is not on this invoice")]
+    NotOnInvoice,
     #[error("this invoice record is in the old (v1) format; the database needs its upgrade")]
     OutdatedInvoiceFormat,
     #[error("payment date is before the invoice date")]

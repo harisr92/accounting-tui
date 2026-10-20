@@ -3,7 +3,8 @@ mod support;
 use std::path::Path;
 
 use compter_mobile::api::{
-    CompterApp, CreditInput, PaymentInput, ProfileInput, ProjectDetail, ProjectInput, TimeInput,
+    CompterApp, CreditInput, CreditLineInput, PaymentInput, ProfileInput, ProjectDetail,
+    ProjectInput, TimeInput,
 };
 use support::{demo, milestone, project};
 
@@ -33,10 +34,17 @@ fn milestone_id(project: &ProjectDetail, name: &str) -> String {
 fn issue_launch(app: &mut CompterApp) -> String {
     let website = open(app, "Website Revamp");
     let launch = milestone_id(&website, "Launch");
-    app.issue_invoice(website.id, launch, None)
+    app.issue_invoice(website.id, vec![launch], None)
         .unwrap()
         .invoice
         .number
+}
+
+/// The milestone billed on invoice `number`'s first line
+fn first_line(app: &CompterApp, number: &str) -> String {
+    app.invoice(number.to_owned()).unwrap().lines[0]
+        .milestone_id
+        .clone()
 }
 
 fn payment(received: &str, tds: &str) -> PaymentInput {
@@ -47,10 +55,14 @@ fn payment(received: &str, tds: &str) -> PaymentInput {
     }
 }
 
-fn credit(amount: &str) -> CreditInput {
+/// A note taking `amount` before GST off the invoice line billing milestone `line`
+fn credit(line: &str, amount: &str) -> CreditInput {
     CreditInput {
         date: String::new(),
-        amount: amount.to_owned(),
+        lines: vec![CreditLineInput {
+            milestone_id: line.to_owned(),
+            amount: amount.to_owned(),
+        }],
         reason: "Discount agreed".to_owned(),
         keep_as_advance: false,
         refunded_inr: String::new(),
@@ -101,7 +113,7 @@ fn issuing_shows_the_invoice_first_then_writes_it_and_its_pdf() {
     let launch = milestone_id(&website, "Launch");
 
     let preview = app
-        .preview_invoice(website.id.clone(), launch.clone(), None)
+        .preview_invoice(website.id.clone(), vec![launch.clone()], None)
         .unwrap();
     assert_eq!(preview.kind, "TAX");
     assert_eq!(preview.total, "₹47,200.00");
@@ -111,7 +123,9 @@ fn issuing_shows_the_invoice_first_then_writes_it_and_its_pdf() {
     );
     assert_eq!(preview.total_inr, None);
 
-    let issued = app.issue_invoice(website.id, launch.clone(), None).unwrap();
+    let issued = app
+        .issue_invoice(website.id, vec![launch.clone()], None)
+        .unwrap();
 
     assert_eq!(issued.invoice.number, preview.number);
     assert_eq!(issued.pdf_error, None);
@@ -190,15 +204,18 @@ fn a_credit_note_for_the_whole_invoice_cancels_it() {
     let (_scratch, mut app) = demo();
     let number = issue_launch(&mut app);
     let invoice = app.invoice(number.clone()).unwrap();
-    let whole = invoice.credit_value.unwrap();
+    let line = invoice.lines[0].milestone_id.clone();
+    let whole = invoice.lines[0].credit_value.clone().unwrap();
     assert_eq!(whole, "40000.00");
 
-    let preview = app.preview_credit(number.clone(), credit(&whole)).unwrap();
+    let preview = app
+        .preview_credit(number.clone(), credit(&line, &whole))
+        .unwrap();
     assert_eq!(preview.total, "₹47,200.00");
     assert_eq!(preview.gst.as_deref(), Some("₹7,200.00"));
     assert_eq!(preview.balance_after, "₹0.00");
 
-    let credited = app.issue_credit(number, credit(&whole)).unwrap();
+    let credited = app.issue_credit(number, credit(&line, &whole)).unwrap();
 
     assert_eq!(credited.note_number, preview.number);
     assert_eq!(credited.pdf_error, None);
@@ -212,6 +229,7 @@ fn a_credit_note_for_the_whole_invoice_cancels_it() {
 fn a_paid_invoice_can_be_credited_with_a_refund_or_an_advance() {
     let (_scratch, mut app) = demo();
     let number = issue_launch(&mut app);
+    let line = first_line(&app, &number);
     let paid = app
         .record_payment(number.clone(), payment("47,200", "0"))
         .unwrap();
@@ -220,12 +238,16 @@ fn a_paid_invoice_can_be_credited_with_a_refund_or_an_advance() {
     assert_eq!(paid.client_advance, None);
 
     // ₹10,000 + 18% GST, all of it already paid
-    let preview = app.preview_credit(number.clone(), credit("10000")).unwrap();
+    let preview = app
+        .preview_credit(number.clone(), credit(&line, "10000"))
+        .unwrap();
     assert_eq!(
         preview.returned.as_deref(),
         Some("₹11,800.00 already paid will be refunded")
     );
-    let refunded = app.issue_credit(number.clone(), credit("10000")).unwrap();
+    let refunded = app
+        .issue_credit(number.clone(), credit(&line, "10000"))
+        .unwrap();
     assert_eq!(refunded.invoice.status, "PAID");
     assert_eq!(
         refunded.invoice.history[1].returned.as_deref(),
@@ -234,7 +256,7 @@ fn a_paid_invoice_can_be_credited_with_a_refund_or_an_advance() {
 
     let advance = CreditInput {
         keep_as_advance: true,
-        ..credit("5000")
+        ..credit(&line, "5000")
     };
     let kept = app.issue_credit(number.clone(), advance).unwrap().invoice;
     assert_eq!(
@@ -243,12 +265,19 @@ fn a_paid_invoice_can_be_credited_with_a_refund_or_an_advance() {
     );
     assert_eq!(kept.client_advance.as_deref(), Some("₹5,900.00"));
 
-    // Together the notes can't take off more than the invoice's ₹47,200
+    // Together the notes can't take off more than the line's ₹40,000: ₹25,000 is left
     let too_much = app
-        .issue_credit(number.clone(), credit("30000"))
+        .issue_credit(number.clone(), credit(&line, "30000"))
         .unwrap_err();
-    assert_eq!(too_much.field, None);
-    let rest = app.issue_credit(number.clone(), credit("25000")).unwrap();
+    assert_eq!(too_much.field, Some(format!("line:{line}")));
+    assert!(
+        too_much.message.contains("25000.00"),
+        "{}",
+        too_much.message
+    );
+    let rest = app
+        .issue_credit(number.clone(), credit(&line, "25000"))
+        .unwrap();
     assert!(!rest.invoice.creditable);
 }
 
@@ -261,13 +290,14 @@ fn a_refund_after_tds_names_the_tds_the_client_reverses() {
         .unwrap()
         .invoices
         .into_iter()
-        .find(|i| i.milestone_name == "Design")
+        .find(|i| i.milestones == "Design")
         .unwrap()
         .number;
+    let line = first_line(&app, &number);
     assert!(app.invoice(number.clone()).unwrap().tds_withheld);
 
     let all_cash = app
-        .issue_credit(number.clone(), credit("50000"))
+        .issue_credit(number.clone(), credit(&line, "50000"))
         .unwrap_err();
     assert!(
         all_cash.message.contains("received"),
@@ -276,7 +306,7 @@ fn a_refund_after_tds_names_the_tds_the_client_reverses() {
     );
     let bad = CreditInput {
         tds_reversed: "some".to_owned(),
-        ..credit("50000")
+        ..credit(&line, "50000")
     };
     assert_eq!(
         app.issue_credit(number.clone(), bad)
@@ -288,7 +318,7 @@ fn a_refund_after_tds_names_the_tds_the_client_reverses() {
 
     let reversed = CreditInput {
         tds_reversed: "5,000".to_owned(),
-        ..credit("50000")
+        ..credit(&line, "50000")
     };
     let preview = app
         .preview_credit(number.clone(), reversed.clone())
@@ -320,11 +350,15 @@ fn a_client_abroad_is_invoiced_at_the_rate_typed() {
     let draft = detail.milestones[0].id.clone();
 
     let bad_rate = app
-        .preview_invoice(created.id.clone(), draft.clone(), Some("ninety".to_owned()))
+        .preview_invoice(
+            created.id.clone(),
+            vec![draft.clone()],
+            Some("ninety".to_owned()),
+        )
         .unwrap_err();
     assert_eq!(bad_rate.field.as_deref(), Some("rate"));
     let preview = app
-        .preview_invoice(created.id, draft, Some("90".to_owned()))
+        .preview_invoice(created.id, vec![draft], Some("90".to_owned()))
         .unwrap();
     assert_eq!(preview.kind, "EXPORT");
     assert_eq!(preview.total, "€1,000.00");
@@ -383,4 +417,127 @@ fn a_project_lists_its_milestones_in_every_order() {
     assert_eq!(names(&website.by_due), ["Design", "Frontend", "Launch"]);
     assert_eq!(names(&website.by_name), ["Design", "Frontend", "Launch"]);
     assert_eq!(names(&website.by_amount), ["Frontend", "Design", "Launch"]);
+}
+
+#[test]
+fn several_milestones_go_on_one_invoice_and_credit_notes_pick_its_lines() {
+    let (_scratch, mut app) = demo();
+    // An unregistered client in Karnataka: IGST
+    let created = app.create_project(project("Brochure", None)).unwrap();
+    app.add_milestone(
+        created.id.clone(),
+        milestone("Copy", "2026-10-01", Some("10,000")),
+    )
+    .unwrap();
+    let detail = app
+        .add_milestone(
+            created.id.clone(),
+            milestone("Print", "2026-10-05", Some("5,000")),
+        )
+        .unwrap();
+    let ids: Vec<String> = detail.milestones.iter().map(|m| m.id.clone()).collect();
+
+    let preview = app
+        .preview_invoice(created.id.clone(), ids.clone(), None)
+        .unwrap();
+    assert_eq!(preview.total, "₹17,700.00");
+    let project_id = created.id.clone();
+    let issued = app.issue_invoice(created.id, ids.clone(), None).unwrap();
+    assert!(
+        issued
+            .project
+            .milestones
+            .iter()
+            .all(|m| m.status == "INVOICED")
+    );
+    let invoice = issued.invoice;
+    assert_eq!(invoice.milestones, "Copy, Print");
+    let names: Vec<_> = invoice.lines.iter().map(|l| l.name.as_str()).collect();
+    assert_eq!(names, ["Copy", "Print"]);
+    assert_eq!(invoice.lines[1].amount, "₹5,000.00");
+    assert_eq!(invoice.lines[1].credit_value.as_deref(), Some("5000.00"));
+    let listed = app.invoices().unwrap().invoices;
+    assert_eq!(listed[0].milestones, "Copy, Print");
+
+    // A bad amount names its line
+    let bad = CreditInput {
+        lines: vec![
+            CreditLineInput {
+                milestone_id: ids[0].clone(),
+                amount: "1,000".to_owned(),
+            },
+            CreditLineInput {
+                milestone_id: ids[1].clone(),
+                amount: "lots".to_owned(),
+            },
+        ],
+        ..credit(&ids[0], "")
+    };
+    let error = app.preview_credit(invoice.number.clone(), bad).unwrap_err();
+    assert_eq!(error.field, Some(format!("line:{}", ids[1])));
+
+    // Lines are checked while they can still be changed: more than is left names the line
+    let over = app
+        .check_credit_lines(
+            invoice.number.clone(),
+            vec![CreditLineInput {
+                milestone_id: ids[1].clone(),
+                amount: "5,000.01".to_owned(),
+            }],
+        )
+        .unwrap_err();
+    assert_eq!(over.field, Some(format!("line:{}", ids[1])));
+    assert!(over.message.contains("left to credit"), "{}", over.message);
+    app.check_credit_lines(invoice.number.clone(), credit(&ids[1], "5000").lines)
+        .unwrap();
+    // A fraction of a paisa is a mistyped amount, refused rather than rounded
+    let fraction = app
+        .check_credit_lines(invoice.number.clone(), credit(&ids[1], "5000.004").lines)
+        .unwrap_err();
+    assert_eq!(fraction.field, Some(format!("line:{}", ids[1])));
+    // Previewing or issuing checks the lines too, naming the one refused
+    let preview = app
+        .preview_credit(invoice.number.clone(), credit(&ids[1], "6000"))
+        .unwrap_err();
+    assert_eq!(preview.field, Some(format!("line:{}", ids[1])));
+    assert!(
+        preview.message.starts_with("Print: "),
+        "{}",
+        preview.message
+    );
+
+    // Print in full, then what is left on Copy
+    let credited = app
+        .issue_credit(invoice.number.clone(), credit(&ids[1], "5000"))
+        .unwrap();
+    let lines = &credited.invoice.lines;
+    assert!(!lines[1].can_credit);
+    assert_eq!(lines[1].creditable, "₹0.00");
+    // Once anything is credited, amounts are left to type
+    assert!(lines[0].can_credit);
+    assert_eq!(lines[0].credit_value, None);
+    assert_eq!(lines[0].left_value, "10000.00");
+    assert_eq!(
+        credited.invoice.credit_guide,
+        "₹11,800.00 due · up to ₹11,800.00 incl. GST can be credited"
+    );
+    // Print, taken back in full, is credited while Copy is still due
+    let statuses: Vec<_> = app
+        .project(project_id.clone())
+        .unwrap()
+        .milestones
+        .iter()
+        .map(|m| (m.name.clone(), m.status.clone()))
+        .collect();
+    assert_eq!(
+        statuses,
+        [
+            ("Copy".to_owned(), "INVOICED".to_owned()),
+            ("Print".to_owned(), "CREDITED".to_owned())
+        ]
+    );
+    let cancelled = app
+        .issue_credit(invoice.number.clone(), credit(&ids[0], "10000"))
+        .unwrap();
+    assert_eq!(cancelled.invoice.status, "CREDITED");
 }

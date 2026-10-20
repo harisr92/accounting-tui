@@ -174,7 +174,7 @@ class _InvoiceBody extends StatelessWidget {
           description: invoice.clientName,
           status: invoice.status,
           details: [
-            invoice.milestoneName,
+            invoice.milestones,
             invoice.date,
             invoice.kind,
             ?invoice.exchangeRate,
