@@ -2379,8 +2379,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProjectDetail dco_decode_project_detail(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 20)
-      throw Exception('unexpected arr length: expect 20 but see ${arr.length}');
+    if (arr.length != 21)
+      throw Exception('unexpected arr length: expect 21 but see ${arr.length}');
     return ProjectDetail(
       id: dco_decode_String(arr[0]),
       name: dco_decode_String(arr[1]),
@@ -2396,12 +2396,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       paid: dco_decode_String(arr[11]),
       credited: dco_decode_opt_String(arr[12]),
       outstanding: dco_decode_String(arr[13]),
-      milestones: dco_decode_list_milestone_row(arr[14]),
-      byDue: dco_decode_list_prim_u_32_strict(arr[15]),
-      byName: dco_decode_list_prim_u_32_strict(arr[16]),
-      byAmount: dco_decode_list_prim_u_32_strict(arr[17]),
-      deletable: dco_decode_bool(arr[18]),
-      edit: dco_decode_project_input(arr[19]),
+      logged: dco_decode_opt_String(arr[14]),
+      milestones: dco_decode_list_milestone_row(arr[15]),
+      byDue: dco_decode_list_prim_u_32_strict(arr[16]),
+      byName: dco_decode_list_prim_u_32_strict(arr[17]),
+      byAmount: dco_decode_list_prim_u_32_strict(arr[18]),
+      deletable: dco_decode_bool(arr[19]),
+      edit: dco_decode_project_input(arr[20]),
     );
   }
 
@@ -3284,6 +3285,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_paid = sse_decode_String(deserializer);
     var var_credited = sse_decode_opt_String(deserializer);
     var var_outstanding = sse_decode_String(deserializer);
+    var var_logged = sse_decode_opt_String(deserializer);
     var var_milestones = sse_decode_list_milestone_row(deserializer);
     var var_byDue = sse_decode_list_prim_u_32_strict(deserializer);
     var var_byName = sse_decode_list_prim_u_32_strict(deserializer);
@@ -3305,6 +3307,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       paid: var_paid,
       credited: var_credited,
       outstanding: var_outstanding,
+      logged: var_logged,
       milestones: var_milestones,
       byDue: var_byDue,
       byName: var_byName,
@@ -4067,6 +4070,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.paid, serializer);
     sse_encode_opt_String(self.credited, serializer);
     sse_encode_String(self.outstanding, serializer);
+    sse_encode_opt_String(self.logged, serializer);
     sse_encode_list_milestone_row(self.milestones, serializer);
     sse_encode_list_prim_u_32_strict(self.byDue, serializer);
     sse_encode_list_prim_u_32_strict(self.byName, serializer);
