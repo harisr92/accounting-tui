@@ -128,8 +128,12 @@ impl InvoiceAmounts {
 pub struct InvoiceLine {
     pub milestone_id: MilestoneId,
     pub milestone_name: String,
-    /// Before GST, in the invoice's currency: the milestone's amount when it was invoiced
+    /// Before GST, in the invoice's currency: the milestone's amount when it was invoiced, less
+    /// `discount`
     pub taxable_value: BigDecimal,
+    /// The line's share of the invoice's discount, already taken off `taxable_value`
+    #[serde(default, skip_serializing_if = "Zero::is_zero")]
+    pub discount: BigDecimal,
 }
 
 /// One receipt against an invoice. A client may pay in parts; each part can have TDS withheld.
@@ -340,6 +344,7 @@ impl TryFrom<RawInvoice> for Invoice {
                 milestone_id,
                 milestone_name,
                 taxable_value: raw.amounts.taxable_value.clone(),
+                discount: BigDecimal::zero(),
             }],
             _ => raw.lines,
         };
@@ -482,6 +487,19 @@ impl Invoice {
 
     pub fn milestone_ids(&self) -> Vec<MilestoneId> {
         self.lines.iter().map(|line| line.milestone_id).collect()
+    }
+
+    /// Each milestone billed with the discount its line took off
+    pub fn line_discounts(&self) -> Vec<(MilestoneId, BigDecimal)> {
+        self.lines
+            .iter()
+            .map(|line| (line.milestone_id, line.discount.clone()))
+            .collect()
+    }
+
+    /// Taken off the invoice before GST, in its currency; zero when it had no discount
+    pub fn discount(&self) -> BigDecimal {
+        self.lines.iter().map(|line| &line.discount).sum()
     }
 
     /// The milestones billed, for lists: `Design, Build`
@@ -752,6 +770,9 @@ fn check_lines(lines: &[InvoiceLine], amounts: &InvoiceAmounts) -> Result<(), Do
     }
     for (i, line) in lines.iter().enumerate() {
         require(&line.milestone_name, "milestone name")?;
+        if line.discount < BigDecimal::zero() {
+            return Err(DomainError::NonPositiveAmount);
+        }
         if lines[..i]
             .iter()
             .any(|l| l.milestone_id == line.milestone_id)

@@ -209,7 +209,13 @@ pub fn store() -> Result<Store, ServiceError> {
 
     // Unregistered: a plain invoice, paid with 10% TDS
     invoices.save_profile(profile(None))?;
-    let plain = invoices.issue(pipeline.id(), &[pipeline_ms[0]], date(2026, 3, 10), None)?;
+    let plain = invoices.issue(
+        pipeline.id(),
+        &[pipeline_ms[0]],
+        date(2026, 3, 10),
+        None,
+        None,
+    )?;
     let plain = plain.invoice.number().clone();
     invoices.record_payment(&plain, date(2026, 3, 25), rupee(40_500), rupee(4_500))?;
 
@@ -217,19 +223,37 @@ pub fn store() -> Result<Store, ServiceError> {
     invoices.save_profile(profile(Some(SELLER_GSTIN)))?;
     // Billed in euros at ₹90.00, banked at a better rate
     let rate = ExchangeRate::new(rupee(90))?;
-    let export = invoices.issue(audit.id(), &[audit_ms[0]], date(2026, 6, 30), Some(rate))?;
+    let export = invoices.issue(
+        audit.id(),
+        &[audit_ms[0]],
+        date(2026, 6, 30),
+        Some(rate),
+        None,
+    )?;
     let export = export.invoice.number().clone();
     invoices.record_foreign_payment(&export, date(2026, 7, 15), rupee(1_000), rupee(90_450))?;
 
-    let design = invoices.issue(website.id(), &[website_ms[0]], date(2026, 9, 1), None)?;
+    let design = invoices.issue(website.id(), &[website_ms[0]], date(2026, 9, 1), None, None)?;
     let design = design.invoice.number().clone();
     invoices.record_payment(&design, date(2026, 9, 20), rupee(54_000), rupee(5_000))?;
-    invoices.issue(pipeline.id(), &[pipeline_ms[1]], date(2026, 9, 25), None)?;
-    let frontend = invoices.issue(website.id(), &[website_ms[1]], date(2026, 10, 5), None)?;
+    invoices.issue(
+        pipeline.id(),
+        &[pipeline_ms[1]],
+        date(2026, 9, 25),
+        None,
+        None,
+    )?;
+    let frontend = invoices.issue(
+        website.id(),
+        &[website_ms[1]],
+        date(2026, 10, 5),
+        None,
+        None,
+    )?;
     // Half paid so far
     let frontend = frontend.invoice.number().clone();
     invoices.record_payment(&frontend, date(2026, 10, 12), rupee(35_400), rupee(0))?;
-    invoices.issue(app.id(), &[app_ms[0]], date(2026, 10, 10), None)?;
+    invoices.issue(app.id(), &[app_ms[0]], date(2026, 10, 10), None, None)?;
 
     // Business expenses, GST claimed back as input credit
     let mut expenses = ExpenseService::new(store.repository());

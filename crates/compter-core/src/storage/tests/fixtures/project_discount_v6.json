@@ -1,0 +1,35 @@
+{
+  "id": "01a1593a-81b5-76b0-bb7a-d7d4a33214dd",
+  "name": "Site",
+  "client_name": "Acme",
+  "client_gstin": "29AAPFU0939F1ZR",
+  "client_region": {
+    "type": "india"
+  },
+  "currency": "INR",
+  "billing": {
+    "type": "fixed"
+  },
+  "milestones": [
+    {
+      "id": "01a1593a-81b6-741f-a474-ebddb051a6c5",
+      "name": "Design",
+      "amount": "30000.00",
+      "due_date": "2026-10-15",
+      "status": "INVOICED",
+      "invoice_number": "INV/26-27/001",
+      "discount": "3000.00"
+    },
+    {
+      "id": "01a1593a-81b6-741f-a474-ebde8f849485",
+      "name": "Build",
+      "amount": "10000.00",
+      "due_date": "2026-10-15",
+      "status": "INVOICED",
+      "invoice_number": "INV/26-27/001",
+      "discount": "1000.00"
+    }
+  ],
+  "total_amount": "36000.00",
+  "status": "COMPLETED"
+}

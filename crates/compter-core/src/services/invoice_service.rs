@@ -12,10 +12,10 @@ use super::credit_note_builder::{self, BuiltCreditNote, CreditDraft, CreditLineD
 use super::invoice_builder::{self, BuiltInvoice, InvoicingError};
 use super::{ServiceError, chart};
 use crate::domain::{
-    BusinessProfile, CREDIT_NOTE_PREFIX, Credit, CreditNote, Currency, DomainError, ExchangeRate,
-    FiscalYear, Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber, InvoiceStatus, InvoiceSummary,
-    Logo, LogoId, MilestoneId, MilestoneSort, Payment, ProfileDraft, Project, ProjectId,
-    ReturnKind, Returned,
+    BusinessProfile, CREDIT_NOTE_PREFIX, Credit, CreditNote, Currency, Discount, DomainError,
+    ExchangeRate, FiscalYear, Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber, InvoiceStatus,
+    InvoiceSummary, Logo, LogoId, MilestoneId, MilestoneSort, Payment, ProfileDraft, Project,
+    ProjectId, ReturnKind, Returned,
 };
 use crate::storage::{
     CreditRecord, DataDir, InvoiceRepository, IssueRecord, PaymentRecord, ProjectRepository,
@@ -31,6 +31,8 @@ pub struct InvoicePreview {
     pub currency: Currency,
     /// In `currency`
     pub amounts: InvoiceAmounts,
+    /// Taken off before GST, in `currency`; zero without a discount
+    pub discount: BigDecimal,
     /// The total in rupees, for an invoice in a foreign currency
     pub total_inr: Option<BigDecimal>,
     pub warnings: Vec<String>,
@@ -160,15 +162,16 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
 
     /// Build the invoice `milestones` of the project would get together on `date`, without
     /// saving anything. `rate` is needed for a project billed in a foreign currency (rupees per
-    /// unit on `date`).
+    /// unit on `date`); a `discount` comes off the total before GST.
     pub fn preview(
         &self,
         project_id: ProjectId,
         milestones: &[MilestoneId],
         date: NaiveDate,
         rate: Option<ExchangeRate>,
+        discount: Option<&Discount>,
     ) -> Result<InvoicePreview, ServiceError> {
-        let (_, built, _) = self.build(project_id, milestones, date, rate)?;
+        let (_, built, _) = self.build(project_id, milestones, date, rate, discount)?;
         let invoice = &built.invoice;
         Ok(InvoicePreview {
             number: invoice.number().clone(),
@@ -176,6 +179,7 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
             client_name: invoice.client_name().to_owned(),
             currency: invoice.currency(),
             amounts: invoice.amounts().clone(),
+            discount: invoice.discount(),
             total_inr: invoice.exchange_rate().map(|_| invoice.inr_amounts().total),
             warnings: built.warnings,
         })
@@ -189,8 +193,10 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         milestones: &[MilestoneId],
         date: NaiveDate,
         rate: Option<ExchangeRate>,
+        discount: Option<&Discount>,
     ) -> Result<Issued, ServiceError> {
-        let (mut project, built, sequence) = self.build(project_id, milestones, date, rate)?;
+        let (mut project, built, sequence) =
+            self.build(project_id, milestones, date, rate, discount)?;
         let BuiltInvoice {
             invoice,
             entries,
@@ -199,7 +205,7 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         // Render before saving: a document that can't be printed is never issued
         let pdf = self.render(&invoice)?;
 
-        project.invoice_milestones(&invoice.milestone_ids(), invoice.number().as_str())?;
+        project.invoice_milestones(&invoice.line_discounts(), invoice.number().as_str())?;
         let transaction = entries
             .into_iter()
             .fold(
@@ -536,6 +542,7 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         milestones: &[MilestoneId],
         date: NaiveDate,
         rate: Option<ExchangeRate>,
+        discount: Option<&Discount>,
     ) -> Result<(Project, BuiltInvoice, u32), ServiceError> {
         let profile = self.repo.load_profile()?.ok_or(InvoicingError::NoProfile)?;
         let project = self.repo.load(project_id)?;
@@ -557,7 +564,8 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         let year = FiscalYear::containing(date);
         let sequence = self.repo.next_sequence(year)?;
         let number = InvoiceNumber::new(profile.invoice_prefix(), year, sequence);
-        let built = invoice_builder::build(&profile, &project, &selected, number, date, rate)?;
+        let built =
+            invoice_builder::build(&profile, &project, &selected, number, date, rate, discount)?;
         Ok((project, built, sequence))
     }
 

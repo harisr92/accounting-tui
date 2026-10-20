@@ -82,6 +82,12 @@ pub enum DomainError {
     CreditExceedsMilestone,
     #[error("an amount has at most two decimal places (paise)")]
     FractionOfPaisa,
+    #[error("a discount percent is more than 0 and less than 100")]
+    DiscountPercent,
+    #[error("the discount must be less than the subtotal of {subtotal}, on every line")]
+    DiscountTooLarge { subtotal: String },
+    #[error("only an invoiced milestone carries a discount, and less than its amount")]
+    InvalidMilestoneDiscount,
     #[error("only {left} is left to credit on this line")]
     CreditExceedsLine { left: String },
     #[error("received plus TDS is {got}, more than the {balance} still due")]
