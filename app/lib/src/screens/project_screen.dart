@@ -123,8 +123,8 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> with Searching {
     ref.invalidate(projectsProvider);
   }
 
-  /// Archive or restore the project. One archived while the list hides archived projects
-  /// leaves for the list, as the terminal drops it from view.
+  /// Archive or restore the project. One archived while the list shows the others leaves for
+  /// the list, as the terminal drops it from view.
   Future<void> _setArchived(
     BuildContext context,
     WidgetRef ref,
@@ -137,7 +137,7 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> with Searching {
           .setArchived(id: project.id, archived: archive);
       if (!context.mounted) return;
       _show(ref, saved);
-      if (archive && !ref.read(showArchivedProvider)) {
+      if (archive && !ref.read(archivedOnlyProvider)) {
         context.go('/projects');
         notify(
           context,
