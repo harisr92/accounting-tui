@@ -1,6 +1,6 @@
 use bigdecimal::{BigDecimal, Zero};
 use compter_core::domain::{Currency, Invoice, InvoiceSummary, ReturnKind, Returned};
-use compter_core::services::{CreditPreview, InvoicePreview};
+use compter_core::services::{CreditPreview, CreditableLine, InvoicePreview};
 
 use super::ProjectDetail;
 
@@ -19,7 +19,8 @@ pub struct InvoiceRow {
     /// `YYYY-MM-DD`
     pub date: String,
     pub client_name: String,
-    pub milestone_name: String,
+    /// The milestones billed: `Design, Build`
+    pub milestones: String,
     /// `TAX`, `EXPORT` or `PLAIN`
     pub kind: String,
     pub total: String,
@@ -36,7 +37,7 @@ impl From<&InvoiceSummary> for InvoiceRow {
             number: summary.number().to_string(),
             date: summary.date().to_string(),
             client_name: summary.client_name().to_owned(),
-            milestone_name: summary.milestone_name().to_owned(),
+            milestones: summary.milestones().to_owned(),
             kind: summary.kind().label().to_owned(),
             total: currency.display(summary.total()),
             due: (!summary.is_settled()).then(|| currency.display(summary.balance())),
@@ -53,7 +54,11 @@ pub struct InvoiceDetail {
     pub date: String,
     pub kind: String,
     pub client_name: String,
-    pub milestone_name: String,
+    /// The milestones billed: `Design, Build`
+    pub milestones: String,
+    /// A line per milestone billed, in the order printed, with what credit notes can still
+    /// take back from it
+    pub lines: Vec<InvoiceLineRow>,
     pub currency: String,
     /// `₹83.50 per USD`, for an invoice in a foreign currency
     pub exchange_rate: Option<String>,
@@ -68,6 +73,9 @@ pub struct InvoiceDetail {
     pub settled: bool,
     /// Credit notes haven't yet taken off the whole total, so one can be added, even once paid
     pub creditable: bool,
+    /// Shown while picking the lines of a credit note: `₹47,200.00 due · up to ₹59,000.00 incl.
+    /// GST can be credited`, and that any part beyond what is due goes back to the client
+    pub credit_guide: String,
     /// Rupees credit notes hold for this client as an advance, when there are any
     pub client_advance: Option<String>,
     /// A payment had TDS withheld, so a credit note can say how much of it the client reverses
@@ -79,13 +87,31 @@ pub struct InvoiceDetail {
     pub balance_value: String,
     /// The TDS a client usually withholds, as a hint on rupee invoices
     pub usual_tds: Option<String>,
-    /// To prefill the credit note form: the whole taxable value, while nothing has been paid
-    /// or credited (cancelling the invoice); otherwise left for the user
+}
+
+/// One milestone billed on an invoice
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvoiceLineRow {
+    pub milestone_id: String,
+    pub name: String,
+    /// What it billed, before GST
+    pub amount: String,
+    /// What credit notes can still take back from it, before GST
+    pub creditable: String,
+    /// Something is left to credit, so the line can be picked for a credit note
+    pub can_credit: bool,
+    /// All that is left to credit, as a plain number: what picking the line fills an empty
+    /// amount with
+    pub left_value: String,
+    /// To prefill a credit note's amount for this line: all that is left, as a plain number,
+    /// while nothing has been paid or credited on the invoice (cancelling it); otherwise left
+    /// to type, so nothing is refunded by default
     pub credit_value: Option<String>,
 }
 
-impl From<&Invoice> for InvoiceDetail {
-    fn from(invoice: &Invoice) -> Self {
+impl InvoiceDetail {
+    /// `lines` are the invoice's lines with what is still creditable on each
+    pub(crate) fn new(invoice: &Invoice, lines: &[CreditableLine]) -> Self {
         let currency = invoice.currency();
         let amounts = invoice.amounts();
         let foreign = !currency.is_inr();
@@ -119,13 +145,27 @@ impl From<&Invoice> for InvoiceDetail {
                 }
             }),
         });
-        let untouched = invoice.payments().is_empty() && invoice.credits().is_empty();
+        let untouched = invoice.untouched();
+        let lines = lines
+            .iter()
+            .map(|line| InvoiceLineRow {
+                milestone_id: line.milestone_id.to_string(),
+                name: line.name.clone(),
+                amount: currency.display(&line.billed),
+                creditable: currency.display(&line.creditable),
+                can_credit: line.creditable > BigDecimal::zero(),
+                left_value: line.creditable.to_string(),
+                credit_value: (untouched && line.creditable > BigDecimal::zero())
+                    .then(|| line.creditable.to_string()),
+            })
+            .collect();
         Self {
             number: invoice.number().to_string(),
             date: invoice.date().to_string(),
             kind: invoice.kind().label().to_owned(),
             client_name: invoice.client_name().to_owned(),
-            milestone_name: invoice.milestone_name().to_owned(),
+            milestones: invoice.milestones(),
+            lines,
             currency: currency.code().to_owned(),
             exchange_rate: invoice
                 .exchange_rate()
@@ -139,13 +179,13 @@ impl From<&Invoice> for InvoiceDetail {
             status: invoice.status().label().to_owned(),
             settled: invoice.is_settled(),
             creditable: invoice.creditable() > BigDecimal::zero(),
+            credit_guide: invoice.credit_guide(),
             tds_withheld: invoice.payments().iter().any(|p| !p.tds.is_zero()),
             client_advance: None,
             foreign,
             history: payments.chain(credits).collect(),
             balance_value: invoice.balance().to_string(),
             usual_tds: (!foreign).then(|| currency.display(&invoice.usual_tds())),
-            credit_value: untouched.then(|| amounts.taxable_value.to_string()),
         }
     }
 }
@@ -169,7 +209,7 @@ pub struct HistoryRow {
     pub returned: Option<String>,
 }
 
-/// The invoice a milestone would get today, shown for confirmation before issuing
+/// The invoice milestones would get today, shown for confirmation before issuing
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvoicePreviewRow {
     pub number: String,
@@ -199,7 +239,7 @@ impl From<&InvoicePreview> for InvoicePreviewRow {
     }
 }
 
-/// What issuing did: the invoice, the project with its milestone now invoiced, and whether
+/// What issuing did: the invoice, the project with its milestones now invoiced, and whether
 /// the PDF was written
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IssuedRow {
@@ -275,8 +315,8 @@ pub struct PaymentInput {
 pub struct CreditInput {
     /// `YYYY-MM-DD`; blank means today
     pub date: String,
-    /// Value taken back before GST, in the invoice's currency
-    pub amount: String,
+    /// The invoice lines taken back from, each once
+    pub lines: Vec<CreditLineInput>,
     pub reason: String,
     /// What happens to the part already paid: kept as an advance for the client, or refunded
     pub keep_as_advance: bool,
@@ -286,6 +326,16 @@ pub struct CreditInput {
     /// TDS the client reverses in its return, on a rupee invoice that had TDS withheld; blank
     /// keeps it as your credit
     pub tds_reversed: String,
+}
+
+/// What a credit note takes back from one invoice line, as typed
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreditLineInput {
+    /// The milestone the line billed (`InvoiceLineRow::milestone_id`)
+    pub milestone_id: String,
+    /// Value taken back before GST, in the invoice's currency. An error in it names the field
+    /// `line:<milestone_id>`.
+    pub amount: String,
 }
 
 /// ` (₹10,800.00 cash, ₹1,000.00 TDS reversed)` or ` (₹9,200.00 from your bank)`; blank when

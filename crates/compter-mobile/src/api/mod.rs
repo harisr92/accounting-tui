@@ -16,8 +16,8 @@ pub use error::ApiError;
 pub use expenses::{ExpenseInput, ExpenseList, ExpenseRow};
 pub use handoff::{ReceivedRow, SentRow, SyncStatusRow};
 pub use invoicing::{
-    CreditInput, CreditPreviewRow, CreditedRow, HistoryRow, InvoiceDetail, InvoiceList,
-    InvoicePreviewRow, InvoiceRow, IssuedRow, PaymentInput, TimeInput,
+    CreditInput, CreditLineInput, CreditPreviewRow, CreditedRow, HistoryRow, InvoiceDetail,
+    InvoiceLineRow, InvoiceList, InvoicePreviewRow, InvoiceRow, IssuedRow, PaymentInput, TimeInput,
 };
 pub use profile::{ProfileInput, ProfileRow};
 pub use reports::{ClientRow, ExportRow, FigureRow, QuarterGstRow, ReportRow, Tone};
