@@ -293,5 +293,9 @@ fn render_summary(frame: &mut Frame, area: Rect, project: &Project, theme: &Them
     if !credited.is_zero() {
         stats.insert(2, ("Credited", money_in(&credited, currency)));
     }
+    // Time is logged only on hourly work
+    if project.billing().rate().is_some() {
+        stats.push(("Logged", duration(project.logged_minutes())));
+    }
     stat_tiles(frame, stats_area, &stats, theme);
 }

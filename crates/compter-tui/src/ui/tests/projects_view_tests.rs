@@ -94,6 +94,38 @@ fn hourly_project_logs_time_into_amounts() {
 }
 
 #[test]
+fn hourly_projects_show_the_time_logged_on_every_milestone() {
+    let store = Store::in_memory().unwrap();
+    let mut app = projects_app(&store);
+    create_project(&mut app, &hourly_project_keys("App", "Globex", "1500"));
+    app.handle_key(Key::Tab);
+    app.handle_key(Key::Char('a'));
+    type_keys(&mut app, "Prototype\n");
+    app.handle_key(Key::Char('a'));
+    type_keys(&mut app, "Launch\n");
+    for _ in 0..2 {
+        app.handle_key(Key::Char('t'));
+        type_keys(&mut app, "\t1h\tbuild\n");
+        app.handle_key(Key::Char('j'));
+    }
+    app.handle_key(Key::Char('t'));
+    type_keys(&mut app, "\t15m\tfix\n");
+
+    let screen = screen(&app, W, H);
+    assert!(screen.contains("Logged"), "{screen}");
+    assert!(screen.contains("2h 15m"), "{screen}");
+}
+
+#[test]
+fn fixed_price_projects_show_no_logged_time() {
+    let store = demo::store().unwrap();
+    let app = projects_app(&store);
+    let screen = screen(&app, W, H);
+    assert!(screen.contains("Fixed price"), "{screen}");
+    assert!(!screen.contains("Logged"), "{screen}");
+}
+
+#[test]
 fn a_plain_90_is_hours_and_is_refused_as_one_entry() {
     let store = Store::in_memory().unwrap();
     let mut app = projects_app(&store);
