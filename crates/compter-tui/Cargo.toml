@@ -2,6 +2,8 @@
 name = "compter-tui"
 version = "0.2.3"
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 accounting-core.workspace = true

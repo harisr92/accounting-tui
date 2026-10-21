@@ -2,6 +2,8 @@
 name = "compter-mobile"
 version = "0.2.3"
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "compter's API for the Flutter app, bridged with flutter_rust_bridge"
 
 [lib]

@@ -2,6 +2,8 @@
 name = "compter-core"
 version = "0.2.3"
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "compter's domain, storage and services, shared by every front end"
 
 [dependencies]

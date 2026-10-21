@@ -8,6 +8,8 @@ resolver = "3"
 
 [workspace.package]
 edition = "2024"
+license = "MIT"
+repository = "https://github.com/harisr92/accounting-tui"
 
 [workspace.dependencies]
 accounting-core = { git = "https://github.com/harisr92/accounting-blue.git", rev = "0700ab4976b3193a69d63b6fe4c8e6d14ec35c23", features = ["pdf"] }
