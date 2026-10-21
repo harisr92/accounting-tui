@@ -1,7 +1,7 @@
 name: compter
 description: compter for iOS and Android, on the Rust core in ../crates.
 publish_to: none
-version: 0.2.3+1
+version: 0.2.5+2
 
 environment:
   sdk: ^3.12.0
