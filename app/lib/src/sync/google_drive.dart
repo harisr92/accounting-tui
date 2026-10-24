@@ -6,6 +6,8 @@ import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sig
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
+import 'package:googleapis_auth/googleapis_auth.dart'
+    show AccessDeniedException;
 
 import 'cloud.dart';
 
@@ -31,6 +33,7 @@ const _syncFolderName = 'compter-sync';
 class GoogleDriveAccount implements CloudAccount {
   GoogleSignInAccount? _user;
   drive.DriveApi? _api;
+  String? _token;
   Future<void>? _initialized;
 
   Future<void> _initialize() => _initialized ??= () async {
@@ -54,7 +57,7 @@ class GoogleDriveAccount implements CloudAccount {
     );
     if (authorization == null) return null;
     _user = user;
-    _api = drive.DriveApi(authorization.authClient(scopes: _scopes));
+    _use(authorization);
     return user.email;
   }
 
@@ -66,8 +69,13 @@ class GoogleDriveAccount implements CloudAccount {
       _scopes,
     );
     _user = user;
-    _api = drive.DriveApi(authorization.authClient(scopes: _scopes));
+    _use(authorization);
     return user.email;
+  }
+
+  drive.DriveApi _use(GoogleSignInClientAuthorization authorization) {
+    _token = authorization.accessToken;
+    return _api = drive.DriveApi(authorization.authClient(scopes: _scopes));
   }
 
   @override
@@ -76,31 +84,48 @@ class GoogleDriveAccount implements CloudAccount {
     await GoogleSignIn.instance.signOut();
     _user = null;
     _api = null;
+    _token = null;
   }
 
   /// The API, with a fresh token: access tokens last an hour, and asking again is silent
-  /// while the grant stands
+  /// while the grant stands. The refused token is dropped from the platform's cache first,
+  /// or it would be handed back again (as it is after the user removes compter from their
+  /// Google account); with the grant gone, asking returns nothing and the user signs in again.
   Future<drive.DriveApi> _fresh() async {
     final user = _user;
     if (user == null) throw const CloudSignedOut();
+    final refused = _token;
+    if (refused != null) {
+      _api = null;
+      _token = null;
+      await user.authorizationClient.clearAuthorizationToken(
+        accessToken: refused,
+      );
+    }
     final authorization = await user.authorizationClient.authorizationForScopes(
       _scopes,
     );
     if (authorization == null) throw const CloudSignedOut();
-    return _api = drive.DriveApi(authorization.authClient(scopes: _scopes));
+    return _use(authorization);
   }
 
   /// Run [call], once more with a fresh token if Google refused the old one, mapping network
-  /// failures to [CloudOffline] and lapsed sign-in to [CloudSignedOut]
+  /// failures to [CloudOffline] and lapsed sign-in to [CloudSignedOut]. A refused token
+  /// comes back as [AccessDeniedException] (a 401 with `WWW-Authenticate: invalid_token`),
+  /// not as an API error.
   Future<T> _call<T>(Future<T> Function(drive.DriveApi api) call) async {
     try {
       final api = _api ?? await _fresh();
       try {
         return await call(api);
+      } on AccessDeniedException {
+        return await call(await _fresh());
       } on drive.DetailedApiRequestError catch (error) {
         if (error.status != 401) rethrow;
         return await call(await _fresh());
       }
+    } on AccessDeniedException {
+      throw const CloudSignedOut();
     } on drive.DetailedApiRequestError catch (error) {
       if (error.status == 401 || error.status == 403) {
         throw const CloudSignedOut();
