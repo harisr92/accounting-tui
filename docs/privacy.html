@@ -43,7 +43,7 @@
 <body>
 <main>
 <h1>Privacy Policy</h1>
-<p class="meta">compter, for iOS, Android and the terminal · Effective 21 October 2026</p>
+<p class="meta">compter, for iOS, Android and the terminal · Effective 25 October 2026</p>
 
 <p>compter is a bookkeeping app for freelancers: projects, milestones, GST invoices, payments,
 expenses and tax reports. It is built so that your records stay with you. This policy explains
@@ -53,6 +53,8 @@ what the app stores, where, and what it never does.</p>
 <ul>
   <li>Your records are stored only on your own devices, in a file called <code>compter.redb</code>.</li>
   <li>If you turn on Google Drive sync, that file is copied to a folder in <em>your own</em> Google Drive. It is never sent to us or anyone else.</li>
+  <li>Data travels only over encrypted connections (HTTPS/TLS). On your device it sits in the app's
+    private storage, encrypted by your device's own encryption.</li>
   <li>compter has no accounts, no servers, no analytics, no advertising and no tracking.</li>
   <li>We, the developers, never receive or see your data.</li>
 </ul>
@@ -84,8 +86,10 @@ Drive. Sync is off until you choose it in Settings and sign in with Google.</p>
     or delete any other file in your Drive.</li>
   <li><strong>Where the data goes:</strong> directly between your device and Google Drive, over
     Google's encrypted connection. It never passes through any server of ours.</li>
-  <li><strong>Your Google account:</strong> the app uses your sign-in only to talk to Drive. It does
-    not store your password, and it does not collect your name, email address or contacts.</li>
+  <li><strong>Your Google account:</strong> the app uses your sign-in only to talk to Drive. It never
+    sees or stores your password. It shows the email address you signed in with in Settings, so you
+    know which account is syncing, but does not save it or send it anywhere, and it does not collect
+    your name or contacts.</li>
 </ul>
 <p>compter's use and transfer of information received from Google APIs adheres to the
 <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
@@ -94,6 +98,45 @@ you, is not transferred to anyone else, is not used for advertising, and is not 
 <p>You can turn sync off in Settings at any time, and remove compter's access to your Google
 account at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.
 Files already in your Drive stay there until you delete them.</p>
+
+<h2 id="data-protection">How your data is protected</h2>
+<p>Your records include sensitive business and financial details. compter protects them like this:</p>
+<ul>
+  <li><strong>On your phone:</strong> <code>compter.redb</code> is kept in the app's private storage,
+    which the operating system's sandbox closes to other apps. iOS (Data Protection) and Android
+    (file-based encryption) encrypt that storage at rest while your device is locked with a passcode,
+    PIN or biometrics. compter does not add a separate encryption layer of its own to the file, so
+    please keep a screen lock on your phone.</li>
+  <li><strong>On your computer:</strong> the terminal app keeps <code>compter.redb</code> in your
+    user account's application-data folder, protected by your operating system's file permissions.
+    Turn on disk encryption (FileVault, BitLocker or LUKS) to protect it at rest.</li>
+  <li><strong>In transit:</strong> everything sent to and from Google goes over HTTPS (TLS), through
+    Google's official libraries. compter makes no unencrypted connections and talks to no server
+    other than Google's.</li>
+  <li><strong>Your Google sign-in:</strong> handled by Google's own sign-in on your device; compter
+    never sees your password. The access tokens it gets are short-lived (about an hour), are kept in
+    memory only, and are sent only to Google. compter never writes them to disk. A token Google
+    refuses is cleared at once, and signing out drops them.</li>
+  <li><strong>Sync settings:</strong> the only sync details saved on your device are the sync method
+    and the id and name of the Drive folder you picked, in the app's private preferences. No tokens
+    and no email address.</li>
+  <li><strong>Limited use of Drive:</strong> compter reads and writes only its own files in the folder
+    you picked. Each snapshot is checked against the SHA-256 checksum in its <code>manifest.json</code>
+    before it is used, so a damaged or half-uploaded copy is never loaded.</li>
+  <li><strong>In Google Drive:</strong> your synced files are protected by Google's security,
+    including encryption at rest and in transit, and by your Google account's own settings. We
+    recommend turning on 2-Step Verification for your Google account.</li>
+  <li><strong>No servers of ours:</strong> there is no copy of your data outside your devices and your
+    own Google Drive, so there is no developer database to be breached, and no one at compter can
+    access your records.</li>
+  <li><strong>Keeping and deleting data:</strong> your records are kept until you delete them.
+    Uninstalling the app (or deleting <code>compter.redb</code> on a computer) removes them from that
+    device; deleting the sync folder in Drive removes the synced copy; and you can revoke compter's
+    access to Drive at any time at
+    <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+  <li><strong>Reporting a security issue:</strong> please report it privately through
+    <a href="https://github.com/harisr92/accounting-tui/security/advisories/new">GitHub security advisories</a>.</li>
+</ul>
 
 <h2>Sharing and files</h2>
 <p>When you share or export an invoice PDF or a tax return, the app hands the file to the app you
