@@ -16,7 +16,7 @@ use crate::ui::view::{Action, KeyHint, Notice, View};
 use crate::ui::widgets::panel;
 use compter_core::domain::{
     Appearance, BusinessProfile, Currency, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, FiscalYear,
-    InvoiceNumber, LogoFormat, ProfileDraft,
+    IncomeBasis, InvoiceNumber, LogoFormat, ProfileDraft,
 };
 use compter_core::services::{InvoiceService, PreferencesService};
 use compter_core::storage::Repository;
@@ -38,6 +38,8 @@ const PREFIX: usize = 6;
 const LUT: usize = 7;
 const TERMS: [usize; 2] = [8, 9];
 const CURRENCY: usize = 10;
+const BASIS: usize = 11;
+const BASIS_FROM: usize = 12;
 
 const LOGO_FILE: usize = 0;
 
@@ -96,6 +98,14 @@ impl<R: Repository> SettingsView<R> {
 
     fn submit(&mut self, form: &Form) -> Result<Notice, String> {
         let lines = |fields: &[usize]| fields.iter().map(|&i| form.value(i).to_owned()).collect();
+        let this_year = FiscalYear::containing(chrono::Local::now().date_naive());
+        let from = parse::fiscal_year_or(form.value(BASIS_FROM), this_year)?;
+        let mut income_basis = self
+            .profile
+            .as_ref()
+            .map(|p| p.income_basis().clone())
+            .unwrap_or_default();
+        income_basis.set(from, IncomeBasis::from_index(form.choice(BASIS)));
         let draft = ProfileDraft {
             name: form.value(NAME).to_owned(),
             address: lines(&ADDRESS),
@@ -105,6 +115,7 @@ impl<R: Repository> SettingsView<R> {
             lut_arn: parse::optional(form.value(LUT)),
             terms: lines(&TERMS),
             currency: Currency::from_index(form.choice(CURRENCY)),
+            income_basis,
             // The logo is set on its own (`l`); editing the details keeps it
             logo: self.profile.as_ref().and_then(BusinessProfile::logo),
         };
@@ -181,6 +192,7 @@ fn profile_form(profile: Option<&BusinessProfile>) -> Form {
             ..ProfileDraft::default()
         });
     let line = |lines: &[String], i: usize| lines.get(i).cloned().unwrap_or_default();
+    let this_year = FiscalYear::containing(chrono::Local::now().date_naive());
     Form::new(
         "Business details",
         vec![
@@ -201,6 +213,13 @@ fn profile_form(profile: Option<&BusinessProfile>) -> Form {
                 .with_value(line(&draft.terms, 0)),
             Field::text("", "e.g. Payment due in 15 days").with_value(line(&draft.terms, 1)),
             Field::choice("Currency", Currency::LABELS).with_choice(draft.currency.index()),
+            Field::choice("44ADA basis", IncomeBasis::LABELS)
+                .with_choice(draft.income_basis.basis(this_year).index()),
+            Field::text(
+                "From FY",
+                "earlier years keep theirs; switch only with your CA",
+            )
+            .with_value(this_year.label()),
         ],
     )
 }
@@ -397,6 +416,13 @@ fn profile_lines<'a>(
                 "{} {}: default for new projects; clients in India are billed in INR",
                 p.currency().code(),
                 p.currency().symbol()
+            ),
+        ),
+        row(
+            "44ADA basis",
+            format!(
+                "{}: each invoice counts on the basis of the year it is dated in",
+                p.income_basis().describe()
             ),
         ),
         row(

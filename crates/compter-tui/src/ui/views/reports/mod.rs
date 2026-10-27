@@ -125,9 +125,12 @@ impl<R: Repository> View for ReportsView<R> {
         let Some(report) = &self.report else {
             return;
         };
+        let switch_note = report.switch_note();
+        // Two more lines for what crossed over in the year the basis changed
+        let tax_height = if switch_note.is_some() { 8 } else { 6 };
         let [income_area, tax_area, gst_area, clients_area] = Layout::vertical([
             Constraint::Length(4),
-            Constraint::Length(6),
+            Constraint::Length(tax_height),
             Constraint::Length(7),
             Constraint::Min(3),
         ])
@@ -153,7 +156,7 @@ impl<R: Repository> View for ReportsView<R> {
         }
         stat_tiles(frame, inner, &income, theme);
 
-        render_income_tax(frame, tax_area, report, theme);
+        render_income_tax(frame, tax_area, report, switch_note.as_deref(), theme);
         render_gst(frame, gst_area, report, theme);
         render_clients(frame, clients_area, report, theme);
 
@@ -222,14 +225,21 @@ fn file_name(path: &std::path::Path) -> std::borrow::Cow<'_, str> {
         .unwrap_or_default()
 }
 
-fn render_income_tax(frame: &mut Frame, area: Rect, report: &YearReport, theme: &Theme) {
+fn render_income_tax(
+    frame: &mut Frame,
+    area: Rect,
+    report: &YearReport,
+    switch_note: Option<&str>,
+    theme: &Theme,
+) {
     let block = panel("Income tax", false, theme);
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    let [tiles, note] =
-        Layout::vertical([Constraint::Length(2), Constraint::Length(2)]).areas(inner);
+    let [tiles, note] = Layout::vertical([Constraint::Length(2), Constraint::Min(2)]).areas(inner);
     let presumptive_label = format!("44ADA income ({PRESUMPTIVE_PERCENT}%)");
+    let receipts_label = format!("Receipts ({})", report.basis.label());
     let stats = [
+        (receipts_label.as_str(), money(&report.tax_receipts)),
         (
             presumptive_label.as_str(),
             money(&report.presumptive_income()),
@@ -244,8 +254,12 @@ fn render_income_tax(frame: &mut Frame, area: Rect, report: &YearReport, theme: 
         PresumptiveCheck::BooksBelow => Tone::Warning,
         PresumptiveCheck::Within => Tone::Neutral,
     };
-    let text = check.message();
-    let note_text = Paragraph::new(Line::styled(text, theme.tone(tone))).wrap(Wrap { trim: true });
+    let mut lines = Vec::with_capacity(2);
+    if let Some(switch) = switch_note {
+        lines.push(Line::styled(switch, theme.tone(Tone::Warning)));
+    }
+    lines.push(Line::styled(report.presumptive_note(), theme.tone(tone)));
+    let note_text = Paragraph::new(lines).wrap(Wrap { trim: true });
     frame.render_widget(note_text, note);
 }
 
