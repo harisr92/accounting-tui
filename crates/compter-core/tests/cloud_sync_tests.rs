@@ -258,3 +258,22 @@ fn a_device_json_from_before_the_kept_account_still_finds_its_sign_in() {
         Some("me@example.com")
     );
 }
+
+#[test]
+fn a_held_lease_says_in_local_time_when_compter_opens_anyway() {
+    let cloud = Cloud::default();
+    let phone = Device::new();
+    let laptop = Device::new();
+    let _open = SyncSession::begin(&phone.data, cloud.clone(), "iPhone").unwrap();
+
+    let message = SyncSession::begin(&laptop.data, cloud.clone(), "laptop")
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(
+        message.starts_with("compter is open on iPhone (last seen "),
+        "{message}"
+    );
+    assert!(message.contains("compter opens anyway after "), "{message}");
+    assert!(!message.contains("UTC"), "{message}");
+}

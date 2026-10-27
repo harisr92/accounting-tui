@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../compter.dart';
 import '../handoff.dart';
 import '../rust/api/error.dart';
+import 'background_time.dart';
 import 'cloud.dart';
 import 'google_drive.dart';
 import 'sync_settings.dart';
@@ -85,6 +86,12 @@ class SyncController extends Notifier<SyncReport> {
   String? _conflictInbox;
   bool _busy = false;
 
+  /// Completes when the sync running now finishes, so [leave] can wait for it
+  Completer<void>? _idle;
+
+  /// Counts returns to the app, so a [leave] that waited sees the user came back
+  int _resumes = 0;
+
   /// compter is open on the computer: send nothing until it closes
   bool _blocked = false;
 
@@ -117,12 +124,13 @@ class SyncController extends Notifier<SyncReport> {
       _folder = ref.read(cloudAccountProvider).folder();
       _lifecycle = AppLifecycleListener(
         onResume: () {
+          _resumes++;
           unawaited(syncNow());
           _tick();
         },
         onPause: () {
           _timer?.cancel();
-          unawaited(leave());
+          unawaited(withBackgroundTime(leave));
         },
       );
       _tick();
@@ -147,7 +155,7 @@ class SyncController extends Notifier<SyncReport> {
   Future<void> syncNow() async {
     final folder = _folder;
     if (folder == null || _busy) return;
-    _busy = true;
+    _begin();
     state = SyncReport(
       SyncPhase.syncing,
       'Syncing…',
@@ -178,23 +186,42 @@ class SyncController extends Notifier<SyncReport> {
     } on Object catch (error) {
       _report(error);
     } finally {
-      _busy = false;
+      _end();
     }
   }
 
-  /// Going to the background: a last send, and the lease released, so the computer can open.
-  /// iOS gives only seconds here, which is why changes are also sent while the app is open.
-  Future<void> leave() async {
-    final folder = _folder;
-    if (folder == null || _busy) return;
+  void _begin() {
     _busy = true;
+    _idle = Completer<void>();
+  }
+
+  void _end() {
+    _busy = false;
+    _idle?.complete();
+    _idle = null;
+  }
+
+  /// Going to the background: a last send, and the lease released, so the computer can open.
+  /// A sync already running (the one on opening, or the minute's) is waited for: returning
+  /// instead would leave the lease held until it goes stale, 5 minutes later. On iOS the app
+  /// asks for background time to finish ([withBackgroundTime]); changes are also sent while the
+  /// app is open, in case it isn't given enough.
+  Future<void> leave() async {
+    final resumes = _resumes;
+    while (_busy) {
+      await _idle?.future;
+    }
+    final folder = _folder;
+    // Back in the app while waiting: the lease is its again
+    if (folder == null || resumes != _resumes) return;
+    _begin();
     try {
       if (!_blocked && await _pull(folder)) await _sendIfChanged(folder);
       await _releaseLease(folder);
     } on Object catch (error) {
       _report(error);
     } finally {
-      _busy = false;
+      _end();
     }
   }
 
@@ -280,7 +307,7 @@ class SyncController extends Notifier<SyncReport> {
     final folder = _folder;
     final inbox = _conflictInbox;
     if (folder == null || inbox == null) return;
-    _busy = true;
+    _begin();
     try {
       await ref
           .read(compterProvider)
@@ -296,7 +323,7 @@ class SyncController extends Notifier<SyncReport> {
       _report(error);
       return;
     } finally {
-      _busy = false;
+      _end();
     }
     await syncNow();
   }

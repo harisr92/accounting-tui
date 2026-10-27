@@ -220,4 +220,24 @@ void main() {
       expect(folder.json(manifestFile)['generation'], 2);
     },
   );
+
+  test(
+    'leaving while a sync runs waits for it, then frees the lease',
+    () async {
+      final folder = FakeFolder();
+      final computer = await open('computer');
+      await computer.createProject(input: project('Site'));
+      await publish(computer, folder);
+      final phone = await open('phone');
+      final (_, controller) = await phoneSyncing(phone, folder);
+
+      await phone.createProject(input: project('App'));
+      final running = controller.syncNow();
+      await controller.leave();
+      await running;
+
+      expect(folder.files.containsKey('lease.json'), isFalse);
+      expect(folder.json(manifestFile)['generation'], 2);
+    },
+  );
 }

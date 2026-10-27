@@ -20,7 +20,7 @@ use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, TimeDelta, Utc};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -40,7 +40,11 @@ const HEARTBEAT: Duration = Duration::from_secs(60);
 /// Why handing the database between devices failed. Nothing local is overwritten on any of them.
 #[derive(Debug, thiserror::Error)]
 pub enum SyncError {
-    #[error("compter is open on {device} (last seen {seen}); quit it there first")]
+    #[error(
+        "compter is open on {device} (last seen {}); quit it there first. If it was closed and this persists, compter opens anyway after {}",
+        clock(.seen),
+        clock(&stale_after(.seen))
+    )]
     Leased { device: String, seen: DateTime<Utc> },
     #[error(
         "this device and {device} both changed the data since they last synced (theirs published {published}); run `compter sync --keep-local` or `compter sync --keep-remote`"
@@ -754,6 +758,21 @@ fn take_lease(
         });
     }
     write_lease(sync, state.device_id, device_name)
+}
+
+/// When a lease last refreshed at `heartbeat` goes stale
+fn stale_after(heartbeat: &DateTime<Utc>) -> DateTime<Utc> {
+    *heartbeat + TimeDelta::from_std(LEASE_TTL).unwrap_or_default()
+}
+
+/// `at` in this device's time zone, for messages: `14:05`, or `3 Nov 14:05` on another day
+fn clock(at: &DateTime<Utc>) -> String {
+    let local = at.with_timezone(&Local);
+    if local.date_naive() == Local::now().date_naive() {
+        local.format("%H:%M").to_string()
+    } else {
+        local.format("%-d %b %H:%M").to_string()
+    }
 }
 
 /// Refreshed within [`LEASE_TTL`]; a heartbeat in the future (clocks disagree) counts as fresh
