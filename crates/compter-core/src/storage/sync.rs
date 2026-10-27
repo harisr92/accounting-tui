@@ -28,7 +28,8 @@ use uuid::Uuid;
 
 use super::{DataDir, StorageError, Store, write_file};
 
-const SNAPSHOT_FILE: &str = "compter.redb";
+/// The database snapshot: the one sync file that can be large
+pub const SNAPSHOT_FILE: &str = "compter.redb";
 const MANIFEST_FILE: &str = "manifest.json";
 const LEASE_FILE: &str = "lease.json";
 
@@ -150,18 +151,6 @@ impl SyncDir {
             .map(Self::new)
     }
 
-    /// The folder this device syncs through: `env` (see [`Self::from_env`]), else the one saved
-    /// in Settings; syncing is off when neither is set
-    pub fn configured(
-        data: &DataDir,
-        env: Option<Self>,
-    ) -> Result<Option<(Self, SyncSource)>, SyncError> {
-        if let Some(dir) = env {
-            return Ok(Some((dir, SyncSource::Env)));
-        }
-        Ok(Self::saved(data)?.map(|dir| (dir, SyncSource::Settings)))
-    }
-
     /// The folder saved in Settings on this device
     pub fn saved(data: &DataDir) -> Result<Option<Self>, SyncError> {
         let settings = read_json::<DeviceSettings>(&data.device_settings_path())?;
@@ -177,6 +166,11 @@ impl SyncDir {
         }
         let path = data.device_settings_path();
         let mut settings = read_json::<DeviceSettings>(&path)?.unwrap_or_default();
+        if dir.is_some_and(|dir| {
+            settings.google_drive.is_some() || settings.sync_dir.as_deref() != Some(dir)
+        }) {
+            forget_base(data)?;
+        }
         settings.sync_dir = dir.map(Path::to_path_buf);
         settings.google_drive = None;
         write_json(&path, &settings)
@@ -269,14 +263,36 @@ impl SyncBackend {
     }
 
     /// Sync through Google Drive as `account` from the next start, in place of any folder; or
-    /// stop syncing through it when `None`
+    /// stop syncing through it when `None`. The account stays recorded as signed in either way
+    /// ([`Self::google_account`]), until [`Self::forget_google_account`].
     pub fn save_google_drive(data: &DataDir, account: Option<&str>) -> Result<(), SyncError> {
         let path = data.device_settings_path();
         let mut settings = read_json::<DeviceSettings>(&path)?.unwrap_or_default();
-        if account.is_some() {
+        if account.is_some_and(|account| settings.google_drive.as_deref() != Some(account)) {
+            forget_base(data)?;
+        }
+        if let Some(account) = account {
             settings.sync_dir = None;
+            settings.google_account = Some(account.to_owned());
         }
         settings.google_drive = account.map(str::to_owned);
+        write_json(&path, &settings)
+    }
+
+    /// The Google account whose sign-in this device keeps (in the keychain), whether or not it
+    /// syncs through Google Drive now: switching to a folder doesn't sign out
+    pub fn google_account(data: &DataDir) -> Result<Option<String>, SyncError> {
+        let settings = read_json::<DeviceSettings>(&data.device_settings_path())?;
+        Ok(settings.and_then(|settings| settings.google_account.or(settings.google_drive)))
+    }
+
+    /// Stop syncing through Google Drive and forget which account was signed in, once its
+    /// sign-in is gone from the keychain
+    pub fn forget_google_account(data: &DataDir) -> Result<(), SyncError> {
+        let path = data.device_settings_path();
+        let mut settings = read_json::<DeviceSettings>(&path)?.unwrap_or_default();
+        settings.google_drive = None;
+        settings.google_account = None;
         write_json(&path, &settings)
     }
 }
@@ -297,6 +313,11 @@ struct DeviceSettings {
     /// The Google account this device syncs through, when it syncs through Google Drive
     #[serde(default)]
     google_drive: Option<String>,
+    /// The Google account signed in on this device, kept after sync moves to a folder so
+    /// signing out can still find its keychain entry. Older files lack it: `google_drive` stands
+    /// in.
+    #[serde(default)]
+    google_account: Option<String>,
 }
 
 fn check_folder(data: &DataDir, dir: &Path) -> Result<(), SyncError> {
@@ -407,6 +428,11 @@ impl SyncSession {
     /// Conflict copies the sync client left in the folder, worth telling the user about
     pub fn conflict_copies(&self) -> Vec<String> {
         self.sync.conflict_copies()
+    }
+
+    /// Where this session syncs, for messages
+    pub fn place(&self) -> String {
+        self.sync.place()
     }
 
     /// Close the database, publish it if it changed, and release the lease. Returns the
@@ -676,6 +702,20 @@ fn load_state(data: &DataDir) -> Result<LocalState, SyncError> {
 
 fn save_state(data: &DataDir, state: &LocalState) -> Result<(), SyncError> {
     write_json(&data.sync_state_path(), state)
+}
+
+/// Forget what this device last synced, when it starts syncing somewhere else. Generations count
+/// per place: one remembered from a folder would make a lower one in Google Drive look old, so
+/// the device would skip it and later publish over it. Forgotten, the local database counts as
+/// changed, and a snapshot already there is a conflict to settle rather than lost records.
+fn forget_base(data: &DataDir) -> Result<(), SyncError> {
+    let Some(mut state) = read_json::<LocalState>(&data.sync_state_path())? else {
+        return Ok(());
+    };
+    state.base_generation = 0;
+    state.base_sha256 = None;
+    state.base_content = None;
+    save_state(data, &state)
 }
 
 /// Pull a newer snapshot, unless this device changed its own copy since it last synced

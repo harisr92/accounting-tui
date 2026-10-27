@@ -189,3 +189,72 @@ fn google_drive_and_a_folder_replace_each_other_unless_the_variable_overrides_bo
     SyncBackend::save_google_drive(&device.data, None).unwrap();
     assert_eq!(SyncBackend::configured(&device.data, None).unwrap(), None);
 }
+
+#[test]
+fn a_generation_counted_in_a_folder_never_hides_a_snapshot_in_google_drive() {
+    let folder = tempfile::tempdir().unwrap();
+    let laptop = Device::new();
+    SyncDir::save(&laptop.data, Some(folder.path())).unwrap();
+    for name in ["Site", "App", "Shop"] {
+        let session =
+            SyncSession::begin(&laptop.data, SyncDir::new(folder.path()), "laptop").unwrap();
+        let store = Store::open(&laptop.data).unwrap();
+        let project = Project::new(name, "Acme", None, Billing::Fixed).unwrap();
+        store.repository().save(&project).unwrap();
+        session.finish(store).unwrap();
+    }
+
+    let cloud = Cloud::default();
+    let phone = Device::new();
+    assert_eq!(phone.add_project(&cloud, "Phone"), Some(1));
+
+    SyncBackend::save_google_drive(&laptop.data, Some("me@example.com")).unwrap();
+    assert!(matches!(
+        SyncSession::begin(&laptop.data, cloud.clone(), "laptop"),
+        Err(SyncError::Conflict { .. })
+    ));
+}
+
+#[test]
+fn the_google_sign_in_is_remembered_until_signing_out_even_after_switching_to_a_folder() {
+    let device = Device::new();
+    let folder = tempfile::tempdir().unwrap();
+    assert_eq!(SyncBackend::google_account(&device.data).unwrap(), None);
+
+    SyncBackend::save_google_drive(&device.data, Some("me@example.com")).unwrap();
+    SyncDir::save(&device.data, Some(folder.path())).unwrap();
+    assert!(matches!(
+        SyncBackend::configured(&device.data, None).unwrap(),
+        Some(SyncBackend::Folder(..))
+    ));
+    assert_eq!(
+        SyncBackend::google_account(&device.data)
+            .unwrap()
+            .as_deref(),
+        Some("me@example.com")
+    );
+
+    SyncBackend::forget_google_account(&device.data).unwrap();
+    assert_eq!(SyncBackend::google_account(&device.data).unwrap(), None);
+    assert!(matches!(
+        SyncBackend::configured(&device.data, None).unwrap(),
+        Some(SyncBackend::Folder(..))
+    ));
+}
+
+#[test]
+fn a_device_json_from_before_the_kept_account_still_finds_its_sign_in() {
+    let device = Device::new();
+    std::fs::create_dir_all(device.data.root()).unwrap();
+    std::fs::write(
+        device.data.device_settings_path(),
+        br#"{"sync_dir":null,"google_drive":"me@example.com"}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        SyncBackend::google_account(&device.data)
+            .unwrap()
+            .as_deref(),
+        Some("me@example.com")
+    );
+}

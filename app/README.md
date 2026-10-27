@@ -99,7 +99,10 @@ Drive UI, so nobody moves or renames them by accident. In **Testing**, sign-in l
      `ios/Flutter/Google.xcconfig` (gitignored) and fill in its client ID and reversed ID.
    - **Android**, package `app.compter`, with the SHA-1 of each key that signs the
      app: the debug key (`keytool -list -v -keystore ~/.android/debug.keystore -storepass
-     android`) and the upload key.
+     android`), the upload key, and **Google Play's app signing key** (Play Console → Test and
+     release → App integrity → App signing). Play re-signs what it installs with that last one,
+     so without it sign-in fails only in store builds, with "Developer console is not set up
+     correctly".
      Its ID goes nowhere: Google finds it by package and SHA-1.
    - **Web application**, in the same project, with no origins or redirect URIs (it has no
      SHA-1). Android's sign-in needs its client ID, passed when building:
@@ -165,6 +168,8 @@ git tag mobile-v0.3.0 && git push origin mobile-v0.3.0
 | `COMPTER_IOS_CERTIFICATE_BASE64`, `COMPTER_IOS_CERTIFICATE_PASSWORD` | `base64 -i distribution.p12`, and its password |
 | `COMPTER_IOS_PROFILE_BASE64`, `COMPTER_IOS_PROFILE_NAME` | `base64 -i compter.mobileprovision`, and the profile's name |
 | `COMPTER_ASC_KEY_ID`, `COMPTER_ASC_ISSUER_ID`, `COMPTER_ASC_KEY` | the API key's ID, issuer ID and `.p8` contents |
+| `COMPTER_GOOGLE_SERVER_CLIENT_ID` | the **Web** OAuth client's ID, for Android's Google sign-in |
+| `COMPTER_GOOGLE_IOS_CLIENT_ID`, `COMPTER_GOOGLE_REVERSED_CLIENT_ID` | the iOS OAuth client's ID and reversed ID, written to `ios/Flutter/Google.xcconfig` |
 
 Play uploads stay drafts until the app has been published once; then set the repository
 variable `COMPTER_PLAY_RELEASE_STATUS` to `completed`.

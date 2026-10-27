@@ -15,7 +15,7 @@ use ratatui::crossterm::{cursor, execute};
 use compter_core::demo;
 use compter_core::services::{ExpenseService, InvoiceService, PreferencesService, ReportService};
 use compter_core::storage::sync::{
-    self, Resolution, SyncBackend, SyncDir, SyncFolder, SyncSession,
+    self, Resolution, SyncBackend, SyncDir, SyncError, SyncFolder, SyncSession,
 };
 use compter_core::storage::{DataDir, Store};
 use compter_tui::app::App;
@@ -92,8 +92,9 @@ fn main() -> Result<ExitCode> {
         store,
         data_dir,
         sync,
+        notice,
     } = open_store(demo_mode)?;
-    let notice = sync.as_ref().and_then(conflict_notice);
+    let notice = notice.or_else(|| sync.as_ref().and_then(conflict_notice));
     let result = run_tui(&store, data_dir, notice);
     if let Some(session) = sync {
         finish_sync(session, store)?;
@@ -160,7 +161,15 @@ fn import_merges(args: &[String]) -> Result<ExitCode> {
         eprintln!("import-merges needs a repository and a project name\n\n{USAGE}");
         return Ok(ExitCode::from(2));
     };
-    let Opened { store, sync, .. } = open_store(false)?;
+    let Opened {
+        store,
+        sync,
+        notice,
+        ..
+    } = open_store(false)?;
+    if let Some(notice) = notice {
+        eprintln!("{}", notice.text);
+    }
     let result = cli::import_merges(&store, Path::new(repo.as_str()), project, dry_run);
     if let Some(session) = sync {
         finish_sync(session, store)?;
@@ -225,9 +234,14 @@ struct Opened {
     /// The folder invoice PDFs go in (none in demo mode)
     data_dir: Option<DataDir>,
     sync: Option<SyncSession>,
+    /// Why it opened without syncing, for the footer
+    notice: Option<Notice>,
 }
 
-/// The database, brought up to date from the sync folder first when one is set
+/// The database, brought up to date from the sync folder first when one is set. A cloud drive
+/// that can't be reached (offline, or signed out) doesn't stop the user working: compter opens
+/// this device's own copy unsynced, and the next start that reaches the drive publishes it, or
+/// reports a conflict if another device changed the data meanwhile.
 fn open_store(demo_mode: bool) -> Result<Opened> {
     if demo_mode {
         let store = demo::store().wrap_err("could not build the demo data")?;
@@ -235,18 +249,36 @@ fn open_store(demo_mode: bool) -> Result<Opened> {
             store,
             data_dir: None,
             sync: None,
+            notice: None,
         });
     }
     let dir = DataDir::from_env()?;
-    let sync = sync_folder(&dir)?
+    let (sync, notice) = match sync_folder(&dir)?
         .map(|folder| SyncSession::begin(&dir, folder, sync::device_name_from_env()))
-        .transpose()?;
+    {
+        None => (None, None),
+        Some(Ok(session)) => (Some(session), None),
+        Some(Err(error @ SyncError::Remote { .. })) => (
+            None,
+            Some(Notice::error(format!(
+                "{error}: working on this device only; it syncs at the next start online"
+            ))),
+        ),
+        Some(Err(error @ SyncError::SignedOut(_))) => (
+            None,
+            Some(Notice::error(format!(
+                "{error} (`compter drive sign-in`); working on this device only"
+            ))),
+        ),
+        Some(Err(error)) => return Err(error.into()),
+    };
     let store = Store::open(&dir)
         .wrap_err_with(|| format!("could not open {}", dir.database_path().display()))?;
     Ok(Opened {
         store,
         data_dir: Some(dir),
         sync,
+        notice,
     })
 }
 
@@ -262,11 +294,11 @@ fn conflict_notice(session: &SyncSession) -> Option<Notice> {
 }
 
 fn finish_sync(session: SyncSession, store: Store) -> Result<()> {
-    if let Some(generation) = session
-        .finish(store)
-        .wrap_err("could not publish to the sync folder; your data is safe on this device")?
-    {
-        println!("published snapshot {generation} to the sync folder");
+    let place = session.place();
+    if let Some(generation) = session.finish(store).wrap_err_with(|| {
+        format!("could not publish to {place}; your data is safe on this device")
+    })? {
+        println!("published snapshot {generation} to {place}");
     }
     Ok(())
 }

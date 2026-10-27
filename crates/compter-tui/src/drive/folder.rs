@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use compter_core::storage::sync::{SyncError, SyncFolder};
+use compter_core::storage::sync::{SNAPSHOT_FILE, SyncError, SyncFolder};
 use serde::Deserialize;
 use ureq::Agent;
 use ureq::http::Response;
@@ -20,7 +20,10 @@ const BOUNDARY: &str = "compter-sync-boundary";
 pub struct DriveFolder {
     client: Client,
     account: String,
+    /// For everything but the snapshot: short, so quitting never waits long on the lease
     agent: Agent,
+    /// For the snapshot, which may be large
+    transfer: Agent,
     session: Mutex<Session>,
 }
 
@@ -36,7 +39,8 @@ impl DriveFolder {
         Self {
             client,
             account: account.into(),
-            agent: oauth::agent(),
+            agent: oauth::agent(oauth::SHORT),
+            transfer: oauth::agent(oauth::TRANSFER),
             session: Mutex::default(),
         }
     }
@@ -50,9 +54,20 @@ impl DriveFolder {
         self.session.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Run `request` with an access token, once more with a fresh one if Google refused it
+    /// The agent for moving `name`'s contents
+    fn agent_for(&self, name: &str) -> &Agent {
+        if name == SNAPSHOT_FILE {
+            &self.transfer
+        } else {
+            &self.agent
+        }
+    }
+
+    /// Run `request` through `agent` with an access token, once more with a fresh one if Google
+    /// refused it
     fn call(
         &self,
+        agent: &Agent,
         request: impl Fn(&Agent, &str) -> Result<Response<ureq::Body>, ureq::Error>,
     ) -> Result<Response<ureq::Body>, DriveError> {
         let cached = self.session().access_token.clone();
@@ -60,11 +75,11 @@ impl DriveFolder {
             Some(token) => token,
             None => self.refresh()?,
         };
-        let response = request(&self.agent, &token)?;
+        let response = request(agent, &token)?;
         if response.status().as_u16() != 401 {
             return Ok(response);
         }
-        let response = request(&self.agent, &self.refresh()?)?;
+        let response = request(agent, &self.refresh()?)?;
         if response.status().as_u16() == 401 {
             return Err(DriveError::SignedOut);
         }
@@ -83,7 +98,7 @@ impl DriveFolder {
             return Ok(Some(id.clone()));
         }
         let query = format!("name = '{}' and trashed = false", name.replace('\'', "\\'"));
-        let mut response = self.call(|agent, token| {
+        let mut response = self.call(&self.agent, |agent, token| {
             agent
                 .get(FILES_URL)
                 .header("Authorization", format!("Bearer {token}"))
@@ -118,7 +133,7 @@ impl DriveFolder {
             return Ok(None);
         };
         let url = format!("{FILES_URL}/{id}");
-        let mut response = self.call(|agent, token| {
+        let mut response = self.call(self.agent_for(name), |agent, token| {
             agent
                 .get(&url)
                 .header("Authorization", format!("Bearer {token}"))
@@ -144,7 +159,7 @@ impl DriveFolder {
     fn write_file(&self, name: &str, bytes: &[u8]) -> Result<(), DriveError> {
         if let Some(id) = self.file_id(name)? {
             let url = format!("{UPLOAD_URL}/{id}");
-            let mut response = self.call(|agent, token| {
+            let mut response = self.call(self.agent_for(name), |agent, token| {
                 agent
                     .patch(&url)
                     .header("Authorization", format!("Bearer {token}"))
@@ -158,7 +173,7 @@ impl DriveFolder {
             self.forget(name);
         }
         let body = multipart(name, bytes);
-        let mut response = self.call(|agent, token| {
+        let mut response = self.call(self.agent_for(name), |agent, token| {
             agent
                 .post(UPLOAD_URL)
                 .header("Authorization", format!("Bearer {token}"))
@@ -178,7 +193,7 @@ impl DriveFolder {
             return Ok(());
         };
         let url = format!("{FILES_URL}/{id}");
-        let mut response = self.call(|agent, token| {
+        let mut response = self.call(&self.agent, |agent, token| {
             agent
                 .delete(&url)
                 .header("Authorization", format!("Bearer {token}"))

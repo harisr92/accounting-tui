@@ -99,9 +99,19 @@ pub fn drive_sign_in(data: &DataDir, device_name: &str) -> Result<()> {
         // The URL is printed for when there is no browser to open
         let _ = viewer::open_url(url);
     })?;
+    // One sign-in per computer: another account's grant would be left in the keychain unseen
+    if let Some(previous) = SyncBackend::google_account(data)?.filter(|p| *p != account) {
+        drive::sign_out(&previous)?;
+    }
     SyncBackend::save_google_drive(data, Some(&account))?;
     println!("signed in as {account}; compter syncs through Google Drive from the next start");
     let folder = DriveFolder::new(client, &account);
+    // Seeding reads the database file, so compter must not have it open: opening fails if it does
+    if data.database_path().exists() {
+        Store::open(data)
+            .and_then(Store::close)
+            .wrap_err("quit compter before signing in, so its data can be published")?;
+    }
     if let Some(generation) = sync::seed(data, &folder, device_name)
         .wrap_err("could not publish to Google Drive; your data is safe on this computer")?
     {
@@ -110,14 +120,23 @@ pub fn drive_sign_in(data: &DataDir, device_name: &str) -> Result<()> {
     Ok(())
 }
 
-/// Stop syncing through Google Drive and forget the sign-in on this computer
+/// Stop syncing through Google Drive and forget the sign-in on this computer, also when sync
+/// already moved to a folder
 pub fn drive_sign_out(data: &DataDir) -> Result<()> {
-    let Some(SyncBackend::GoogleDrive { account }) = SyncBackend::configured(data, None)? else {
-        println!("this computer doesn't sync through Google Drive");
+    let Some(account) = SyncBackend::google_account(data)? else {
+        println!("this computer isn't signed in to Google Drive");
         return Ok(());
     };
+    let syncing = matches!(
+        SyncBackend::configured(data, None)?,
+        Some(SyncBackend::GoogleDrive { .. })
+    );
     drive::sign_out(&account)?;
-    SyncBackend::save_google_drive(data, None)?;
-    println!("signed out of {account}; sync is off until you set it up again");
+    SyncBackend::forget_google_account(data)?;
+    if syncing {
+        println!("signed out of {account}; sync is off until you set it up again");
+    } else {
+        println!("signed out of {account}");
+    }
     Ok(())
 }

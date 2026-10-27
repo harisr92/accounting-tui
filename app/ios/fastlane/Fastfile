@@ -46,6 +46,10 @@ platform :ios do
       </plist>
     PLIST
 
+    # Without it the app builds, but Google Drive sync can't sign in (Info.plist's GIDClientID)
+    google = File.expand_path("../Flutter/Google.xcconfig", __dir__)
+    UI.user_error!("#{google} is missing: see app/README.md, Google Drive sync") unless File.exist?(google)
+
     Dir.chdir("../..") do
       sh("flutter", "build", "ipa", "--release",
          "--build-name=#{build_name}", "--build-number=#{build_number}",
