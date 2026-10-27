@@ -57,6 +57,7 @@ overrides both. compter publishes a snapshot there on exit and picks up a newer 
 quit compter on one device before opening it on another.";
 
 fn main() -> Result<ExitCode> {
+    install_hooks()?;
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("import-merges") {
         return import_merges(&args[1..]);
@@ -86,7 +87,6 @@ fn main() -> Result<ExitCode> {
         }
     }
 
-    install_hooks()?;
     // Open the database before raw mode, so errors like "already open" print normally
     let Opened {
         store,
@@ -324,7 +324,11 @@ where
 
 /// Restore the terminal before printing a panic, so the report stays visible
 fn install_hooks() -> Result<()> {
-    let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default().into_hooks();
+    // Users get the message; where it came from and how to get a backtrace are for developers
+    let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default()
+        .display_location_section(cfg!(debug_assertions))
+        .display_env_section(cfg!(debug_assertions))
+        .into_hooks();
     eyre_hook.install()?;
     let panic_hook = panic_hook.into_panic_hook();
     std::panic::set_hook(Box::new(move |info| {
