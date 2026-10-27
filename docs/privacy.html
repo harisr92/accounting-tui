@@ -97,10 +97,8 @@ and sign in with Google.</p>
 <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
 including the Limited Use requirements. Data from Google Drive is used only to provide sync to
 you, is not transferred to anyone else, is not used for advertising, and is not read by humans.</p>
-<p>You can turn sync off in Settings at any time, and remove compter's access to your Google
-account at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.
-Removing access doesn't delete compter's hidden folder: to delete it, open Google Drive on the
-web, go to Settings → Manage apps, and choose <em>Delete hidden app data</em> for compter.</p>
+<p>You can turn sync off at any time, and delete what compter keeps in your Drive: see
+<a href="#delete-data">Deleting your data</a>.</p>
 
 <h2 id="data-protection">How your data is protected</h2>
 <p>Your records include sensitive business and financial details. compter protects them like this:</p>
@@ -135,15 +133,33 @@ web, go to Settings → Manage apps, and choose <em>Delete hidden app data</em> 
   <li><strong>No servers of ours:</strong> there is no copy of your data outside your devices and your
     own Google Drive, so there is no developer database to be breached, and no one at compter can
     access your records.</li>
-  <li><strong>Keeping and deleting data:</strong> your records are kept until you delete them.
-    Uninstalling the app (or deleting <code>compter.redb</code> on a computer) removes them from that
-    device; deleting compter's hidden app data in Drive (Settings → Manage apps) removes the synced
-    copy; and you can revoke compter's
-    access to Drive at any time at
-    <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+  <li><strong>Keeping and deleting data:</strong> your records are kept until you delete them, as
+    described in <a href="#delete-data">Deleting your data</a>.</li>
   <li><strong>Reporting a security issue:</strong> please report it privately through
     <a href="https://github.com/harisr92/accounting-tui/security/advisories/new">GitHub security advisories</a>.</li>
 </ul>
+
+<h2 id="delete-data">Deleting your data</h2>
+<p>Your records exist only on your own devices and, if you sync, in your own Google Drive. We hold
+no copy, so you delete them yourself, without asking us. Each copy is deleted separately:</p>
+<ul>
+  <li><strong>On your phone:</strong> uninstall compter. iOS and Android delete the app's private
+    storage, including <code>compter.redb</code> and the app's preferences.</li>
+  <li><strong>On a computer:</strong> delete the <code>compter</code> data folder:
+    <code>~/.local/share/compter</code> on Linux and macOS (or <code>$XDG_DATA_HOME/compter</code>),
+    <code>%APPDATA%\compter</code> on Windows, or the folder <code>$COMPTER_HOME</code> names.
+    Run <code>compter drive sign-out</code> first to remove the Google sign-in from your keychain.</li>
+  <li><strong>In Google Drive:</strong> open <a href="https://drive.google.com">drive.google.com</a>,
+    go to <em>Settings → Manage apps</em>, find compter, and choose <em>Options → Delete hidden app
+    data</em>. This removes the synced snapshot, its manifest and the lease. Nothing else in your
+    Drive is touched.</li>
+  <li><strong>compter's access to your Google account:</strong> remove it at
+    <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. This
+    stops compter reaching your Drive, but doesn't delete files already there: delete those as
+    above.</li>
+</ul>
+<p>Deleting is permanent. Invoices and other records may be ones the law requires you to keep for
+some years (in India, GST records for six years after the year's annual return is due), so export what you need first.</p>
 
 <h2>Sharing and files</h2>
 <p>When you share or export an invoice PDF or a tax return, the app hands the file to the app you
