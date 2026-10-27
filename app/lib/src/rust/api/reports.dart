@@ -128,9 +128,12 @@ class ReportRow {
   final String year;
   final List<FigureRow> income;
 
-  /// 44ADA income, expenses and books profit
+  /// Gross receipts on the profile's basis, 44ADA income, expenses and books profit
   final List<FigureRow> incomeTax;
   final String incomeTaxNote;
+
+  /// In the first year on a new basis: what crossed over from the old one, to check by hand
+  final String? incomeTaxSwitch;
   final Tone incomeTaxTone;
   final List<QuarterGstRow> gst;
 
@@ -154,6 +157,7 @@ class ReportRow {
     required this.income,
     required this.incomeTax,
     required this.incomeTaxNote,
+    this.incomeTaxSwitch,
     required this.incomeTaxTone,
     required this.gst,
     required this.clients,
@@ -169,6 +173,7 @@ class ReportRow {
       income.hashCode ^
       incomeTax.hashCode ^
       incomeTaxNote.hashCode ^
+      incomeTaxSwitch.hashCode ^
       incomeTaxTone.hashCode ^
       gst.hashCode ^
       clients.hashCode ^
@@ -186,6 +191,7 @@ class ReportRow {
           income == other.income &&
           incomeTax == other.incomeTax &&
           incomeTaxNote == other.incomeTaxNote &&
+          incomeTaxSwitch == other.incomeTaxSwitch &&
           incomeTaxTone == other.incomeTaxTone &&
           gst == other.gst &&
           clients == other.clients &&

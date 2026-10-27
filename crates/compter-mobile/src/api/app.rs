@@ -5,9 +5,9 @@ use flutter_rust_bridge::frb;
 
 use compter_core::demo;
 use compter_core::domain::{
-    Billing, ClientDetails, ClientRegion, Currency, Discount, DomainError, ExchangeRate, ExpenseId,
-    Invoice, InvoiceNumber, MilestoneId, ProfileDraft, Project, ProjectId, ReturnKind, ReturnTerms,
-    TimeEntry,
+    BasisSchedule, Billing, ClientDetails, ClientRegion, Currency, Discount, DomainError,
+    ExchangeRate, ExpenseId, IncomeBasis, Invoice, InvoiceNumber, MilestoneId, ProfileDraft,
+    Project, ProjectId, ReturnKind, ReturnTerms, TimeEntry,
 };
 use compter_core::input;
 use compter_core::services::{
@@ -18,7 +18,7 @@ use compter_core::storage::sync::{self, Lease, Resolution, SyncDir, SyncError};
 use compter_core::storage::{DataDir, RedbRepository, Store};
 
 use super::expenses::{category, fiscal_year};
-use super::profile::currency;
+use super::profile::{currency, this_year};
 use super::reports::month_label;
 use super::{
     ApiError, CreditInput, CreditLineInput, CreditPreviewRow, CreditedRow, ExpenseInput,
@@ -247,6 +247,14 @@ impl CompterApp {
                 .filter_map(|line| input::optional(line))
                 .collect::<Vec<_>>()
         };
+        let saved = self.invoices.profile()?;
+        let from = input::fiscal_year_or(&input.basis_from, this_year())
+            .map_err(|message| ApiError::invalid("basis_from", message))?;
+        let basis = if input.cash_basis {
+            IncomeBasis::Cash
+        } else {
+            IncomeBasis::Accrual
+        };
         let draft = ProfileDraft {
             name: input.name.trim().to_owned(),
             address: lines(input.address),
@@ -256,9 +264,13 @@ impl CompterApp {
             lut_arn: input::optional(&input.lut_arn),
             terms: lines(input.terms),
             currency,
-            logo: self.invoices.profile()?.and_then(|p| p.logo()),
+            logo: saved.and_then(|p| p.logo()),
+            // Set from the stored schedule by `save_profile_with_basis`
+            income_basis: BasisSchedule::default(),
         };
-        Ok(ProfileRow::from(&self.invoices.save_profile(draft)?))
+        Ok(ProfileRow::from(
+            &self.invoices.save_profile_with_basis(draft, from, basis)?,
+        ))
     }
 
     /// Every issued invoice, newest first

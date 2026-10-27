@@ -1,8 +1,8 @@
 use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 
-use crate::domain::Discount;
-use crate::input::{date_or, discount, duration_minutes, money, optional};
+use crate::domain::{Discount, FiscalYear};
+use crate::input::{date_or, discount, duration_minutes, fiscal_year_or, money, optional};
 
 #[test]
 fn money_accepts_indian_grouping_and_rupee_sign() {
@@ -70,4 +70,29 @@ fn discount_is_a_percent_an_amount_or_nothing() {
     );
     assert!(discount("ten%").is_err());
     assert!(discount("abc").is_err());
+}
+
+#[test]
+fn a_financial_year_is_typed_by_its_label_or_start_year() {
+    let today = FiscalYear::starting(2026);
+    assert_eq!(
+        fiscal_year_or("2025-26", today),
+        Ok(FiscalYear::starting(2025))
+    );
+    assert_eq!(
+        fiscal_year_or("FY 2025-26", today),
+        Ok(FiscalYear::starting(2025))
+    );
+    assert_eq!(
+        fiscal_year_or("2025-2026", today),
+        Ok(FiscalYear::starting(2025))
+    );
+    assert_eq!(
+        fiscal_year_or(" 2027 ", today),
+        Ok(FiscalYear::starting(2027))
+    );
+    assert_eq!(fiscal_year_or("", today), Ok(today));
+    assert!(fiscal_year_or("2025-27", today).is_err());
+    assert!(fiscal_year_or("26-27", today).is_err());
+    assert!(fiscal_year_or("next year", today).is_err());
 }

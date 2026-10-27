@@ -15,8 +15,8 @@ use crate::ui::theme::Theme;
 use crate::ui::view::{Action, KeyHint, Notice, View};
 use crate::ui::widgets::panel;
 use compter_core::domain::{
-    Appearance, BusinessProfile, Currency, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, FiscalYear,
-    InvoiceNumber, LogoFormat, ProfileDraft,
+    Appearance, BasisSchedule, BusinessProfile, Currency, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC,
+    FiscalYear, IncomeBasis, InvoiceNumber, LogoFormat, ProfileDraft,
 };
 use compter_core::services::{InvoiceService, PreferencesService};
 use compter_core::storage::Repository;
@@ -38,6 +38,8 @@ const PREFIX: usize = 6;
 const LUT: usize = 7;
 const TERMS: [usize; 2] = [8, 9];
 const CURRENCY: usize = 10;
+const BASIS: usize = 11;
+const BASIS_FROM: usize = 12;
 
 const LOGO_FILE: usize = 0;
 
@@ -96,6 +98,7 @@ impl<R: Repository> SettingsView<R> {
 
     fn submit(&mut self, form: &Form) -> Result<Notice, String> {
         let lines = |fields: &[usize]| fields.iter().map(|&i| form.value(i).to_owned()).collect();
+        let from = parse::fiscal_year_or(form.value(BASIS_FROM), this_year())?;
         let draft = ProfileDraft {
             name: form.value(NAME).to_owned(),
             address: lines(&ADDRESS),
@@ -105,12 +108,14 @@ impl<R: Repository> SettingsView<R> {
             lut_arn: parse::optional(form.value(LUT)),
             terms: lines(&TERMS),
             currency: Currency::from_index(form.choice(CURRENCY)),
+            // Set from the stored schedule by `save_profile_with_basis`
+            income_basis: BasisSchedule::default(),
             // The logo is set on its own (`l`); editing the details keeps it
             logo: self.profile.as_ref().and_then(BusinessProfile::logo),
         };
         let profile = self
             .service
-            .save_profile(draft)
+            .save_profile_with_basis(draft, from, IncomeBasis::from_index(form.choice(BASIS)))
             .map_err(|e| e.to_string())?;
         self.profile = Some(profile);
         Ok(Notice::success("Business details saved"))
@@ -172,6 +177,11 @@ fn logo_form() -> Form {
     )
 }
 
+/// The financial year today is in
+fn this_year() -> FiscalYear {
+    FiscalYear::containing(chrono::Local::now().date_naive())
+}
+
 fn profile_form(profile: Option<&BusinessProfile>) -> Form {
     let draft = profile
         .map(BusinessProfile::to_draft)
@@ -181,6 +191,7 @@ fn profile_form(profile: Option<&BusinessProfile>) -> Form {
             ..ProfileDraft::default()
         });
     let line = |lines: &[String], i: usize| lines.get(i).cloned().unwrap_or_default();
+    let this_year = this_year();
     Form::new(
         "Business details",
         vec![
@@ -201,6 +212,13 @@ fn profile_form(profile: Option<&BusinessProfile>) -> Form {
                 .with_value(line(&draft.terms, 0)),
             Field::text("", "e.g. Payment due in 15 days").with_value(line(&draft.terms, 1)),
             Field::choice("Currency", Currency::LABELS).with_choice(draft.currency.index()),
+            Field::choice("44ADA basis", IncomeBasis::LABELS)
+                .with_choice(draft.income_basis.basis(this_year).index()),
+            Field::text(
+                "From FY",
+                "earlier years keep theirs; switch only with your CA",
+            )
+            .with_value(this_year.label()),
         ],
     )
 }
@@ -373,11 +391,7 @@ fn profile_lines<'a>(
         || "not registered: invoices are issued without GST".to_owned(),
         |g| g.as_str().to_owned(),
     );
-    let example = InvoiceNumber::new(
-        p.invoice_prefix(),
-        FiscalYear::containing(chrono::Local::now().date_naive()),
-        1,
-    );
+    let example = InvoiceNumber::new(p.invoice_prefix(), this_year(), 1);
     vec![
         row("Name", p.name().to_owned()),
         row("Address", p.address().join(", ")),
@@ -397,6 +411,13 @@ fn profile_lines<'a>(
                 "{} {}: default for new projects; clients in India are billed in INR",
                 p.currency().code(),
                 p.currency().symbol()
+            ),
+        ),
+        row(
+            "44ADA basis",
+            format!(
+                "{}: each invoice counts on the basis of the year it is dated in",
+                p.income_basis().describe()
             ),
         ),
         row(

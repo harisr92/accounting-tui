@@ -313,6 +313,44 @@ fn the_last_time_entry_is_undone() {
     assert!(app.undo_time(created.id, october).is_err());
 }
 
+#[test]
+fn a_milestone_shows_every_entry_logged_newest_first() {
+    let (_scratch, mut app) = demo();
+    let created = app
+        .create_project(project("Support", Some("1,500")))
+        .unwrap();
+    let detail = app
+        .add_milestone(created.id.clone(), milestone("October", "", None))
+        .unwrap();
+    let october = detail.milestones[0].id.clone();
+    assert!(detail.milestones[0].time_log.is_empty());
+
+    app.log_time(created.id.clone(), october.clone(), time("1h 30m"))
+        .unwrap();
+    let logged = app
+        .log_time(
+            created.id,
+            october,
+            TimeInput {
+                note: "Release notes".to_owned(),
+                ..time("45m")
+            },
+        )
+        .unwrap();
+
+    let log = &logged.milestones[0].time_log;
+    assert_eq!(log.len(), 2);
+    assert_eq!(
+        (log[0].duration.as_str(), log[0].note.as_str()),
+        ("0h 45m", "Release notes")
+    );
+    assert_eq!(
+        (log[1].duration.as_str(), log[1].note.as_str()),
+        ("1h 30m", "Fixes")
+    );
+    assert_eq!(log[0].date, Local::now().date_naive().to_string());
+}
+
 /// A demo project with at least one invoiced milestone
 fn invoiced_project(app: &CompterApp) -> ProjectDetail {
     app.projects(true)

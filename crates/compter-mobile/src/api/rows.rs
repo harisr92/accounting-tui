@@ -1,7 +1,7 @@
 use bigdecimal::Zero;
 use compter_core::domain::{
     Billing, ClientRegion, Milestone, MilestoneSort, MilestoneStatus, Project, ProjectSummary,
-    format_duration, state_name,
+    TimeEntry, format_duration, state_name,
 };
 
 /// One line of the project list, from the stored summary (never the full record)
@@ -141,6 +141,8 @@ pub struct MilestoneRow {
     /// The time entry undoing would remove, as `2026-10-18 · 1h 30m · note`; `None` when
     /// there is none or the milestone is no longer pending
     pub last_time: Option<String>,
+    /// Every time entry logged on it, newest logged first; empty on fixed-price projects
+    pub time_log: Vec<TimeEntryRow>,
     /// The form, filled with this milestone, to edit it
     pub edit: MilestoneInput,
 }
@@ -167,11 +169,38 @@ impl MilestoneRow {
                         note => format!("{} · {duration} · {note}", entry.date()),
                     }
                 }),
+            time_log: milestone
+                .time_entries()
+                .iter()
+                .rev()
+                .map(TimeEntryRow::from)
+                .collect(),
             edit: MilestoneInput {
                 name: milestone.name().to_owned(),
                 due_date: milestone.due_date().to_string(),
                 amount: (!hourly).then(|| milestone.amount().to_string()),
             },
+        }
+    }
+}
+
+/// Time logged on an hourly milestone: when, how long and what was done
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimeEntryRow {
+    /// `YYYY-MM-DD`
+    pub date: String,
+    /// `1h 30m`
+    pub duration: String,
+    /// What was done; may be blank
+    pub note: String,
+}
+
+impl From<&TimeEntry> for TimeEntryRow {
+    fn from(entry: &TimeEntry) -> Self {
+        Self {
+            date: entry.date().to_string(),
+            duration: format_duration(entry.minutes()),
+            note: entry.note().to_owned(),
         }
     }
 }

@@ -13,9 +13,9 @@ use super::invoice_builder::{self, BuiltInvoice, InvoicingError};
 use super::{ServiceError, chart};
 use crate::domain::{
     BusinessProfile, CREDIT_NOTE_PREFIX, Credit, CreditNote, Currency, Discount, DomainError,
-    ExchangeRate, FiscalYear, Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber, InvoiceStatus,
-    InvoiceSummary, Logo, LogoId, MilestoneId, MilestoneSort, Payment, ProfileDraft, Project,
-    ProjectId, ReturnKind, Returned,
+    ExchangeRate, FiscalYear, IncomeBasis, Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber,
+    InvoiceStatus, InvoiceSummary, Logo, LogoId, MilestoneId, MilestoneSort, Payment, ProfileDraft,
+    Project, ProjectId, ReturnKind, Returned,
 };
 use crate::storage::{
     CreditRecord, DataDir, InvoiceRepository, IssueRecord, PaymentRecord, ProjectRepository,
@@ -118,6 +118,23 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         }
         self.repo.save_profile(&profile)?;
         Ok(profile)
+    }
+
+    /// Save the profile as entered, counting income tax on `basis` from the year `from` on.
+    /// The schedule is the stored one, so earlier years keep the basis they were filed on.
+    pub fn save_profile_with_basis(
+        &mut self,
+        mut draft: ProfileDraft,
+        from: FiscalYear,
+        basis: IncomeBasis,
+    ) -> Result<BusinessProfile, ServiceError> {
+        draft.income_basis = self
+            .repo
+            .load_profile()?
+            .map(|profile| profile.income_basis().clone())
+            .unwrap_or_default();
+        draft.income_basis.set(from, basis);
+        self.save_profile(draft)
     }
 
     /// The logo new invoices are issued with

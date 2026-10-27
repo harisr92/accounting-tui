@@ -6,7 +6,7 @@ use std::str::FromStr;
 use bigdecimal::{BigDecimal, RoundingMode, ToPrimitive};
 use chrono::NaiveDate;
 
-use crate::domain::Discount;
+use crate::domain::{Discount, FiscalYear};
 
 pub type ParseResult<T> = Result<T, &'static str>;
 
@@ -64,6 +64,36 @@ pub fn duration_minutes(input: &str) -> ParseResult<u32> {
         .to_u32()
         .ok_or(INVALID)?;
     from_hours.checked_add(minutes).ok_or(INVALID)
+}
+
+/// `2026-27`, `FY 2026-27` or `2026`; blank means `default`
+pub fn fiscal_year_or(input: &str, default: FiscalYear) -> ParseResult<FiscalYear> {
+    const INVALID: &str = "financial year must look like 2026-27";
+    let input = input.trim();
+    let input = input
+        .strip_prefix("FY")
+        .or_else(|| input.strip_prefix("fy"))
+        .unwrap_or(input)
+        .trim();
+    if input.is_empty() {
+        return Ok(default);
+    }
+    let (start, end) = match input.split_once('-') {
+        Some((start, end)) => (start, Some(end)),
+        None => (input, None),
+    };
+    let start: i32 = start.parse().map_err(|_| INVALID)?;
+    if !(2000..=2999).contains(&start) {
+        return Err(INVALID);
+    }
+    if let Some(end) = end {
+        let end: i32 = end.parse().map_err(|_| INVALID)?;
+        let next = start + 1;
+        if end != next % 100 && end != next {
+            return Err("a financial year runs April to March, like 2026-27");
+        }
+    }
+    Ok(FiscalYear::starting(start))
 }
 
 /// Trimmed text, or `None` when blank

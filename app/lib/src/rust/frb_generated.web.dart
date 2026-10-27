@@ -182,6 +182,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<QuarterGstRow> dco_decode_list_quarter_gst_row(dynamic raw);
 
   @protected
+  List<TimeEntryRow> dco_decode_list_time_entry_row(dynamic raw);
+
+  @protected
   MilestoneInput dco_decode_milestone_input(dynamic raw);
 
   @protected
@@ -225,6 +228,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SyncStatusRow dco_decode_sync_status_row(dynamic raw);
+
+  @protected
+  TimeEntryRow dco_decode_time_entry_row(dynamic raw);
 
   @protected
   TimeInput dco_decode_time_input(dynamic raw);
@@ -415,6 +421,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<TimeEntryRow> sse_decode_list_time_entry_row(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   MilestoneInput sse_decode_milestone_input(SseDeserializer deserializer);
 
   @protected
@@ -460,6 +471,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SyncStatusRow sse_decode_sync_status_row(SseDeserializer deserializer);
+
+  @protected
+  TimeEntryRow sse_decode_time_entry_row(SseDeserializer deserializer);
 
   @protected
   TimeInput sse_decode_time_input(SseDeserializer deserializer);
@@ -706,6 +720,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_time_entry_row(
+    List<TimeEntryRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_milestone_input(
     MilestoneInput self,
     SseSerializer serializer,
@@ -755,6 +775,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_sync_status_row(SyncStatusRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_time_entry_row(TimeEntryRow self, SseSerializer serializer);
 
   @protected
   void sse_encode_time_input(TimeInput self, SseSerializer serializer);

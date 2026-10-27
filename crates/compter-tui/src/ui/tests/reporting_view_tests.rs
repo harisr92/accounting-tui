@@ -2,8 +2,9 @@ use crate::ui::key::Key;
 
 use crate::ui::tests::support::{go_to_year, reporting_app, screen, type_keys};
 use compter_core::demo;
-use compter_core::domain::FiscalYear;
-use compter_core::storage::{ExpenseRepository, Store};
+use compter_core::domain::{FiscalYear, IncomeBasis};
+use compter_core::services::InvoiceService;
+use compter_core::storage::{ExpenseRepository, ProjectRepository, Store};
 
 const W: u16 = 140;
 const H: u16 = 34;
@@ -51,6 +52,69 @@ fn reports_show_the_year_for_tax_and_gst() {
     assert!(
         screen.contains("tax audit (44AB)"),
         "books profit is below 44ADA income"
+    );
+}
+
+#[test]
+fn the_cash_basis_counts_fees_received_for_44ada() {
+    let store = demo::store().unwrap();
+    let mut invoices = InvoiceService::new(store.repository(), None);
+    let mut draft = invoices.profile().unwrap().unwrap().to_draft();
+    draft.income_basis.set(fy_2026(), IncomeBasis::Cash);
+    invoices.save_profile(draft).unwrap();
+    let mut app = reporting_app(&store);
+    app.handle_key(Key::Char('3'));
+    go_to_year(&mut app, 2026);
+    let screen = screen(&app, 80, H);
+    for expected in ["Receipts (cash)", "₹1,70,450.00", "₹85,225.00", "₹8,450.00"] {
+        assert!(screen.contains(expected), "missing {expected:?}\n{screen}");
+    }
+}
+
+#[test]
+fn the_year_of_a_switch_says_what_crossed_over() {
+    let store = demo::store().unwrap();
+    let repo = store.repository();
+    let website = repo
+        .list()
+        .unwrap()
+        .into_iter()
+        .find(|p| p.name() == "Website Revamp")
+        .unwrap();
+    let launch = repo
+        .load(website.id())
+        .unwrap()
+        .milestones()
+        .iter()
+        .find(|m| m.name() == "Launch")
+        .unwrap()
+        .id();
+    let mut invoices = InvoiceService::new(store.repository(), None);
+    // ₹40,000 + GST invoiced in March, on accrual, and paid in April, on cash
+    let date = |m, d| chrono::NaiveDate::from_ymd_opt(2026, m, d).unwrap();
+    let issued = invoices
+        .issue(website.id(), &[launch], date(3, 20), None, None)
+        .unwrap();
+    let paid = "47200".parse().unwrap();
+    invoices
+        .record_payment(issued.invoice.number(), date(4, 10), paid, 0.into())
+        .unwrap();
+    let mut draft = invoices.profile().unwrap().unwrap().to_draft();
+    draft.income_basis.set(fy_2026(), IncomeBasis::Cash);
+    invoices.save_profile(draft).unwrap();
+
+    let mut app = reporting_app(&store);
+    app.handle_key(Key::Char('3'));
+    go_to_year(&mut app, 2026);
+    let screen = screen(&app, 80, H);
+    assert!(
+        screen.contains("Switched to cash: ₹40,000.00 received this year"),
+        "{screen}"
+    );
+    // The 44ADA check still shows under it
+    assert!(
+        screen.contains("Books profit is below 44ADA income"),
+        "{screen}"
     );
 }
 

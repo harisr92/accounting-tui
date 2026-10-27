@@ -5,6 +5,10 @@ import '../rust/api/profile.dart';
 import 'form_dialog.dart';
 import 'project_forms.dart';
 
+/// How Reports count gross receipts for 44ADA from the year in `basis_from` on:
+/// [ProfileInput.cashBasis] is the second
+const _bases = ['Accrual (invoiced)', 'Cash (received)'];
+
 /// The business details printed on every invoice, prefilled from what is saved (or the usual
 /// SAC code and prefix the first time)
 Future<ProfileRow?> profileForm(BuildContext context, CompterApp app) async {
@@ -66,6 +70,19 @@ Future<ProfileRow?> profileForm(BuildContext context, CompterApp app) async {
         initial: input.currency,
         options: currencies,
       ),
+      FieldSpec(
+        'income_basis',
+        '44ADA basis',
+        hint: 'invoices dated in the year, or fees received in it',
+        initial: _bases[input.cashBasis ? 1 : 0],
+        options: _bases,
+      ),
+      FieldSpec(
+        'basis_from',
+        'From FY',
+        hint: 'earlier years keep theirs; switch only with your CA',
+        initial: input.basisFrom,
+      ),
     ],
     submit: (values) => app.saveProfile(
       input: ProfileInput(
@@ -77,6 +94,8 @@ Future<ProfileRow?> profileForm(BuildContext context, CompterApp app) async {
         lutArn: values['lut_arn']!,
         terms: values['terms']!.split('\n'),
         currency: values['currency']!,
+        cashBasis: values['income_basis'] == _bases[1],
+        basisFrom: values['basis_from']!,
       ),
     ),
   );

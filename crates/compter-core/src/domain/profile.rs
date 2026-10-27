@@ -3,7 +3,7 @@ use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 
 use super::error::require;
-use super::{Currency, DomainError, LogoId};
+use super::{Currency, DomainError, FiscalYear, LogoId};
 
 /// SAC for IT design and development services, the usual freelance software code
 pub const DEFAULT_SAC: &str = "998314";
@@ -33,6 +33,131 @@ pub struct ProfileDraft {
     /// Printed on new invoices; set from Settings, stored in its own table
     #[serde(default)]
     pub logo: Option<LogoId>,
+    /// How the Reports tab counts gross receipts for 44ADA, year by year
+    #[serde(default)]
+    pub income_basis: BasisSchedule,
+}
+
+/// When fees count as gross receipts for income tax: the accounting method under section 145
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IncomeBasis {
+    /// Mercantile: invoices dated in the year, whenever they are paid
+    #[default]
+    Accrual,
+    /// Fees received in the year (TDS included), whenever they were invoiced
+    Cash,
+}
+
+impl IncomeBasis {
+    pub const ALL: [Self; 2] = [Self::Accrual, Self::Cash];
+    /// Form options, in the order of [`Self::ALL`]
+    pub const LABELS: &'static [&'static str] = &["Accrual (invoiced)", "Cash (received)"];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Accrual => "accrual",
+            Self::Cash => "cash",
+        }
+    }
+
+    /// Position in [`Self::ALL`] and [`Self::LABELS`]
+    pub fn index(self) -> usize {
+        Self::ALL
+            .iter()
+            .position(|&b| b == self)
+            .unwrap_or_default()
+    }
+
+    /// The basis at `index` of [`Self::ALL`]; accrual when out of range
+    pub fn from_index(index: usize) -> Self {
+        Self::ALL.get(index).copied().unwrap_or_default()
+    }
+}
+
+/// One stored change of basis: `basis` applies from the financial year starting in `from`
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BasisChange {
+    /// Start year of the first financial year on `basis` (`2026` for 2026-27)
+    from: i32,
+    basis: IncomeBasis,
+}
+
+/// Which basis each financial year was filed on: accrual until the first change. A year keeps
+/// its basis when a later one changes, so the years already filed never move.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(from = "Vec<BasisChange>", into = "Vec<BasisChange>")]
+pub struct BasisSchedule(Vec<BasisChange>);
+
+impl From<Vec<BasisChange>> for BasisSchedule {
+    /// Sorted by year, keeping only real changes, so any stored list reads one way
+    fn from(mut changes: Vec<BasisChange>) -> Self {
+        changes.sort_by_key(|change| change.from);
+        let mut schedule = Self(Vec::with_capacity(changes.len()));
+        for change in changes {
+            schedule.0.retain(|kept| kept.from != change.from);
+            if schedule.before(change.from) != change.basis {
+                schedule.0.push(change);
+            }
+        }
+        schedule
+    }
+}
+
+impl From<BasisSchedule> for Vec<BasisChange> {
+    fn from(schedule: BasisSchedule) -> Self {
+        schedule.0
+    }
+}
+
+impl BasisSchedule {
+    /// The basis `year` is counted on
+    pub fn basis(&self, year: FiscalYear) -> IncomeBasis {
+        self.before(year.start_year() + 1)
+    }
+
+    /// Use `basis` from `from` on. Years before `from` keep theirs; later changes are dropped,
+    /// as the new basis is meant to be kept. When `from` is already on `basis` nothing changes,
+    /// so saving a form again keeps a switch planned for a later year.
+    pub fn set(&mut self, from: FiscalYear, basis: IncomeBasis) {
+        if self.basis(from) == basis {
+            return;
+        }
+        self.0.retain(|change| change.from < from.start_year());
+        if self.basis(from) != basis {
+            self.0.push(BasisChange {
+                from: from.start_year(),
+                basis,
+            });
+        }
+    }
+
+    /// Whether `year` is the first on a new basis, so invoices may cross between the two
+    pub fn switched_in(&self, year: FiscalYear) -> bool {
+        self.0.iter().any(|change| change.from == year.start_year())
+    }
+
+    /// `accrual`, or `accrual, cash from FY 2026-27`
+    pub fn describe(&self) -> String {
+        let mut text = IncomeBasis::Accrual.label().to_owned();
+        for change in &self.0 {
+            text.push_str(&format!(
+                ", {} from {}",
+                change.basis.label(),
+                FiscalYear::starting(change.from)
+            ));
+        }
+        text
+    }
+
+    /// The basis of the year before the one starting in `start_year`
+    fn before(&self, start_year: i32) -> IncomeBasis {
+        self.0
+            .iter()
+            .rev()
+            .find(|change| change.from < start_year)
+            .map_or(IncomeBasis::Accrual, |change| change.basis)
+    }
 }
 
 /// Who is issuing invoices: the freelancer's business
@@ -48,6 +173,7 @@ pub struct BusinessProfile {
     terms: Vec<String>,
     currency: Currency,
     logo: Option<LogoId>,
+    income_basis: BasisSchedule,
 }
 
 impl TryFrom<ProfileDraft> for BusinessProfile {
@@ -92,6 +218,7 @@ impl TryFrom<ProfileDraft> for BusinessProfile {
             terms: non_blank(draft.terms),
             currency: draft.currency,
             logo: draft.logo,
+            income_basis: draft.income_basis,
         })
     }
 }
@@ -145,6 +272,11 @@ impl BusinessProfile {
         self.logo
     }
 
+    /// How gross receipts are counted for 44ADA, year by year
+    pub fn income_basis(&self) -> &BasisSchedule {
+        &self.income_basis
+    }
+
     /// The profile as entered, for prefilling the Settings form
     pub fn to_draft(&self) -> ProfileDraft {
         ProfileDraft {
@@ -157,6 +289,7 @@ impl BusinessProfile {
             terms: self.terms.clone(),
             currency: self.currency,
             logo: self.logo,
+            income_basis: self.income_basis.clone(),
         }
     }
 }

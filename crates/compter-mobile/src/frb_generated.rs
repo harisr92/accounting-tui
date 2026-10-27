@@ -2712,6 +2712,18 @@ impl SseDecode for Vec<crate::api::reports::QuarterGstRow> {
     }
 }
 
+impl SseDecode for Vec<crate::api::rows::TimeEntryRow> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::rows::TimeEntryRow>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for crate::api::rows::MilestoneInput {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2737,6 +2749,7 @@ impl SseDecode for crate::api::rows::MilestoneRow {
         let mut var_logged = <Option<String>>::sse_decode(deserializer);
         let mut var_invoiceNumber = <Option<String>>::sse_decode(deserializer);
         let mut var_lastTime = <Option<String>>::sse_decode(deserializer);
+        let mut var_timeLog = <Vec<crate::api::rows::TimeEntryRow>>::sse_decode(deserializer);
         let mut var_edit = <crate::api::rows::MilestoneInput>::sse_decode(deserializer);
         return crate::api::rows::MilestoneRow {
             id: var_id,
@@ -2747,6 +2760,7 @@ impl SseDecode for crate::api::rows::MilestoneRow {
             logged: var_logged,
             invoice_number: var_invoiceNumber,
             last_time: var_lastTime,
+            time_log: var_timeLog,
             edit: var_edit,
         };
     }
@@ -2799,6 +2813,8 @@ impl SseDecode for crate::api::profile::ProfileInput {
         let mut var_lutArn = <String>::sse_decode(deserializer);
         let mut var_terms = <Vec<String>>::sse_decode(deserializer);
         let mut var_currency = <String>::sse_decode(deserializer);
+        let mut var_cashBasis = <bool>::sse_decode(deserializer);
+        let mut var_basisFrom = <String>::sse_decode(deserializer);
         return crate::api::profile::ProfileInput {
             name: var_name,
             address: var_address,
@@ -2808,6 +2824,8 @@ impl SseDecode for crate::api::profile::ProfileInput {
             lut_arn: var_lutArn,
             terms: var_terms,
             currency: var_currency,
+            cash_basis: var_cashBasis,
+            basis_from: var_basisFrom,
         };
     }
 }
@@ -2824,6 +2842,8 @@ impl SseDecode for crate::api::profile::ProfileRow {
         let mut var_lutArn = <Option<String>>::sse_decode(deserializer);
         let mut var_terms = <Vec<String>>::sse_decode(deserializer);
         let mut var_currency = <String>::sse_decode(deserializer);
+        let mut var_cashBasis = <bool>::sse_decode(deserializer);
+        let mut var_incomeBasis = <String>::sse_decode(deserializer);
         return crate::api::profile::ProfileRow {
             name: var_name,
             address: var_address,
@@ -2834,6 +2854,8 @@ impl SseDecode for crate::api::profile::ProfileRow {
             lut_arn: var_lutArn,
             terms: var_terms,
             currency: var_currency,
+            cash_basis: var_cashBasis,
+            income_basis: var_incomeBasis,
         };
     }
 }
@@ -2971,6 +2993,7 @@ impl SseDecode for crate::api::reports::ReportRow {
         let mut var_income = <Vec<crate::api::reports::FigureRow>>::sse_decode(deserializer);
         let mut var_incomeTax = <Vec<crate::api::reports::FigureRow>>::sse_decode(deserializer);
         let mut var_incomeTaxNote = <String>::sse_decode(deserializer);
+        let mut var_incomeTaxSwitch = <Option<String>>::sse_decode(deserializer);
         let mut var_incomeTaxTone = <crate::api::reports::Tone>::sse_decode(deserializer);
         let mut var_gst = <Vec<crate::api::reports::QuarterGstRow>>::sse_decode(deserializer);
         let mut var_clients = <Vec<crate::api::reports::ClientRow>>::sse_decode(deserializer);
@@ -2983,6 +3006,7 @@ impl SseDecode for crate::api::reports::ReportRow {
             income: var_income,
             income_tax: var_incomeTax,
             income_tax_note: var_incomeTaxNote,
+            income_tax_switch: var_incomeTaxSwitch,
             income_tax_tone: var_incomeTaxTone,
             gst: var_gst,
             clients: var_clients,
@@ -3018,6 +3042,20 @@ impl SseDecode for crate::api::handoff::SyncStatusRow {
             summary: var_summary,
             changed: var_changed,
             sha256: var_sha256,
+        };
+    }
+}
+
+impl SseDecode for crate::api::rows::TimeEntryRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_date = <String>::sse_decode(deserializer);
+        let mut var_duration = <String>::sse_decode(deserializer);
+        let mut var_note = <String>::sse_decode(deserializer);
+        return crate::api::rows::TimeEntryRow {
+            date: var_date,
+            duration: var_duration,
+            note: var_note,
         };
     }
 }
@@ -3694,6 +3732,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::rows::MilestoneRow {
             self.logged.into_into_dart().into_dart(),
             self.invoice_number.into_into_dart().into_dart(),
             self.last_time.into_into_dart().into_dart(),
+            self.time_log.into_into_dart().into_dart(),
             self.edit.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -3744,6 +3783,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::profile::ProfileInput {
             self.lut_arn.into_into_dart().into_dart(),
             self.terms.into_into_dart().into_dart(),
             self.currency.into_into_dart().into_dart(),
+            self.cash_basis.into_into_dart().into_dart(),
+            self.basis_from.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3772,6 +3813,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::profile::ProfileRow {
             self.lut_arn.into_into_dart().into_dart(),
             self.terms.into_into_dart().into_dart(),
             self.currency.into_into_dart().into_dart(),
+            self.cash_basis.into_into_dart().into_dart(),
+            self.income_basis.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3930,6 +3973,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::reports::ReportRow {
             self.income.into_into_dart().into_dart(),
             self.income_tax.into_into_dart().into_dart(),
             self.income_tax_note.into_into_dart().into_dart(),
+            self.income_tax_switch.into_into_dart().into_dart(),
             self.income_tax_tone.into_into_dart().into_dart(),
             self.gst.into_into_dart().into_dart(),
             self.clients.into_into_dart().into_dart(),
@@ -3990,6 +4034,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::handoff::SyncStatusRow>
     for crate::api::handoff::SyncStatusRow
 {
     fn into_into_dart(self) -> crate::api::handoff::SyncStatusRow {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::rows::TimeEntryRow {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.date.into_into_dart().into_dart(),
+            self.duration.into_into_dart().into_dart(),
+            self.note.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::rows::TimeEntryRow
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::rows::TimeEntryRow>
+    for crate::api::rows::TimeEntryRow
+{
+    fn into_into_dart(self) -> crate::api::rows::TimeEntryRow {
         self
     }
 }
@@ -4411,6 +4477,16 @@ impl SseEncode for Vec<crate::api::reports::QuarterGstRow> {
     }
 }
 
+impl SseEncode for Vec<crate::api::rows::TimeEntryRow> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::rows::TimeEntryRow>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for crate::api::rows::MilestoneInput {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4431,6 +4507,7 @@ impl SseEncode for crate::api::rows::MilestoneRow {
         <Option<String>>::sse_encode(self.logged, serializer);
         <Option<String>>::sse_encode(self.invoice_number, serializer);
         <Option<String>>::sse_encode(self.last_time, serializer);
+        <Vec<crate::api::rows::TimeEntryRow>>::sse_encode(self.time_log, serializer);
         <crate::api::rows::MilestoneInput>::sse_encode(self.edit, serializer);
     }
 }
@@ -4475,6 +4552,8 @@ impl SseEncode for crate::api::profile::ProfileInput {
         <String>::sse_encode(self.lut_arn, serializer);
         <Vec<String>>::sse_encode(self.terms, serializer);
         <String>::sse_encode(self.currency, serializer);
+        <bool>::sse_encode(self.cash_basis, serializer);
+        <String>::sse_encode(self.basis_from, serializer);
     }
 }
 
@@ -4490,6 +4569,8 @@ impl SseEncode for crate::api::profile::ProfileRow {
         <Option<String>>::sse_encode(self.lut_arn, serializer);
         <Vec<String>>::sse_encode(self.terms, serializer);
         <String>::sse_encode(self.currency, serializer);
+        <bool>::sse_encode(self.cash_basis, serializer);
+        <String>::sse_encode(self.income_basis, serializer);
     }
 }
 
@@ -4573,6 +4654,7 @@ impl SseEncode for crate::api::reports::ReportRow {
         <Vec<crate::api::reports::FigureRow>>::sse_encode(self.income, serializer);
         <Vec<crate::api::reports::FigureRow>>::sse_encode(self.income_tax, serializer);
         <String>::sse_encode(self.income_tax_note, serializer);
+        <Option<String>>::sse_encode(self.income_tax_switch, serializer);
         <crate::api::reports::Tone>::sse_encode(self.income_tax_tone, serializer);
         <Vec<crate::api::reports::QuarterGstRow>>::sse_encode(self.gst, serializer);
         <Vec<crate::api::reports::ClientRow>>::sse_encode(self.clients, serializer);
@@ -4598,6 +4680,15 @@ impl SseEncode for crate::api::handoff::SyncStatusRow {
         <String>::sse_encode(self.summary, serializer);
         <bool>::sse_encode(self.changed, serializer);
         <Option<String>>::sse_encode(self.sha256, serializer);
+    }
+}
+
+impl SseEncode for crate::api::rows::TimeEntryRow {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.date, serializer);
+        <String>::sse_encode(self.duration, serializer);
+        <String>::sse_encode(self.note, serializer);
     }
 }
 
