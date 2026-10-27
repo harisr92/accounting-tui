@@ -19,7 +19,7 @@ use compter_core::domain::{
 };
 use compter_core::services::{InvoiceService, PreferencesService};
 use compter_core::storage::Repository;
-use compter_core::storage::sync::{SyncDir, SyncSource};
+use compter_core::storage::sync::{SyncBackend, SyncSource};
 
 const HINTS: &[KeyHint] = &[
     KeyHint::new("e", "edit business details"),
@@ -61,7 +61,7 @@ pub struct SettingsView<R> {
     profile: Option<BusinessProfile>,
     appearance: Appearance,
     logo: Option<LogoInfo>,
-    sync: Option<(SyncDir, SyncSource)>,
+    sync: Option<SyncBackend>,
     modal: Option<Modal>,
 }
 
@@ -73,7 +73,7 @@ impl<R: Repository> SettingsView<R> {
         let profile = service.profile()?;
         let logo = logo_info(&service)?;
         let appearance = preferences.appearance()?;
-        let sync = preferences.sync_folder()?;
+        let sync = preferences.sync_backend()?;
         Ok(Self {
             service,
             preferences,
@@ -89,7 +89,7 @@ impl<R: Repository> SettingsView<R> {
         self.profile = self.service.profile()?;
         self.logo = logo_info(&self.service)?;
         self.appearance = self.preferences.appearance()?;
-        self.sync = self.preferences.sync_folder()?;
+        self.sync = self.preferences.sync_backend()?;
         Ok(())
     }
 
@@ -134,19 +134,14 @@ impl<R: Repository> SettingsView<R> {
         self.preferences
             .set_sync_folder(path)
             .map_err(|e| e.to_string())?;
-        self.sync = self.preferences.sync_folder().map_err(|e| e.to_string())?;
-        Ok(Notice::success(
-            match (
-                path.is_some(),
-                self.sync.as_ref().map(|(_, source)| *source),
-            ) {
-                (_, Some(SyncSource::Env)) => {
-                    "Saved, but $COMPTER_SYNC_DIR overrides it while it is set"
-                }
-                (true, _) => "Sync folder saved: compter syncs through it from the next start",
-                (false, _) => "Sync turned off from the next start",
-            },
-        ))
+        self.sync = self.preferences.sync_backend().map_err(|e| e.to_string())?;
+        Ok(Notice::success(match (path.is_some(), &self.sync) {
+            (_, Some(SyncBackend::Folder(_, SyncSource::Env))) => {
+                "Saved, but $COMPTER_SYNC_DIR overrides it while it is set"
+            }
+            (true, _) => "Sync folder saved: compter syncs through it from the next start",
+            (false, _) => "Sync turned off from the next start",
+        }))
     }
 }
 
@@ -285,11 +280,10 @@ impl<R: Repository> View for SettingsView<R> {
                 Err(error) => Action::Notify(Notice::error(error.to_string())),
             },
             Key::Char('s') => {
-                let saved = self
-                    .sync
-                    .as_ref()
-                    .filter(|(_, source)| *source == SyncSource::Settings)
-                    .map(|(dir, _)| dir.root());
+                let saved = match &self.sync {
+                    Some(SyncBackend::Folder(dir, SyncSource::Settings)) => Some(dir.root()),
+                    _ => None,
+                };
                 self.modal = Some(Modal::Sync(FolderPicker::open(
                     "Choose a folder Google Drive, OneDrive, Dropbox or iCloud syncs",
                     saved,
@@ -322,22 +316,32 @@ impl<R: Repository> View for SettingsView<R> {
     }
 }
 
-fn sync_line<'a>(sync: Option<&'a (SyncDir, SyncSource)>, theme: &Theme) -> Line<'a> {
+fn sync_line<'a>(sync: Option<&'a SyncBackend>, theme: &Theme) -> Line<'a> {
     let label = Span::styled(format!("{:<16}", "Sync folder"), theme.dim());
-    let Some((dir, source)) = sync else {
-        return Line::from(vec![
-            label,
-            Span::raw("off"),
-            Span::styled("   s picks one to share data between devices", theme.dim()),
-        ]);
-    };
-    let note = match source {
-        SyncSource::Env => "   set by $COMPTER_SYNC_DIR, which overrides s",
-        SyncSource::Settings => "   s changes it, x stops syncing; from the next start",
+    let (place, note) = match sync {
+        None => {
+            return Line::from(vec![
+                label,
+                Span::raw("off"),
+                Span::styled("   s picks one to share data between devices", theme.dim()),
+            ]);
+        }
+        Some(SyncBackend::Folder(dir, SyncSource::Env)) => (
+            dir.root().display().to_string(),
+            "   set by $COMPTER_SYNC_DIR, which overrides s",
+        ),
+        Some(SyncBackend::Folder(dir, SyncSource::Settings)) => (
+            dir.root().display().to_string(),
+            "   s changes it, x stops syncing; from the next start",
+        ),
+        Some(SyncBackend::GoogleDrive { account }) => (
+            format!("Google Drive ({account})"),
+            "   s picks a folder instead, x stops syncing",
+        ),
     };
     Line::from(vec![
         label,
-        Span::raw(dir.root().display().to_string()),
+        Span::raw(place),
         Span::styled(note, theme.dim()),
     ])
 }

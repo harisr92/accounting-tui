@@ -29,6 +29,27 @@ pub fn open(path: &Path) -> Result<(), ViewerError> {
         })
 }
 
+/// Open `url` in the default browser, without waiting for it
+pub fn open_url(url: &str) -> io::Result<()> {
+    let mut command = if cfg!(windows) {
+        // Not `start`: cmd would split the URL at its `&`s
+        let mut command = Command::new("rundll32");
+        command.arg("url.dll,FileProtocolHandler");
+        command
+    } else if cfg!(target_os = "macos") {
+        Command::new("open")
+    } else {
+        Command::new("xdg-open")
+    };
+    command
+        .arg(url)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map(drop)
+}
+
 /// `$COMPTER_OPEN`, else the platform's "open with the default app" command, waiting for a path
 fn viewer_command() -> Command {
     if let Ok(opener) = std::env::var("COMPTER_OPEN") {

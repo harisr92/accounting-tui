@@ -9,7 +9,11 @@ use color_eyre::eyre::{WrapErr, eyre};
 
 use compter_core::services::ProjectService;
 use compter_core::services::merge_import::{self, WorkSession};
-use compter_core::storage::Store;
+use compter_core::storage::sync::{self, SyncBackend};
+use compter_core::storage::{DataDir, Store};
+
+use crate::drive::{self, DriveFolder};
+use crate::viewer;
 
 /// Add a milestone per merge into the main branch of `repo` to the hourly project `project`
 pub fn import_merges(store: &Store, repo: &Path, project: &str, dry_run: bool) -> Result<()> {
@@ -84,4 +88,36 @@ fn total_minutes(sessions: &[WorkSession]) -> u32 {
 
 fn hours(minutes: u32) -> String {
     format!("{}:{:02}", minutes / 60, minutes % 60)
+}
+
+/// Sign in to Google in the browser and sync this computer through Google Drive from now on.
+/// A Drive with no snapshot yet gets this computer's, so the phone finds one.
+pub fn drive_sign_in(data: &DataDir, device_name: &str) -> Result<()> {
+    let client = drive::Client::from_build()?;
+    let account = drive::sign_in(&client, |url| {
+        println!("Opening Google sign-in in your browser. If it doesn't open, visit:\n\n{url}\n");
+        // The URL is printed for when there is no browser to open
+        let _ = viewer::open_url(url);
+    })?;
+    SyncBackend::save_google_drive(data, Some(&account))?;
+    println!("signed in as {account}; compter syncs through Google Drive from the next start");
+    let folder = DriveFolder::new(client, &account);
+    if let Some(generation) = sync::seed(data, &folder, device_name)
+        .wrap_err("could not publish to Google Drive; your data is safe on this computer")?
+    {
+        println!("published snapshot {generation} to Google Drive");
+    }
+    Ok(())
+}
+
+/// Stop syncing through Google Drive and forget the sign-in on this computer
+pub fn drive_sign_out(data: &DataDir) -> Result<()> {
+    let Some(SyncBackend::GoogleDrive { account }) = SyncBackend::configured(data, None)? else {
+        println!("this computer doesn't sync through Google Drive");
+        return Ok(());
+    };
+    drive::sign_out(&account)?;
+    SyncBackend::save_google_drive(data, None)?;
+    println!("signed out of {account}; sync is off until you set it up again");
+    Ok(())
 }

@@ -14,10 +14,13 @@ use ratatui::crossterm::{cursor, execute};
 
 use compter_core::demo;
 use compter_core::services::{ExpenseService, InvoiceService, PreferencesService, ReportService};
-use compter_core::storage::sync::{self, Resolution, SyncDir, SyncSession};
+use compter_core::storage::sync::{
+    self, Resolution, SyncBackend, SyncDir, SyncFolder, SyncSession,
+};
 use compter_core::storage::{DataDir, Store};
 use compter_tui::app::App;
 use compter_tui::cli;
+use compter_tui::drive::{self, DriveFolder};
 use compter_tui::event::{Event, Events};
 use compter_tui::ui::views::{
     DashboardView, ExpensesView, InvoicesView, ProjectsView, ReportsView, SettingsView,
@@ -33,6 +36,7 @@ const TICK_RATE: Duration = Duration::from_millis(250);
 const USAGE: &str = "usage: compter [--demo] [-V | --version] [-h | --help]
        compter import-merges <repo> <project> [--dry-run]
        compter sync (--keep-local | --keep-remote)
+       compter drive (sign-in | sign-out)
 
   --demo           try compter on sample projects kept in memory; nothing is saved
   -V, --version    display version information
@@ -42,12 +46,14 @@ const USAGE: &str = "usage: compter [--demo] [-V | --version] [-h | --help]
                    of a git repository, timed from the previous merge (8h at most across days)
   sync             settle a conflict between devices: publish this device's data, or replace it
                    with the synced snapshot (the old file is kept as compter.conflict-*.redb)
+  drive            sync through Google Drive: sign in to Google in the browser, or sign out
 
 Data is stored in $COMPTER_HOME, $XDG_DATA_HOME/compter, or else %APPDATA%\\compter on Windows
 and ~/.local/share/compter elsewhere.
 
-To use several devices, set a sync folder in Settings (s) to a folder Google Drive, OneDrive,
-Dropbox or iCloud syncs; $COMPTER_SYNC_DIR overrides it. compter publishes a snapshot there on exit and picks up a newer one on start;
+To use several devices, run `compter drive sign-in` (the phone app syncs the same way), or set a
+sync folder in Settings (s) to a folder OneDrive, Dropbox or iCloud syncs; $COMPTER_SYNC_DIR
+overrides both. compter publishes a snapshot there on exit and picks up a newer one on start;
 quit compter on one device before opening it on another.";
 
 fn main() -> Result<ExitCode> {
@@ -57,6 +63,9 @@ fn main() -> Result<ExitCode> {
     }
     if args.first().map(String::as_str) == Some("sync") {
         return resolve_sync(&args[1..]);
+    }
+    if args.first().map(String::as_str) == Some("drive") {
+        return google_drive(&args[1..]);
     }
     let mut demo_mode = false;
     for arg in &args {
@@ -171,15 +180,43 @@ fn resolve_sync(args: &[String]) -> Result<ExitCode> {
         }
     };
     let dir = DataDir::from_env()?;
-    let Some((sync_dir, _)) = SyncDir::configured(&dir, SyncDir::from_env())? else {
+    let Some(folder) = sync_folder(&dir)? else {
         eprintln!(
-            "no sync folder is set (Settings, or $COMPTER_SYNC_DIR), so there is nothing to sync"
+            "no sync folder is set (Settings, `compter drive sign-in`, or $COMPTER_SYNC_DIR), so there is nothing to sync"
         );
         return Ok(ExitCode::from(2));
     };
-    SyncSession::resolve(&dir, &sync_dir, &sync::device_name_from_env(), resolution)?;
-    println!("synced with {}", sync_dir.root().display());
+    SyncSession::resolve(&dir, &*folder, &sync::device_name_from_env(), resolution)?;
+    println!("synced with {}", folder.place());
     Ok(ExitCode::SUCCESS)
+}
+
+/// `compter drive (sign-in | sign-out)`
+fn google_drive(args: &[String]) -> Result<ExitCode> {
+    let dir = DataDir::from_env()?;
+    match args {
+        [command] if command == "sign-in" => {
+            cli::drive_sign_in(&dir, &sync::device_name_from_env())?
+        }
+        [command] if command == "sign-out" => cli::drive_sign_out(&dir)?,
+        _ => {
+            eprintln!("drive needs sign-in or sign-out\n\n{USAGE}");
+            return Ok(ExitCode::from(2));
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Where this device syncs through, when it syncs
+fn sync_folder(dir: &DataDir) -> Result<Option<Box<dyn SyncFolder>>> {
+    Ok(match SyncBackend::configured(dir, SyncDir::from_env())? {
+        None => None,
+        Some(SyncBackend::Folder(sync_dir, _)) => Some(Box::new(sync_dir)),
+        Some(SyncBackend::GoogleDrive { account }) => Some(Box::new(DriveFolder::new(
+            drive::Client::from_build()?,
+            account,
+        ))),
+    })
 }
 
 /// An open database, with the sync session that must publish it on exit
@@ -201,8 +238,8 @@ fn open_store(demo_mode: bool) -> Result<Opened> {
         });
     }
     let dir = DataDir::from_env()?;
-    let sync = SyncDir::configured(&dir, SyncDir::from_env())?
-        .map(|(sync_dir, _)| SyncSession::begin(&dir, sync_dir, sync::device_name_from_env()))
+    let sync = sync_folder(&dir)?
+        .map(|folder| SyncSession::begin(&dir, folder, sync::device_name_from_env()))
         .transpose()?;
     let store = Store::open(&dir)
         .wrap_err_with(|| format!("could not open {}", dir.database_path().display()))?;
