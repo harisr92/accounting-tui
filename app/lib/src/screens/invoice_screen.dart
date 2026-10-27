@@ -8,6 +8,7 @@ import '../rust/api/error.dart';
 import '../rust/api/invoicing.dart';
 import '../ui/collapsing_fab.dart';
 import '../ui/figures.dart';
+import '../ui/glass.dart';
 import '../ui/large_title.dart';
 import '../ui/record_tile.dart';
 import '../ui/section.dart';
@@ -30,6 +31,7 @@ class InvoiceScreen extends ConsumerWidget {
     return LargeTitleScope(
       child: FabScrollScope(
         child: Scaffold(
+          extendBodyBehindAppBar: true,
           appBar: TitleBar(title: number),
           body: invoice.when(
             loading: () => const Center(child: CircularProgressIndicator()),
@@ -166,8 +168,8 @@ class _InvoiceBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final totalInr = invoice.totalInr;
     final discount = invoice.discount;
-    return ListView(
-      padding: const EdgeInsets.only(bottom: gutter),
+    return ScreenList(
+      bottom: gutter,
       children: [
         LargeTitle(
           icon: Icons.receipt_long,

@@ -10,6 +10,7 @@ import '../ui/action_sheet.dart';
 import '../ui/collapsing_fab.dart';
 import '../ui/empty_state.dart';
 import '../ui/figures.dart';
+import '../ui/glass.dart';
 import '../ui/large_title.dart';
 import '../ui/record_tile.dart';
 import '../ui/search.dart';
@@ -34,6 +35,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
     return LargeTitleScope(
       child: FabScrollScope(
         child: Scaffold(
+          extendBodyBehindAppBar: true,
           appBar: searchAppBar(
             title: 'Expenses',
             hint: 'Description or category',
@@ -46,8 +48,8 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
                 list.expenses,
                 (expense) => [expense.description, expense.category],
               );
-              return ListView(
-                padding: const EdgeInsets.only(bottom: 96),
+              return ScreenList(
+                bottom: 96,
                 children: [
                   const LargeTitle(
                     icon: Icons.account_balance_wallet,

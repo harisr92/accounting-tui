@@ -11,6 +11,7 @@ import 'screens/projects_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
 import 'sync/sync_controller.dart';
+import 'ui/glass.dart';
 
 /// Where invoice [number] opens. Numbers hold slashes (`INV/26-27/004`), so they are encoded.
 String invoicePath(String number) => '/invoices/${Uri.encodeComponent(number)}';
@@ -102,8 +103,9 @@ GoRouter buildRouter() {
 }
 
 /// The tab bar, iOS style: small labels under the icons, the current tab in the theme's colour,
-/// a hairline above. It also starts automatic sync once the app is up, and badges Settings when
-/// sync needs the user (sign in, choose a folder, settle a conflict).
+/// a hairline above, on [Glass] with the screens scrolling under it. It also starts automatic
+/// sync once the app is up, and badges Settings when sync needs the user (sign in, choose a
+/// folder, settle a conflict).
 class _Tabs extends ConsumerStatefulWidget {
   const _Tabs(this.shell);
 
@@ -130,13 +132,28 @@ class _TabsState extends ConsumerState<_Tabs> {
     );
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      body: shell,
+      extendBody: true,
+      // The body's padding now counts the tab bar; its view padding too, so a screen's floating
+      // button, which keeps clear of the view padding, sits above the bar rather than under it
+      body: Builder(
+        builder: (context) {
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            data: media.copyWith(
+              viewPadding: media.viewPadding.copyWith(
+                bottom: media.padding.bottom,
+              ),
+            ),
+            child: shell,
+          );
+        },
+      ),
       bottomNavigationBar: CupertinoTabBar(
         currentIndex: shell.currentIndex,
         // A second tap on the current tab goes back to its list
         onTap: (i) =>
             shell.goBranch(i, initialLocation: i == shell.currentIndex),
-        backgroundColor: scheme.surface,
+        backgroundColor: Glass.tint(scheme),
         activeColor: scheme.primary,
         inactiveColor: scheme.onSurfaceVariant,
         border: Border(

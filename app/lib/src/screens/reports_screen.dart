@@ -8,6 +8,7 @@ import '../rust/api/reports.dart';
 import '../ui/action_sheet.dart';
 import '../ui/collapsing_fab.dart';
 import '../ui/figures.dart';
+import '../ui/glass.dart';
 import '../ui/large_title.dart';
 import '../ui/record_tile.dart';
 import '../ui/section.dart';
@@ -26,13 +27,14 @@ class ReportsScreen extends ConsumerWidget {
     return LargeTitleScope(
       child: FabScrollScope(
         child: Scaffold(
+          extendBodyBehindAppBar: true,
           appBar: const TitleBar(title: 'Reports'),
           body: report.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (error, _) => Center(child: Text('$error')),
-            data: (report) => RefreshIndicator(
+            data: (report) => _ReportBody(
+              report,
               onRefresh: () => ref.refresh(reportProvider(year).future),
-              child: _ReportBody(report),
             ),
           ),
           floatingActionButton: report.value == null
@@ -88,9 +90,10 @@ class ReportsScreen extends ConsumerWidget {
 }
 
 class _ReportBody extends StatelessWidget {
-  const _ReportBody(this.report);
+  const _ReportBody(this.report, {required this.onRefresh});
 
   final ReportRow report;
+  final RefreshCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -103,8 +106,9 @@ class _ReportBody extends StatelessWidget {
     List<(String, String)> figures(List<FigureRow> rows) => [
       for (final f in rows) (f.label, f.value),
     ];
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 96),
+    return ScreenList(
+      onRefresh: onRefresh,
+      bottom: 96,
       children: [
         const LargeTitle(
           icon: Icons.insights,

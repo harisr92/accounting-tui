@@ -1,5 +1,6 @@
 import 'package:compter/src/compter.dart';
 import 'package:compter/src/year_picker.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,7 +13,8 @@ class _Year2026 extends YearNotifier {
 }
 
 /// Every screen on a small phone with large text: nothing overflows (an overflow fails the
-/// test), and each screen's one primary action sits in the bottom third, within thumb's reach.
+/// test), and each screen's one primary action sits in the bottom third, within thumb's reach,
+/// above the glass tab bar that the list scrolls under.
 void main() {
   setUpAll(initRust);
 
@@ -39,6 +41,13 @@ void main() {
     final height =
         tester.view.physicalSize.height / tester.view.devicePixelRatio;
     expect(tester.getCenter(fab).dy, greaterThan(height * 2 / 3));
+    final tabs = find.byType(CupertinoTabBar);
+    if (tabs.evaluate().isNotEmpty) {
+      expect(
+        tester.getBottomLeft(fab).dy,
+        lessThanOrEqualTo(tester.getTopLeft(tabs).dy),
+      );
+    }
   }
 
   Future<void> openTab(WidgetTester tester, IconData icon) async {
@@ -49,6 +58,14 @@ void main() {
   testWidgets('projects and a project', (tester) async {
     await onSmallPhone(tester);
     expectPrimaryInReach(tester, 'New project');
+    // The list scrolls under the glass bars but starts below the header and ends above the tabs
+    final list = find.byType(ListView).last;
+    final header = tester.getBottomLeft(find.byType(AppBar).last).dy;
+    expect(
+      tester.getTopLeft(find.byIcon(Icons.work).first).dy,
+      greaterThan(header),
+    );
+    expect(tester.getTopLeft(list).dy, lessThan(header));
 
     await tester.tap(find.text('Website Revamp'));
     await settle(tester);

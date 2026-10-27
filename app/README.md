@@ -16,6 +16,9 @@ lib/src/handoff.dart       picking and staging the snapshot and manifest carried
                            computer's sync folder (see "Phones" in the main README)
 lib/src/sync/              automatic sync through Google Drive (see "Google Drive sync")
 lib/src/year_picker.dart   the financial year a tab shows, stepped like [ and ] in the terminal
+lib/src/appearance.dart    the theme this phone draws in (like the phone, light, dark, gruvbox
+                           dark), kept in its preferences
+lib/src/ui/glass.dart      the frosted header and tab bar, and ScreenList, which scrolls under them
 lib/src/rust/              generated bindings: never edit, re-run codegen
 hook/build.dart            builds ../crates/compter-mobile whenever Flutter builds (see below)
 ios/fastlane, android/fastlane   store uploads, run by the release workflow (see Releasing)
