@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-/// One folder in a cloud drive, holding the files compter's sync folder holds
+/// The app's own hidden folder in a cloud drive, holding the files compter's sync folder holds
 /// (`compter.redb`, `manifest.json`, `lease.json`). The sync engine only reads and writes
 /// whole files by name, so tests use an in-memory folder.
 abstract interface class CloudFolder {
@@ -14,10 +14,7 @@ abstract interface class CloudFolder {
   Future<void> delete(String name);
 }
 
-/// A folder the user can choose as the sync folder
-typedef CloudFolderChoice = ({String id, String path});
-
-/// The account behind the cloud drive: signing in and finding folders. Google Drive is the
+/// The account behind the cloud drive: signing in, and its app folder. Google Drive is the
 /// one there is; tests use a fake.
 abstract interface class CloudAccount {
   /// Who is signed in, or `null`. Tries the last session without showing anything.
@@ -28,14 +25,8 @@ abstract interface class CloudAccount {
 
   Future<void> signOut();
 
-  /// Folders that already hold a `manifest.json`: compter's sync folders
-  Future<List<CloudFolderChoice>> findSyncFolders();
-
-  /// A new `compter-sync` folder at the top of the drive
-  Future<CloudFolderChoice> createSyncFolder();
-
-  /// The folder with [id], to sync through
-  CloudFolder folder(String id);
+  /// The app's hidden folder, which compter on the computer signs in to as well
+  CloudFolder folder();
 }
 
 /// The cloud can't be reached: offline, or Google is down. Nothing is lost; sync retries.

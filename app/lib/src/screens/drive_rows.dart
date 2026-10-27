@@ -2,17 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../notice.dart';
-import '../sync/cloud.dart';
 import '../sync/sync_controller.dart';
-import '../ui/action_sheet.dart';
 
-/// Automatic sync through Google Drive: where it stands, the account, the folder, and what
-/// the user may need to do (sign in, choose a folder, settle a conflict)
+/// Automatic sync through Google Drive: where it stands, the account, and what the user may
+/// need to do (sign in, settle a conflict)
 class DriveRows extends ConsumerWidget {
-  const DriveRows({super.key, required this.folderPath});
-
-  /// The chosen folder, as `My Drive/compter-sync`
-  final String? folderPath;
+  const DriveRows({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -41,18 +36,12 @@ class DriveRows extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.login),
             title: const Text('Sign in to Google'),
-            subtitle: const Text('To reach the sync folder in your Drive'),
+            subtitle: const Text('compter keeps its files in a hidden folder'),
             onTap: () => _signIn(context, ref),
           )
         else ...[
           ListTile(
-            leading: const Icon(Icons.folder_outlined),
-            title: const Text('Sync folder'),
-            subtitle: Text(folderPath ?? 'Not chosen yet'),
-            onTap: () => _chooseFolder(context, ref),
-          ),
-          ListTile(
-            enabled: folderPath != null && phase != SyncPhase.syncing,
+            enabled: phase != SyncPhase.syncing,
             leading: const Icon(Icons.sync),
             title: const Text('Sync now'),
             onTap: controller.syncNow,
@@ -91,54 +80,6 @@ class DriveRows extends ConsumerWidget {
       if (context.mounted) {
         notify(context, 'Sign-in failed: $error', error: true);
       }
-    }
-  }
-
-  /// Folders that already hold compter's files, or a new one
-  Future<void> _chooseFolder(BuildContext context, WidgetRef ref) async {
-    final account = ref.read(cloudAccountProvider);
-    final List<CloudFolderChoice> found;
-    try {
-      found = await account.findSyncFolders();
-    } on Exception catch (error) {
-      if (context.mounted) notify(context, '$error', error: true);
-      return;
-    }
-    if (!context.mounted) return;
-    const create = (id: '', path: '');
-    final choice = await showActionSheet<CloudFolderChoice>(
-      context,
-      title: 'Sync folder',
-      subtitle: found.isEmpty
-          ? 'No folder in your Drive holds compter’s files yet'
-          : 'Folders holding compter’s files',
-      actions: [
-        for (final folder in found)
-          (icon: Icons.folder_outlined, label: folder.path, value: folder),
-        (
-          icon: Icons.create_new_folder_outlined,
-          label: 'New folder: My Drive/compter-sync',
-          value: create,
-        ),
-      ],
-    );
-    if (choice == null || !context.mounted) return;
-    final controller = ref.read(syncControllerProvider.notifier);
-    try {
-      if (choice == create) {
-        final made = await account.createSyncFolder();
-        await controller.useFolder(made);
-        if (context.mounted) {
-          notify(
-            context,
-            'Made ${made.path}. Point compter on your computer at it.',
-          );
-        }
-      } else {
-        await controller.useFolder(choice);
-      }
-    } on Exception catch (error) {
-      if (context.mounted) notify(context, '$error', error: true);
     }
   }
 }

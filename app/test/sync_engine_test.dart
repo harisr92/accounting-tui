@@ -76,8 +76,6 @@ void main() {
     final controller = container.read(syncControllerProvider.notifier);
     await container.read(syncSettingsProvider.notifier).save((
       method: SyncMethod.googleDrive,
-      folderId: 'sync',
-      folderPath: 'My Drive/compter-sync',
     ));
     await controller.start();
     return (container, controller);
@@ -222,26 +220,4 @@ void main() {
       expect(folder.json(manifestFile)['generation'], 2);
     },
   );
-
-  test('without a folder chosen, Settings asks for one', () async {
-    useMemoryPreferences();
-    final phone = await open('phone');
-    final container = ProviderContainer(
-      overrides: [
-        compterProvider.overrideWithValue(phone),
-        cloudAccountProvider.overrideWithValue(FakeAccount(FakeFolder())),
-      ],
-    );
-    addTearDown(container.dispose);
-    await container.read(syncSettingsProvider.notifier).save((
-      method: SyncMethod.googleDrive,
-      folderId: null,
-      folderPath: null,
-    ));
-
-    await container.read(syncControllerProvider.notifier).start();
-
-    expect(phase(container), SyncPhase.noFolder);
-    expect(container.read(syncControllerProvider).needsAttention, isTrue);
-  });
 }

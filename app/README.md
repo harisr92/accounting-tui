@@ -73,7 +73,8 @@ version, and `targets` must list every platform built for, the host included.
 ## Google Drive sync
 
 Settings → Sync method → **Google Drive, automatic** keeps the phone and compter on a computer
-in step through the computer's sync folder in Google Drive (`lib/src/sync/`):
+in step through compter's hidden app folder in Google Drive (`lib/src/sync/`). The computer
+signs in to the same Cloud project with `compter drive sign-in`, so both see that one folder:
 
 - On opening and on every return to the app, the phone takes the computer's newer snapshot and
   writes its own `lease.json`, so compter on the computer waits until the phone is put away.
@@ -82,17 +83,17 @@ in step through the computer's sync folder in Google Drive (`lib/src/sync/`):
 - If compter is open on the computer, the phone takes nothing over it and sends nothing until
   it closes. If both sides changed, Settings (badged) asks which to keep.
 
-It needs the full `drive` permission: the narrower `drive.file` can't read the `compter.redb`
-that the computer's Drive client uploaded. Google calls that scope restricted. For your own use,
-keep the OAuth app in **Testing** with yourself as a test user; sign-in then lapses after 7 days
-and Settings asks again. Publishing it to others needs Google's verification and a paid
-security assessment.
+It needs only `drive.appdata`, the app's own hidden folder, which Google lists as non-sensitive:
+publishing needs basic verification, with no security assessment. The files never show in the
+Drive UI, so nobody moves or renames them by accident. In **Testing**, sign-in lapses after
+7 days and Settings asks again.
 
 ### One-time setup
 
 1. In Google Cloud: a project, with the **Google Drive API** enabled.
-2. OAuth consent screen: External, publishing status **Testing**, your account as a test
-   user, scope `https://www.googleapis.com/auth/drive`.
+2. OAuth consent screen: External, your account as a test user while in **Testing**, scope
+   `https://www.googleapis.com/auth/drive.appdata` (and `openid`, `email`). Not the full
+   `.../auth/drive`: it is restricted and needs a yearly CASA assessment.
 3. OAuth clients (Credentials → Create credentials → OAuth client ID):
    - **iOS**, bundle ID `app.compter`. Copy `ios/Flutter/Google.xcconfig.example` to
      `ios/Flutter/Google.xcconfig` (gitignored) and fill in its client ID and reversed ID.
@@ -104,9 +105,12 @@ security assessment.
      SHA-1). Android's sign-in needs its client ID, passed when building:
      `flutter run --dart-define=COMPTER_GOOGLE_SERVER_CLIENT_ID=<web client ID>`. Passing the
      Android client's ID instead fails with "Developer console is not set up correctly".
-4. On the computer, set compter's sync folder (Settings → `s`) to the local Google Drive copy
-   of the folder the phone uses, e.g. `~/Library/CloudStorage/GoogleDrive-you@example.com/My
-   Drive/compter-sync`.
+   - **Desktop app**, in the same project, for compter on the computer. Build it with
+     `COMPTER_GOOGLE_DESKTOP_CLIENT_ID` and `COMPTER_GOOGLE_DESKTOP_CLIENT_SECRET` set (an
+     installed app's secret isn't secret; Google still asks for it). Release builds read
+     them from the repository secrets of the same names; a `v*` tag fails without them.
+4. On the computer, run `compter drive sign-in` with the same Google account. It keeps the
+   grant in the OS keychain and, if the Drive has no snapshot yet, publishes the computer's.
 
 
 
