@@ -1,4 +1,5 @@
 use crate::domain::{Appearance, BusinessProfile, Logo, LogoId, ProfileDraft};
+use crate::storage::tables::{APPEARANCE_KEY, SETTINGS};
 use crate::storage::{SettingsRepository, Store};
 
 const PNG_HEADER: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR";
@@ -59,4 +60,19 @@ fn the_theme_is_dark_until_one_is_saved() {
     assert_eq!(repo.load_appearance().unwrap(), Appearance::Light);
     // It is kept apart from the business profile
     assert!(repo.load_profile().unwrap().is_none());
+}
+
+#[test]
+fn a_theme_from_a_newer_build_falls_back_to_dark() {
+    let store = Store::in_memory().unwrap();
+    let txn = store.database().begin_write().unwrap();
+    txn.open_table(SETTINGS)
+        .unwrap()
+        .insert(APPEARANCE_KEY, br#""solarized""#.as_slice())
+        .unwrap();
+    txn.commit().unwrap();
+    assert_eq!(
+        store.repository().load_appearance().unwrap(),
+        Appearance::Dark
+    );
 }

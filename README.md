@@ -26,7 +26,7 @@ Tab focus · j/k move · n new · i invoice · 1-9/←→ tabs · ? help · q qu
 
 ## Status
 
-**All 7 steps are done.** Track projects, milestones and hours, and archive finished projects. Issue GST tax invoices, export invoices under LUT or plain invoices as PDFs, record payments including TDS, and correct invoices with credit notes. Record and edit business expenses. See each financial year for income tax (44ADA and regular books) and GST, and export the quarterly GSTR-1 and the monthly IFF. Search the project, invoice and expense lists, and pick a dark, light or monochrome theme. Everything is posted to an accounting-core ledger and saved as you go.
+**All 7 steps are done.** Track projects, milestones and hours, and archive finished projects. Issue GST tax invoices, export invoices under LUT or plain invoices as PDFs, record payments including TDS, and correct invoices with credit notes. Record and edit business expenses. See each financial year for income tax (44ADA and regular books) and GST, and export the quarterly GSTR-1 and the monthly IFF. Search the project, invoice and expense lists, and pick a dark, light, gruvbox dark or monochrome theme. Everything is posted to an accounting-core ledger and saved as you go.
 
 ## Build and run
 
@@ -83,7 +83,7 @@ Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Un
 
 **Reports tab**: `[`/`]` change the year, `g` exports the GSTR-1 for a quarter, `i` exports a month's IFF. See [Reports](#reports).
 
-**Settings tab**: `e` edits your business details: name, address, GSTIN, SAC code, invoice prefix, LUT ARN, and terms such as bank details. They must be filled in before the first invoice. `l` sets a logo (path to a PNG or JPEG under 1 MB; blank removes it), printed at the top left of new invoices. `t` switches the theme: dark, light (for light terminal backgrounds) or monochrome. The choice is saved. `s` opens a folder browser to pick the folder this device syncs through, and `x` stops syncing (see [Using several devices](#using-several-devices)). With [`NO_COLOR`](https://no-color.org) set, every theme is drawn without colour.
+**Settings tab**: `e` edits your business details: name, address, GSTIN, SAC code, invoice prefix, LUT ARN, and terms such as bank details. They must be filled in before the first invoice. `l` sets a logo (path to a PNG or JPEG under 1 MB; blank removes it), printed at the top left of new invoices. `t` switches the theme: dark, light (for light terminal backgrounds), gruvbox dark (needs a true-colour terminal) or monochrome. The choice is saved. `s` opens a folder browser to pick the folder this device syncs through, and `x` stops syncing (see [Using several devices](#using-several-devices)). With [`NO_COLOR`](https://no-color.org) set, every theme is drawn without colour.
 
 **Forms**: type to edit, `Backspace` deletes, `Ctrl-u` clears the field. `Tab`/`↓` and `Shift-Tab`/`↑` move between fields, and `Space`/`←→` change a choice. `Enter` saves and `Esc` cancels. If something is wrong, the form stays open with the reason shown in red and your input kept.
 
@@ -305,7 +305,7 @@ crates/compter-tui/src/   the `compter_tui` crate: the terminal app
 └── ui/
     ├── mod.rs           draw(): header / body / footer, help overlay
     ├── view.rs          View trait (render, keys, hints, on_activate), Action, Notice
-    ├── theme.rs         every colour and style: dark, light and monochrome
+    ├── theme.rs         every colour and style: dark, light, gruvbox dark and monochrome
     ├── filter.rs        Filter: the `/` search shared by the list tabs
     ├── widgets.rs       panel, modal, money, duration, status_span
     ├── selection.rs     wrap-around Selection and j/k Nav
