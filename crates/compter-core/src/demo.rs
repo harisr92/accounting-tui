@@ -6,8 +6,8 @@ use chrono::NaiveDate;
 use accounting_core::StateCode;
 
 use crate::domain::{
-    Billing, ClientDetails, ClientRegion, Currency, DEFAULT_SAC, DomainError, ExchangeRate,
-    ExpenseCategory, MilestoneId, ProfileDraft, Project, TimeEntry,
+    BasisSchedule, Billing, ClientDetails, ClientRegion, Currency, DEFAULT_SAC, DomainError,
+    ExchangeRate, ExpenseCategory, MilestoneId, ProfileDraft, Project, TimeEntry,
 };
 use crate::services::{ExpenseDraft, ExpenseService, InvoiceService, ServiceError};
 use crate::storage::{ProjectRepository, Store};
@@ -92,6 +92,7 @@ fn profile(gstin: Option<&str>) -> ProfileDraft {
         ],
         currency: Currency::Inr,
         logo: None,
+        income_basis: BasisSchedule::default(),
     }
 }
 

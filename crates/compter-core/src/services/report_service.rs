@@ -23,7 +23,12 @@ impl<R: InvoiceRepository + ExpenseRepository + SettingsRepository> ReportServic
     }
 
     pub fn year(&self, year: FiscalYear) -> Result<YearReport, ServiceError> {
-        let mut builder = YearReportBuilder::new(year);
+        let basis = self
+            .repo
+            .load_profile()?
+            .map(|profile| profile.income_basis().clone())
+            .unwrap_or_default();
+        let mut builder = YearReportBuilder::new(year, basis);
         self.repo
             .scan_invoices(&mut |invoice| builder.add_invoice(&invoice))?;
         self.repo

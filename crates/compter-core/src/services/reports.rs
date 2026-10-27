@@ -1,12 +1,13 @@
 //! A financial year in numbers: income, 44ADA vs books, GST by quarter, TDS and clients.
 //! Pure: built from invoices and expenses, no storage.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use bigdecimal::{BigDecimal, Zero};
 
 use crate::domain::{
-    CreditNote, Expense, ExpenseCategory, FiscalYear, Invoice, InvoiceKind, Quarter, ReturnKind,
+    BasisSchedule, CreditNote, Currency, Expense, ExpenseCategory, FiscalYear, IncomeBasis,
+    Invoice, InvoiceAmounts, InvoiceKind, Quarter, ReturnKind,
 };
 
 /// Share of gross receipts deemed to be profit under section 44ADA
@@ -62,10 +63,27 @@ pub struct ClientYear {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct YearReport {
     pub year: FiscalYear,
+    /// The year's basis for income tax, from the business profile's schedule
+    pub basis: IncomeBasis,
     pub invoice_count: usize,
     /// Taxable value of invoices dated in the year, less credit notes dated in it: the gross
     /// receipts for income tax
     pub gross_receipts: BigDecimal,
+    /// The gross receipts 44ADA takes 50% of. Each invoice counts once, on the basis of the
+    /// year it is dated in: on accrual its taxable value counts in that year (less credit notes,
+    /// in theirs), on cash the fee part (excl. GST, TDS included) of each payment counts in the
+    /// year it arrives (less refunds and TDS reversed, in theirs), whatever basis that later
+    /// year is on. Foreign payments count the rupees banked.
+    pub tax_receipts: BigDecimal,
+    /// Fee part of payments dated in this accrual year on invoices from earlier cash years:
+    /// never counted when invoiced, so in `tax_receipts` here
+    pub carried_in: BigDecimal,
+    /// Fee part of payments dated in this cash year on invoices from earlier accrual years:
+    /// counted when invoiced, so left out of `tax_receipts`
+    pub already_counted: BigDecimal,
+    /// The part of `exchange_difference` on invoices counted on accrual, a gain on top of their
+    /// taxable value. Invoices counted on cash already count the rupees banked.
+    pub accrual_exchange: BigDecimal,
     /// Taxable value taken back by credit notes dated in the year (already out of
     /// `gross_receipts`)
     pub credited: BigDecimal,
@@ -94,17 +112,49 @@ pub struct YearReport {
 impl YearReport {
     /// Income under 44ADA: 50% of gross receipts
     pub fn presumptive_income(&self) -> BigDecimal {
-        (&self.gross_receipts * BigDecimal::from(PRESUMPTIVE_PERCENT) / BigDecimal::from(100))
+        (&self.tax_receipts * BigDecimal::from(PRESUMPTIVE_PERCENT) / BigDecimal::from(100))
             .with_scale_round(2, bigdecimal::RoundingMode::HalfUp)
     }
 
     /// Profit from the books: gross receipts and exchange gains less expenses
     pub fn books_profit(&self) -> BigDecimal {
-        &self.gross_receipts + &self.exchange_difference - &self.expenses
+        &self.tax_receipts + &self.accrual_exchange - &self.expenses
     }
 
     pub fn within_presumptive_limit(&self) -> bool {
-        self.gross_receipts <= PRESUMPTIVE_LIMIT_RUPEES
+        self.tax_receipts <= PRESUMPTIVE_LIMIT_RUPEES
+    }
+
+    /// In the first year on a new basis, what crossed over from the old one, so the invoices
+    /// at the boundary can be checked; `None` when nothing did
+    pub fn switch_note(&self) -> Option<String> {
+        let rupees = |amount: &BigDecimal| Currency::Inr.display(amount);
+        if !self.already_counted.is_zero() {
+            Some(format!(
+                "Switched to cash: {} received this year is left out, its invoices were counted on accrual when issued",
+                rupees(&self.already_counted)
+            ))
+        } else if !self.carried_in.is_zero() {
+            Some(format!(
+                "Switched to accrual: {} received this year on invoices from cash years is counted, as it never was",
+                rupees(&self.carried_in)
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// What the Income tax panel says under its figures
+    pub fn presumptive_note(&self) -> &'static str {
+        match (self.presumptive_check(), self.basis) {
+            (PresumptiveCheck::Within, IncomeBasis::Accrual) => {
+                "Within the 44ADA limit. Gross receipts are invoices dated in the year, excl. GST"
+            }
+            (PresumptiveCheck::Within, IncomeBasis::Cash) => {
+                "Within the 44ADA limit. Gross receipts are fees received in the year (TDS included), excl. GST"
+            }
+            (check, _) => check.message(),
+        }
     }
 
     /// Whether 44ADA can be used for the year, and what to watch for
@@ -138,27 +188,35 @@ impl PresumptiveCheck {
             Self::BooksBelow => {
                 "Books profit is below 44ADA income: declaring the lower figure needs a tax audit (44AB) if income is over the basic exemption"
             }
-            Self::Within => {
-                "Within the 44ADA limit. Gross receipts are invoices dated in the year, excl. GST"
-            }
+            Self::Within => "Within the 44ADA limit",
         }
     }
 }
 
-/// Accumulates a [`YearReport`] one invoice at a time
+/// Accumulates a [`YearReport`] one invoice at a time. Feed every invoice before any credit
+/// note: a note needs to know whether its invoice was counted on cash.
 pub struct YearReportBuilder {
     report: YearReport,
+    schedule: BasisSchedule,
     clients: BTreeMap<String, ClientYear>,
+    /// Invoices counted on cash that have credit notes dated in the year; only refunds take
+    /// anything off their receipts
+    cash_credited: BTreeSet<String>,
 }
 
 impl YearReportBuilder {
-    pub fn new(year: FiscalYear) -> Self {
+    pub fn new(year: FiscalYear, schedule: BasisSchedule) -> Self {
         let zero = BigDecimal::zero;
         Self {
             report: YearReport {
                 year,
+                basis: schedule.basis(year),
                 invoice_count: 0,
                 gross_receipts: zero(),
+                tax_receipts: zero(),
+                carried_in: zero(),
+                already_counted: zero(),
+                accrual_exchange: zero(),
                 credited: zero(),
                 export_receipts: zero(),
                 invoiced_total: zero(),
@@ -171,7 +229,9 @@ impl YearReportBuilder {
                 quarters: year.quarters().map(QuarterGst::new),
                 clients: Vec::new(),
             },
+            schedule,
             clients: BTreeMap::new(),
+            cash_credited: BTreeSet::new(),
         }
     }
 
@@ -191,10 +251,15 @@ impl YearReportBuilder {
     pub fn add_invoice(&mut self, invoice: &Invoice) {
         let year = self.report.year;
         let amounts = &invoice.inr_amounts();
+        let on_cash = self.schedule.basis(invoice.fiscal_year()) == IncomeBasis::Cash;
+        let year_on_cash = self.report.basis == IncomeBasis::Cash;
         if year.contains(invoice.date()) {
             let r = &mut self.report;
             r.invoice_count += 1;
             r.gross_receipts += &amounts.taxable_value;
+            if !on_cash {
+                r.tax_receipts += &amounts.taxable_value;
+            }
             r.invoiced_total += &amounts.total;
             if invoice.kind() == InvoiceKind::Export {
                 r.export_receipts += &amounts.taxable_value;
@@ -213,8 +278,23 @@ impl YearReportBuilder {
         }
         for payment in invoice.payments().iter().filter(|p| year.contains(p.date)) {
             let received = payment.received_inr();
+            let r = &mut self.report;
             if payment.credited_inr.is_some() {
-                self.report.exchange_difference += received - invoice.to_inr(&payment.settled());
+                let difference = received - invoice.to_inr(&payment.settled());
+                if !on_cash {
+                    r.accrual_exchange += &difference;
+                }
+                r.exchange_difference += difference;
+            }
+            let fee = fee_part(amounts, &(received + &payment.tds));
+            match (on_cash, year_on_cash) {
+                (true, true) => r.tax_receipts += fee,
+                (true, false) => {
+                    r.tax_receipts += &fee;
+                    r.carried_in += fee;
+                }
+                (false, true) => r.already_counted += fee,
+                (false, false) => {}
             }
             self.report.received += received;
             self.report.tds += &payment.tds;
@@ -225,13 +305,14 @@ impl YearReportBuilder {
         // Credit notes dated in the year that give money back: TDS the client reverses comes
         // off the year's TDS, and a refund takes its cash back out of the bank (an advance stays
         // received)
-        let returns = invoice
-            .credits()
-            .iter()
-            .filter(|c| year.contains(c.date))
-            .filter_map(|c| c.returned.as_ref());
-        for returned in returns {
+        let credits = invoice.credits().iter().filter(|c| year.contains(c.date));
+        if on_cash && credits.clone().next().is_some() {
+            self.cash_credited
+                .insert(invoice.number().as_str().to_owned());
+        }
+        for returned in credits.filter_map(|c| c.returned.as_ref()) {
             if let Some(tds) = &returned.tds_reversed {
+                self.take_back(on_cash, amounts, tds);
                 self.report.tds -= tds;
                 self.client(invoice.client_name()).tds -= tds;
             }
@@ -241,11 +322,28 @@ impl YearReportBuilder {
                     .refunded_inr
                     .clone()
                     .unwrap_or_else(|| booked.clone());
+                self.take_back(on_cash, amounts, &refunded);
+                if !on_cash {
+                    self.report.accrual_exchange += &booked - &refunded;
+                }
                 self.report.exchange_difference += &booked - &refunded;
                 self.report.received -= &refunded;
                 self.client(invoice.client_name()).received -= refunded;
             }
         }
+    }
+
+    /// Money given back on an invoice counted on cash comes off the year it leaves in; on one
+    /// counted on accrual its credit note takes the value off instead
+    fn take_back(&mut self, on_cash: bool, amounts: &InvoiceAmounts, amount: &BigDecimal) {
+        if !on_cash {
+            return;
+        }
+        let fee = fee_part(amounts, amount);
+        if self.report.basis == IncomeBasis::Accrual {
+            self.report.carried_in -= &fee;
+        }
+        self.report.tax_receipts -= fee;
     }
 
     /// Count a credit note dated in the year: it takes its value and GST back out of the year's
@@ -257,6 +355,9 @@ impl YearReportBuilder {
         let amounts = note.inr_amounts();
         let r = &mut self.report;
         r.gross_receipts -= &amounts.taxable_value;
+        if !self.cash_credited.contains(note.invoice().as_str()) {
+            r.tax_receipts -= &amounts.taxable_value;
+        }
         r.credited += &amounts.taxable_value;
         r.invoiced_total -= &amounts.total;
         if note.kind() == InvoiceKind::Export {
@@ -301,4 +402,14 @@ impl YearReportBuilder {
         self.report.clients = clients;
         self.report
     }
+}
+
+/// The fee part of money that settled an invoice, without its GST: each rupee settles the
+/// taxable value and the tax in proportion
+fn fee_part(amounts: &InvoiceAmounts, paid: &BigDecimal) -> BigDecimal {
+    if amounts.total.is_zero() {
+        return BigDecimal::zero();
+    }
+    (paid * &amounts.taxable_value / &amounts.total)
+        .with_scale_round(2, bigdecimal::RoundingMode::HalfUp)
 }

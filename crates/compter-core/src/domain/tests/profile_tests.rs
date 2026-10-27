@@ -1,4 +1,7 @@
-use crate::domain::{BusinessProfile, Currency, DomainError, LogoId, ProfileDraft};
+use crate::domain::{
+    BasisSchedule, BusinessProfile, Currency, DomainError, FiscalYear, IncomeBasis, LogoId,
+    ProfileDraft,
+};
 
 fn draft() -> ProfileDraft {
     ProfileDraft {
@@ -110,4 +113,50 @@ fn logo_survives_editing_and_older_records_have_none() {
     stored.as_object_mut().unwrap().remove("logo");
     let older: BusinessProfile = serde_json::from_value(stored).unwrap();
     assert_eq!(older.logo(), None);
+}
+
+#[test]
+fn a_change_of_basis_leaves_earlier_years_alone() {
+    let fy = FiscalYear::starting;
+    let mut schedule = BasisSchedule::default();
+    assert_eq!(schedule.basis(fy(2026)), IncomeBasis::Accrual);
+
+    schedule.set(fy(2026), IncomeBasis::Cash);
+    assert_eq!(schedule.basis(fy(2025)), IncomeBasis::Accrual);
+    assert_eq!(schedule.basis(fy(2026)), IncomeBasis::Cash);
+    assert_eq!(schedule.basis(fy(2030)), IncomeBasis::Cash);
+    assert!(schedule.switched_in(fy(2026)));
+    assert!(!schedule.switched_in(fy(2027)));
+    assert_eq!(schedule.describe(), "accrual, cash from FY 2026-27");
+
+    // Saving the form again with the year's own basis changes nothing
+    let before = schedule.clone();
+    schedule.set(fy(2027), IncomeBasis::Cash);
+    assert_eq!(schedule, before);
+
+    // Going back later keeps the cash years
+    schedule.set(fy(2028), IncomeBasis::Accrual);
+    assert_eq!(schedule.basis(fy(2027)), IncomeBasis::Cash);
+    assert_eq!(schedule.basis(fy(2028)), IncomeBasis::Accrual);
+    // An earlier change drops the ones after it
+    schedule.set(fy(2024), IncomeBasis::Cash);
+    assert_eq!(schedule.basis(fy(2023)), IncomeBasis::Accrual);
+    assert_eq!(schedule.basis(fy(2030)), IncomeBasis::Cash);
+}
+
+#[test]
+fn a_stored_schedule_reads_as_its_real_changes() {
+    let stored = r#"[{"from":2027,"basis":"accrual"},{"from":2026,"basis":"cash"},{"from":2025,"basis":"accrual"}]"#;
+    let schedule: BasisSchedule = serde_json::from_str(stored).unwrap();
+    // 2025 changes nothing and 2027 goes back: sorted, and only real changes kept
+    assert_eq!(
+        serde_json::to_string(&schedule).unwrap(),
+        r#"[{"from":2026,"basis":"cash"},{"from":2027,"basis":"accrual"}]"#
+    );
+
+    let mut draft = draft();
+    draft.income_basis = schedule.clone();
+    let profile = BusinessProfile::try_from(draft).unwrap();
+    assert_eq!(profile.income_basis(), &schedule);
+    assert_eq!(profile.to_draft().income_basis, schedule);
 }

@@ -16,6 +16,11 @@ impl FiscalYear {
         Self { start_year }
     }
 
+    /// The year from April of `start_year`
+    pub const fn starting(start_year: i32) -> Self {
+        Self { start_year }
+    }
+
     pub fn start_year(self) -> i32 {
         self.start_year
     }

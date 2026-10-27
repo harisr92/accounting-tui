@@ -29,7 +29,10 @@ pub use invoice::{
 };
 pub use logo::{Logo, LogoFormat, LogoId, MAX_LOGO_BYTES};
 pub use milestone::{Milestone, MilestoneId, MilestoneSort, MilestoneStatus};
-pub use profile::{BusinessProfile, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, ProfileDraft};
+pub use profile::{
+    BasisChange, BasisSchedule, BusinessProfile, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, IncomeBasis,
+    ProfileDraft,
+};
 pub use project::{ClientDetails, ClientRegion, Project, ProjectId, ProjectStatus, ProjectSummary};
 pub use states::state_name;
 

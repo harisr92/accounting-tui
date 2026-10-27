@@ -5,7 +5,8 @@ use bigdecimal::BigDecimal;
 
 use crate::domain::{
     Billing, BusinessProfile, ClientRegion, CreditNote, Currency, Expense, ExpenseCategory,
-    Invoice, InvoiceKind, InvoiceStatus, MilestoneStatus, Project, ProjectStatus, ReturnKind,
+    IncomeBasis, Invoice, InvoiceKind, InvoiceStatus, MilestoneStatus, Project, ProjectStatus,
+    ReturnKind,
 };
 use crate::storage::codec::decode;
 use crate::storage::migrations::invoice_v1_to_v2;
@@ -78,6 +79,9 @@ fn business_profile_v1_still_loads() {
     assert_eq!(profile.sac_code(), "998314");
     assert!(profile.gstin().is_some());
     assert!(profile.lut_arn().is_some());
+    // Saved before the cash basis existed: reports keep counting invoices
+    let year = crate::domain::FiscalYear::starting(2026);
+    assert_eq!(profile.income_basis().basis(year), IncomeBasis::Accrual);
 }
 
 /// v1 invoices are upgraded by the v1 → v2 migration before they load
