@@ -19,12 +19,15 @@ permissions:
 jobs:
   linux:
     uses: ./.github/workflows/package-linux.yml
+    secrets: inherit
 
   macos:
     uses: ./.github/workflows/package-macos.yml
+    secrets: inherit
 
   windows:
     uses: ./.github/workflows/package-windows.yml
+    secrets: inherit
 
   publish:
     name: Publish GitHub Release

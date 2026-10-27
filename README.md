@@ -367,7 +367,9 @@ The app opens the file on start, before the terminal is taken over, so an error 
 
 Don't put `compter.redb` itself in Google Drive, OneDrive, Dropbox or iCloud. redb's lock only works on one machine, a sync client can upload the file halfway through a write, and edits made on two devices become a "conflict copy" that silently drops one side. Invoice numbers have to stay sequential, so two devices' changes can't be merged either.
 
-Instead, on every device, open **Settings** and press `s` to pick a synced folder, e.g. `~/Library/CloudStorage/GoogleDrive-you@example.com/My Drive/compter-sync`. The browser opens in the current sync folder (or your home folder): `j`/`k` move, `Enter` opens a folder, `Backspace` goes up, `~` jumps home, `.` shows hidden folders, and `Space` chooses the folder shown. It must exist and be apart from the data folder. The choice belongs to the device (each one may see the folder at a different path), so it is saved in `device.json` in the data folder, not in the database, and takes effect the next time compter starts. Press `x` to stop syncing.
+Instead, sync through Google Drive directly: run `compter drive sign-in` on every computer, with the same Google account. It opens Google's sign-in in the browser, keeps the grant in the OS keychain (Keychain, Credential Manager, or the Secret Service on Linux), and from the next start hands the database over through compter's hidden app folder in your Drive, the one the phone app uses. Nothing appears in your Drive's file list. `compter drive sign-out` forgets the sign-in. Builds need a Google OAuth client, see `app/README.md`.
+
+Or, on every device, open **Settings** and press `s` to pick a folder a sync client shares, e.g. `~/Dropbox/compter-sync`. The browser opens in the current sync folder (or your home folder): `j`/`k` move, `Enter` opens a folder, `Backspace` goes up, `~` jumps home, `.` shows hidden folders, and `Space` chooses the folder shown. It must exist and be apart from the data folder. The choice belongs to the device (each one may see the folder at a different path), so it is saved in `device.json` in the data folder, not in the database, and takes effect the next time compter starts. Press `x` to stop syncing.
 
 `COMPTER_SYNC_DIR`, when set, overrides that setting, which is handy for scripts:
 
@@ -390,7 +392,7 @@ Conflict copies made by the sync client (`compter (1).redb` and the like) are ne
 
 ### Phones
 
-With the synced folder in Google Drive, the phone app syncs with it automatically: **Settings → Sync method → Google Drive**, then pick the folder. It takes the computer's newer snapshot whenever you open the app, sends its changes every minute and when you put it away, and holds a lease while open, so compter on the computer waits for it (and the other way round). Setting up the Google sign-in it needs is described in `app/README.md`.
+With the computer signed in to Google Drive (`compter drive sign-in`), the phone app syncs with it automatically: **Settings → Sync method → Google Drive**, signed in to the same account. It takes the computer's newer snapshot whenever you open the app, sends its changes every minute and when you put it away, and holds a lease while open, so compter on the computer waits for it (and the other way round). Setting up the Google sign-in it needs is described in `app/README.md`.
 
 Otherwise you carry the two files across by hand, in **Settings → Sync with your computer**. Quit compter on the computer first, and let the sync client finish.
 

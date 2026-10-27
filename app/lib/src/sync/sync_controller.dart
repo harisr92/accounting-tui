@@ -23,7 +23,6 @@ enum SyncPhase {
   /// The files are carried by hand
   manual,
   signedOut,
-  noFolder,
   syncing,
   synced,
   offline,
@@ -54,7 +53,6 @@ class SyncReport {
   /// Settings has something for the user to do
   bool get needsAttention => const {
     SyncPhase.signedOut,
-    SyncPhase.noFolder,
     SyncPhase.conflict,
     SyncPhase.failed,
   }.contains(phase);
@@ -65,7 +63,7 @@ final cloudAccountProvider = Provider<CloudAccount>(
   (ref) => GoogleDriveAccount(),
 );
 
-/// Automatic sync with the computer through its sync folder in Google Drive. The same steps
+/// Automatic sync with the computer through compter's hidden app folder in Google Drive. The same steps
 /// as compter on a computer, with the phone moving the files itself:
 /// - on start and on every return to the app: take the computer's newer snapshot, and hold
 ///   the lease, so compter on the computer waits;
@@ -110,20 +108,13 @@ class SyncController extends Notifier<SyncReport> {
     } on Exception {
       _account = null;
     }
-    final folderId = settings.folderId;
     if (_account == null) {
       state = const SyncReport(
         SyncPhase.signedOut,
         'Sign in to Google to sync',
       );
-    } else if (folderId == null) {
-      state = SyncReport(
-        SyncPhase.noFolder,
-        'Choose the sync folder',
-        account: _account,
-      );
     } else {
-      _folder = ref.read(cloudAccountProvider).folder(folderId);
+      _folder = ref.read(cloudAccountProvider).folder();
       _lifecycle = AppLifecycleListener(
         onResume: () {
           unawaited(syncNow());
@@ -333,7 +324,6 @@ class SyncController extends Notifier<SyncReport> {
 
   /// Sync through Google Drive, or by hand
   Future<void> useMethod(SyncMethod method) async {
-    final settings = await ref.read(syncSettingsProvider.future);
     if (method == SyncMethod.manual && _folder != null) {
       try {
         await _releaseLease(_folder!);
@@ -341,21 +331,7 @@ class SyncController extends Notifier<SyncReport> {
         // Offline: the lease goes stale on its own
       }
     }
-    await ref.read(syncSettingsProvider.notifier).save((
-      method: method,
-      folderId: settings.folderId,
-      folderPath: settings.folderPath,
-    ));
-    await start();
-  }
-
-  /// Sync through [choice] from now on
-  Future<void> useFolder(CloudFolderChoice choice) async {
-    await ref.read(syncSettingsProvider.notifier).save((
-      method: SyncMethod.googleDrive,
-      folderId: choice.id,
-      folderPath: choice.path,
-    ));
+    await ref.read(syncSettingsProvider.notifier).save((method: method));
     await start();
   }
 

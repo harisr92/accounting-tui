@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'package:compter/src/sync/cloud.dart';
 
-/// A Drive folder in memory; [offline] makes every call fail as with no network
+/// Drive's app folder in memory; [offline] makes every call fail as with no network
 class FakeFolder implements CloudFolder {
   final files = <String, Uint8List>{};
   bool offline = false;
@@ -49,14 +49,5 @@ class FakeAccount implements CloudAccount {
   Future<void> signOut() async {}
 
   @override
-  Future<List<CloudFolderChoice>> findSyncFolders() async => [
-    (id: 'sync', path: 'My Drive/compter-sync'),
-  ];
-
-  @override
-  Future<CloudFolderChoice> createSyncFolder() async =>
-      (id: 'sync', path: 'My Drive/compter-sync');
-
-  @override
-  CloudFolder folder(String id) => drive;
+  CloudFolder folder() => drive;
 }

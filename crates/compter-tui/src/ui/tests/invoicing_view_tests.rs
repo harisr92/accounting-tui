@@ -8,7 +8,7 @@ use compter_core::domain::{
     Billing, BusinessProfile, ClientDetails, ClientRegion, Currency, InvoiceStatus,
     MilestoneStatus, ProfileDraft, Project,
 };
-use compter_core::storage::sync::SyncDir;
+use compter_core::storage::sync::{SyncBackend, SyncDir};
 use compter_core::storage::{
     DataDir, InvoiceRepository, ProjectRepository, SettingsRepository, Store,
 };
@@ -667,4 +667,20 @@ fn a_discount_comes_off_before_gst() {
     app.handle_key(Key::Char('2'));
     let invoices = screen(&app, W, H);
     assert!(invoices.contains("outstanding ₹53,100.00"), "{invoices}");
+}
+
+#[test]
+fn settings_shows_the_google_account_this_device_syncs_through() {
+    let store = Store::in_memory().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let data_dir = DataDir::new(root.path());
+    SyncBackend::save_google_drive(&data_dir, Some("me@example.com")).unwrap();
+    let mut app = settings_app(&store, data_dir.clone());
+    let shown = screen(&app, W, H);
+    assert!(shown.contains("Google Drive (me@example.com)"), "{shown}");
+
+    app.handle_key(Key::Char('x'));
+    let shown = screen(&app, W, H);
+    assert!(shown.contains("Sync folder     off"), "{shown}");
+    assert_eq!(SyncBackend::configured(&data_dir, None).unwrap(), None);
 }

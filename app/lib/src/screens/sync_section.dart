@@ -53,10 +53,10 @@ class SyncSection extends ConsumerWidget {
             onTap: () => _chooseMethod(context, ref),
           ),
           if (drive) ...[
-            DriveRows(folderPath: settings?.folderPath),
+            const DriveRows(),
             const SectionNote(
-              'Point compter on your computer at the same folder in its '
-              'Google Drive. While this phone is open, compter there waits.',
+              'On your computer, run `compter drive sign-in` with the same '
+              'Google account. While this phone is open, compter there waits.',
             ),
           ] else ...[
             ..._manualRows(context, ref, status.value?.summary),

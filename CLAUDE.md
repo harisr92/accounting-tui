@@ -23,7 +23,8 @@ compter-core/src/
 compter-tui/src/
   app.rs     application state and global key handling
   event.rs   input, resize and tick threads
-  cli.rs     non-interactive commands (import-merges reads git here)
+  cli.rs     non-interactive commands (import-merges reads git here, drive sign-in)
+  drive/     Google Drive sync: OAuth sign-in, keychain token, the app folder as a SyncFolder
   viewer.rs  opens a written PDF in the desktop's default app
   ui/        rendering and key handling; changes data only by calling services
 compter-mobile/src/
@@ -65,7 +66,8 @@ Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain
 - redb's per-operation errors convert into `StorageError` via `?`. Map `StorageError` to accounting-core errors with `LedgerError::from`.
 - accounting-core's store traits are async; we implement them with sync redb calls and drive them with `pollster::block_on`. Don't add an async runtime.
 - Sync decides "changed since the last sync" from `Store::content_hash` (every record), never the file's bytes: redb rewrites its header on every open. The manifest's SHA-256 stays a file hash, to spot a half-synced snapshot.
-- Phones hand the database over with `sync::receive`, `send`, `settle_received` (store closed): by hand, or automatically through Google Drive (`app/lib/src/sync/`), where Dart only moves the files and writes the lease from `sync::lease_for`. The engine always takes the folder's snapshot before sending (never sends over one it couldn't take), uploads snapshot before manifest, and sends nothing while `sync::held_by_other` says compter is open elsewhere. `receive` takes only a snapshot newer than, or the very one, it last synced; anything else is `SyncError::Undelivered`, since a hand-off may never arrive or arrive as a copy.
+- The engine reads and writes the sync files only through `sync::SyncFolder` (whole files by name): `SyncDir` for a folder a sync client shares, `compter-tui`'s `drive::DriveFolder` for Google Drive. Google Drive sync uses only the hidden `appDataFolder` (scope `drive.appdata`, non-sensitive), shared by the desktop and phone clients of one Cloud project; never ask for the full `drive` scope, which is restricted and needs a yearly CASA assessment. The desktop's refresh token lives in the OS keychain (`drive/token.rs`), and `device.json` records only which account (`SyncBackend`).
+- Phones hand the database over with `sync::receive`, `send`, `settle_received` (store closed): by hand, or automatically through Google Drive's app folder (`app/lib/src/sync/`), where Dart only moves the files and writes the lease from `sync::lease_for`. The engine always takes the folder's snapshot before sending (never sends over one it couldn't take), uploads snapshot before manifest, and sends nothing while `sync::held_by_other` says compter is open elsewhere. `receive` takes only a snapshot newer than, or the very one, it last synced; anything else is `SyncError::Undelivered`, since a hand-off may never arrive or arrive as a copy.
 - Settings that belong to one device (the sync folder) live in `device.json` in the data dir, not in redb: sync runs before the store opens, and the database travels between devices. Read and write them only through `storage::sync` (`SyncDir::saved` / `save`), via `PreferencesService`. `$COMPTER_SYNC_DIR` overrides the saved folder; it is read only in `main.rs` and injected.
 - Tests use `Store::in_memory()`. Tests that reopen the file use `tempfile` and go in `crates/compter-core/tests/`.
 

@@ -18,16 +18,16 @@ const _serverClientId = String.fromEnvironment(
   'COMPTER_GOOGLE_SERVER_CLIENT_ID',
 );
 
-/// Full Drive access: the phone must read the `compter.redb` the computer's Drive client
-/// uploaded, which the narrower `drive.file` scope can't see
-const _scopes = [drive.DriveApi.driveScope];
+/// Only the app's hidden folder, shared with compter on the computer, which signs in to the
+/// same Cloud project: a non-sensitive scope, unlike full Drive access
+const _scopes = [drive.DriveApi.driveAppdataScope];
 
 /// Answers whether Info.plist has a `GIDClientID` (ios/Runner/AppDelegate.swift). Without one
 /// GoogleSignIn raises a native exception Dart can't catch, so iOS asks before initializing.
 const _iosConfig = MethodChannel('compter/google_sign_in');
 
-const _folderMime = 'application/vnd.google-apps.folder';
-const _syncFolderName = 'compter-sync';
+/// Drive's name for the app's hidden folder, in `spaces` and `parents`
+const _appData = 'appDataFolder';
 
 /// Google Drive through google_sign_in: one account, authorized for [_scopes]
 class GoogleDriveAccount implements CloudAccount {
@@ -139,65 +139,24 @@ class GoogleDriveAccount implements CloudAccount {
   }
 
   @override
-  Future<List<CloudFolderChoice>> findSyncFolders() => _call((api) async {
-    final manifests = await api.files.list(
-      q: "name = 'manifest.json' and trashed = false",
-      $fields: 'files(parents)',
-      spaces: 'drive',
-      pageSize: 50,
-    );
-    final ids = {
-      for (final file in manifests.files ?? <drive.File>[]) ...?file.parents,
-    };
-    return [for (final id in ids) (id: id, path: await _path(api, id))];
-  });
-
-  /// `My Drive/Work/compter-sync`, walking up the folder's parents
-  Future<String> _path(drive.DriveApi api, String id) async {
-    final names = <String>[];
-    String? next = id;
-    // A folder deeper than this is shown by its last parts
-    for (var depth = 0; next != null && depth < 8; depth++) {
-      final folder =
-          await api.files.get(next, $fields: 'name,parents') as drive.File;
-      final parents = folder.parents;
-      names.insert(0, parents == null ? 'My Drive' : folder.name ?? '?');
-      next = parents?.first;
-    }
-    return names.join('/');
-  }
-
-  @override
-  Future<CloudFolderChoice> createSyncFolder() => _call((api) async {
-    final folder = await api.files.create(
-      drive.File()
-        ..name = _syncFolderName
-        ..mimeType = _folderMime,
-      $fields: 'id',
-    );
-    return (id: folder.id!, path: 'My Drive/$_syncFolderName');
-  });
-
-  @override
-  CloudFolder folder(String id) => _DriveFolder(this, id);
+  CloudFolder folder() => _DriveFolder(this);
 }
 
-/// One Drive folder. Files are found by name and their IDs remembered, so a write updates
-/// the same file rather than adding another of the same name.
+/// The app's hidden folder. Files are found by name and their IDs remembered, so a write
+/// updates the same file rather than adding another of the same name.
 class _DriveFolder implements CloudFolder {
-  _DriveFolder(this._account, this._id);
+  _DriveFolder(this._account);
 
   final GoogleDriveAccount _account;
-  final String _id;
   final _ids = <String, String>{};
 
   Future<String?> _fileId(drive.DriveApi api, String name) async {
     final known = _ids[name];
     if (known != null) return known;
     final found = await api.files.list(
-      q: "name = '$name' and '$_id' in parents and trashed = false",
+      q: "name = '$name' and trashed = false",
       $fields: 'files(id)',
-      spaces: 'drive',
+      spaces: _appData,
       orderBy: 'modifiedTime desc',
       pageSize: 1,
     );
@@ -233,7 +192,7 @@ class _DriveFolder implements CloudFolder {
         final created = await api.files.create(
           drive.File()
             ..name = name
-            ..parents = [_id],
+            ..parents = [_appData],
           uploadMedia: media,
           $fields: 'id',
         );

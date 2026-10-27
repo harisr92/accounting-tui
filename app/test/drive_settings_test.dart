@@ -13,7 +13,7 @@ import 'support.dart';
 void main() {
   setUpAll(initRust);
 
-  testWidgets('choosing Google Drive and its folder starts syncing', (
+  testWidgets('choosing Google Drive starts syncing in its app folder', (
     tester,
   ) async {
     final phone = await tester.runAsync(() async {
@@ -40,12 +40,6 @@ void main() {
     await tester.tap(find.text('Sync method'));
     await settle(tester);
     await tester.tap(find.text('Google Drive, automatic'));
-    await pumpUntil(tester, find.text('Not chosen yet'));
-    expect(find.text('Choose the sync folder'), findsOneWidget);
-
-    await tester.tap(find.text('Sync folder'));
-    await settle(tester);
-    await tester.tap(find.text('My Drive/compter-sync'));
     await pumpUntil(tester, find.textContaining('Synced at'));
 
     expect(find.text('nila@example.com'), findsOneWidget);
