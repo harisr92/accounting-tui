@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `blank`, `currency`
+// These functions are ignored because they are not marked as `pub`: `blank`, `currency`, `this_year`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `from`, `from`
 
 /// The business profile as typed. `profile_input` prefills it, with the usual SAC code and
@@ -31,6 +31,13 @@ class ProfileInput {
   /// `INR`, `USD`, `GBP` or `EUR`
   final String currency;
 
+  /// Count fees received in the year for 44ADA (cash basis), not invoices dated in it
+  final bool cashBasis;
+
+  /// The first year on `cash_basis`, `2026-27`; earlier years keep theirs. Blank means this
+  /// year.
+  final String basisFrom;
+
   const ProfileInput({
     required this.name,
     required this.address,
@@ -40,6 +47,8 @@ class ProfileInput {
     required this.lutArn,
     required this.terms,
     required this.currency,
+    required this.cashBasis,
+    required this.basisFrom,
   });
 
   @override
@@ -51,7 +60,9 @@ class ProfileInput {
       invoicePrefix.hashCode ^
       lutArn.hashCode ^
       terms.hashCode ^
-      currency.hashCode;
+      currency.hashCode ^
+      cashBasis.hashCode ^
+      basisFrom.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -65,7 +76,9 @@ class ProfileInput {
           invoicePrefix == other.invoicePrefix &&
           lutArn == other.lutArn &&
           terms == other.terms &&
-          currency == other.currency;
+          currency == other.currency &&
+          cashBasis == other.cashBasis &&
+          basisFrom == other.basisFrom;
 }
 
 /// The business profile as shown in Settings
@@ -84,6 +97,12 @@ class ProfileRow {
   /// What new projects are billed in: `INR`, `USD`, `GBP` or `EUR`
   final String currency;
 
+  /// This year's reports count fees received for 44ADA, not invoices dated in it
+  final bool cashBasis;
+
+  /// Every year's basis: `accrual, cash from FY 2026-27`
+  final String incomeBasis;
+
   const ProfileRow({
     required this.name,
     required this.address,
@@ -94,6 +113,8 @@ class ProfileRow {
     this.lutArn,
     required this.terms,
     required this.currency,
+    required this.cashBasis,
+    required this.incomeBasis,
   });
 
   @override
@@ -106,7 +127,9 @@ class ProfileRow {
       invoicePrefix.hashCode ^
       lutArn.hashCode ^
       terms.hashCode ^
-      currency.hashCode;
+      currency.hashCode ^
+      cashBasis.hashCode ^
+      incomeBasis.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -121,5 +144,7 @@ class ProfileRow {
           invoicePrefix == other.invoicePrefix &&
           lutArn == other.lutArn &&
           terms == other.terms &&
-          currency == other.currency;
+          currency == other.currency &&
+          cashBasis == other.cashBasis &&
+          incomeBasis == other.incomeBasis;
 }

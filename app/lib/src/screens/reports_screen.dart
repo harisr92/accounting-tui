@@ -116,6 +116,8 @@ class _ReportBody extends StatelessWidget {
         FigureGrid(figures(report.income)),
         const SectionHeader('Income tax'),
         FigureGrid(figures(report.incomeTax)),
+        if (report.incomeTaxSwitch case final switched?)
+          SectionNote(switched, color: scheme.tertiary),
         SectionNote(report.incomeTaxNote, color: noteColor),
         const SectionHeader('GST by quarter'),
         for (final q in report.gst)

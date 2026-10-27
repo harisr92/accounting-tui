@@ -2336,6 +2336,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<TimeEntryRow> dco_decode_list_time_entry_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_time_entry_row).toList();
+  }
+
+  @protected
   MilestoneInput dco_decode_milestone_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -2352,8 +2358,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   MilestoneRow dco_decode_milestone_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return MilestoneRow(
       id: dco_decode_String(arr[0]),
       name: dco_decode_String(arr[1]),
@@ -2363,7 +2369,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       logged: dco_decode_opt_String(arr[5]),
       invoiceNumber: dco_decode_opt_String(arr[6]),
       lastTime: dco_decode_opt_String(arr[7]),
-      edit: dco_decode_milestone_input(arr[8]),
+      timeLog: dco_decode_list_time_entry_row(arr[8]),
+      edit: dco_decode_milestone_input(arr[9]),
     );
   }
 
@@ -2396,8 +2403,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProfileInput dco_decode_profile_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return ProfileInput(
       name: dco_decode_String(arr[0]),
       address: dco_decode_list_String(arr[1]),
@@ -2407,6 +2414,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       lutArn: dco_decode_String(arr[5]),
       terms: dco_decode_list_String(arr[6]),
       currency: dco_decode_String(arr[7]),
+      cashBasis: dco_decode_bool(arr[8]),
+      basisFrom: dco_decode_String(arr[9]),
     );
   }
 
@@ -2414,8 +2423,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProfileRow dco_decode_profile_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
     return ProfileRow(
       name: dco_decode_String(arr[0]),
       address: dco_decode_list_String(arr[1]),
@@ -2426,6 +2435,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       lutArn: dco_decode_opt_String(arr[6]),
       terms: dco_decode_list_String(arr[7]),
       currency: dco_decode_String(arr[8]),
+      cashBasis: dco_decode_bool(arr[9]),
+      incomeBasis: dco_decode_String(arr[10]),
     );
   }
 
@@ -2526,20 +2537,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ReportRow dco_decode_report_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return ReportRow(
       year: dco_decode_String(arr[0]),
       income: dco_decode_list_figure_row(arr[1]),
       incomeTax: dco_decode_list_figure_row(arr[2]),
       incomeTaxNote: dco_decode_String(arr[3]),
-      incomeTaxTone: dco_decode_tone(arr[4]),
-      gst: dco_decode_list_quarter_gst_row(arr[5]),
-      clients: dco_decode_list_client_row(arr[6]),
-      quarters: dco_decode_list_String(arr[7]),
-      quarterToFile: dco_decode_u_32(arr[8]),
-      iffMonths: dco_decode_list_String(arr[9]),
-      iffMonthToFile: dco_decode_u_32(arr[10]),
+      incomeTaxSwitch: dco_decode_opt_String(arr[4]),
+      incomeTaxTone: dco_decode_tone(arr[5]),
+      gst: dco_decode_list_quarter_gst_row(arr[6]),
+      clients: dco_decode_list_client_row(arr[7]),
+      quarters: dco_decode_list_String(arr[8]),
+      quarterToFile: dco_decode_u_32(arr[9]),
+      iffMonths: dco_decode_list_String(arr[10]),
+      iffMonthToFile: dco_decode_u_32(arr[11]),
     );
   }
 
@@ -2566,6 +2578,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       summary: dco_decode_String(arr[0]),
       changed: dco_decode_bool(arr[1]),
       sha256: dco_decode_opt_String(arr[2]),
+    );
+  }
+
+  @protected
+  TimeEntryRow dco_decode_time_entry_row(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return TimeEntryRow(
+      date: dco_decode_String(arr[0]),
+      duration: dco_decode_String(arr[1]),
+      note: dco_decode_String(arr[2]),
     );
   }
 
@@ -3205,6 +3230,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<TimeEntryRow> sse_decode_list_time_entry_row(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TimeEntryRow>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_time_entry_row(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   MilestoneInput sse_decode_milestone_input(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_name = sse_decode_String(deserializer);
@@ -3228,6 +3267,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_logged = sse_decode_opt_String(deserializer);
     var var_invoiceNumber = sse_decode_opt_String(deserializer);
     var var_lastTime = sse_decode_opt_String(deserializer);
+    var var_timeLog = sse_decode_list_time_entry_row(deserializer);
     var var_edit = sse_decode_milestone_input(deserializer);
     return MilestoneRow(
       id: var_id,
@@ -3238,6 +3278,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       logged: var_logged,
       invoiceNumber: var_invoiceNumber,
       lastTime: var_lastTime,
+      timeLog: var_timeLog,
       edit: var_edit,
     );
   }
@@ -3290,6 +3331,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_lutArn = sse_decode_String(deserializer);
     var var_terms = sse_decode_list_String(deserializer);
     var var_currency = sse_decode_String(deserializer);
+    var var_cashBasis = sse_decode_bool(deserializer);
+    var var_basisFrom = sse_decode_String(deserializer);
     return ProfileInput(
       name: var_name,
       address: var_address,
@@ -3299,6 +3342,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       lutArn: var_lutArn,
       terms: var_terms,
       currency: var_currency,
+      cashBasis: var_cashBasis,
+      basisFrom: var_basisFrom,
     );
   }
 
@@ -3314,6 +3359,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_lutArn = sse_decode_opt_String(deserializer);
     var var_terms = sse_decode_list_String(deserializer);
     var var_currency = sse_decode_String(deserializer);
+    var var_cashBasis = sse_decode_bool(deserializer);
+    var var_incomeBasis = sse_decode_String(deserializer);
     return ProfileRow(
       name: var_name,
       address: var_address,
@@ -3324,6 +3371,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       lutArn: var_lutArn,
       terms: var_terms,
       currency: var_currency,
+      cashBasis: var_cashBasis,
+      incomeBasis: var_incomeBasis,
     );
   }
 
@@ -3452,6 +3501,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_income = sse_decode_list_figure_row(deserializer);
     var var_incomeTax = sse_decode_list_figure_row(deserializer);
     var var_incomeTaxNote = sse_decode_String(deserializer);
+    var var_incomeTaxSwitch = sse_decode_opt_String(deserializer);
     var var_incomeTaxTone = sse_decode_tone(deserializer);
     var var_gst = sse_decode_list_quarter_gst_row(deserializer);
     var var_clients = sse_decode_list_client_row(deserializer);
@@ -3464,6 +3514,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       income: var_income,
       incomeTax: var_incomeTax,
       incomeTaxNote: var_incomeTaxNote,
+      incomeTaxSwitch: var_incomeTaxSwitch,
       incomeTaxTone: var_incomeTaxTone,
       gst: var_gst,
       clients: var_clients,
@@ -3498,6 +3549,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       changed: var_changed,
       sha256: var_sha256,
     );
+  }
+
+  @protected
+  TimeEntryRow sse_decode_time_entry_row(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_date = sse_decode_String(deserializer);
+    var var_duration = sse_decode_String(deserializer);
+    var var_note = sse_decode_String(deserializer);
+    return TimeEntryRow(date: var_date, duration: var_duration, note: var_note);
   }
 
   @protected
@@ -4034,6 +4094,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_time_entry_row(
+    List<TimeEntryRow> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_time_entry_row(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_milestone_input(
     MilestoneInput self,
     SseSerializer serializer,
@@ -4055,6 +4127,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.logged, serializer);
     sse_encode_opt_String(self.invoiceNumber, serializer);
     sse_encode_opt_String(self.lastTime, serializer);
+    sse_encode_list_time_entry_row(self.timeLog, serializer);
     sse_encode_milestone_input(self.edit, serializer);
   }
 
@@ -4100,6 +4173,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.lutArn, serializer);
     sse_encode_list_String(self.terms, serializer);
     sse_encode_String(self.currency, serializer);
+    sse_encode_bool(self.cashBasis, serializer);
+    sse_encode_String(self.basisFrom, serializer);
   }
 
   @protected
@@ -4114,6 +4189,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.lutArn, serializer);
     sse_encode_list_String(self.terms, serializer);
     sse_encode_String(self.currency, serializer);
+    sse_encode_bool(self.cashBasis, serializer);
+    sse_encode_String(self.incomeBasis, serializer);
   }
 
   @protected
@@ -4194,6 +4271,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_figure_row(self.income, serializer);
     sse_encode_list_figure_row(self.incomeTax, serializer);
     sse_encode_String(self.incomeTaxNote, serializer);
+    sse_encode_opt_String(self.incomeTaxSwitch, serializer);
     sse_encode_tone(self.incomeTaxTone, serializer);
     sse_encode_list_quarter_gst_row(self.gst, serializer);
     sse_encode_list_client_row(self.clients, serializer);
@@ -4220,6 +4298,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.summary, serializer);
     sse_encode_bool(self.changed, serializer);
     sse_encode_opt_String(self.sha256, serializer);
+  }
+
+  @protected
+  void sse_encode_time_entry_row(TimeEntryRow self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.date, serializer);
+    sse_encode_String(self.duration, serializer);
+    sse_encode_String(self.note, serializer);
   }
 
   @protected

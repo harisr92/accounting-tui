@@ -76,6 +76,7 @@ class SettingsScreen extends ConsumerWidget {
     if (profile.lutArn != null) _Field('LUT ARN', profile.lutArn!),
     if (profile.terms.isNotEmpty) _Field('Terms', profile.terms.join('\n')),
     _Field('Currency', profile.currency),
+    _Field('44ADA basis', profile.incomeBasis),
   ];
 }
 

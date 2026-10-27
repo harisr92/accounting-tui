@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `new`, `order`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`
 
 /// A milestone as typed
 class MilestoneInput {
@@ -58,6 +58,9 @@ class MilestoneRow {
   /// there is none or the milestone is no longer pending
   final String? lastTime;
 
+  /// Every time entry logged on it, newest logged first; empty on fixed-price projects
+  final List<TimeEntryRow> timeLog;
+
   /// The form, filled with this milestone, to edit it
   final MilestoneInput edit;
 
@@ -70,6 +73,7 @@ class MilestoneRow {
     this.logged,
     this.invoiceNumber,
     this.lastTime,
+    required this.timeLog,
     required this.edit,
   });
 
@@ -83,6 +87,7 @@ class MilestoneRow {
       logged.hashCode ^
       invoiceNumber.hashCode ^
       lastTime.hashCode ^
+      timeLog.hashCode ^
       edit.hashCode;
 
   @override
@@ -98,6 +103,7 @@ class MilestoneRow {
           logged == other.logged &&
           invoiceNumber == other.invoiceNumber &&
           lastTime == other.lastTime &&
+          timeLog == other.timeLog &&
           edit == other.edit;
 }
 
@@ -329,4 +335,34 @@ class ProjectRow {
           clientName == other.clientName &&
           status == other.status &&
           archived == other.archived;
+}
+
+/// Time logged on an hourly milestone: when, how long and what was done
+class TimeEntryRow {
+  /// `YYYY-MM-DD`
+  final String date;
+
+  /// `1h 30m`
+  final String duration;
+
+  /// What was done; may be blank
+  final String note;
+
+  const TimeEntryRow({
+    required this.date,
+    required this.duration,
+    required this.note,
+  });
+
+  @override
+  int get hashCode => date.hashCode ^ duration.hashCode ^ note.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TimeEntryRow &&
+          runtimeType == other.runtimeType &&
+          date == other.date &&
+          duration == other.duration &&
+          note == other.note;
 }

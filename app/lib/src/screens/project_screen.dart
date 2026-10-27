@@ -202,6 +202,12 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> with Searching {
             label: 'Log time',
             value: _Action.logTime,
           ),
+        if (milestone.timeLog.isNotEmpty)
+          (
+            icon: Icons.history,
+            label: 'Time log · ${milestone.logged}',
+            value: _Action.timeLog,
+          ),
         if (milestone.lastTime != null)
           (icon: Icons.undo, label: 'Undo last time', value: _Action.undoTime),
         if (pending)
@@ -237,6 +243,8 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> with Searching {
       case _Action.logTime:
         final updated = await logTime(context, app, project, milestone);
         if (updated != null) _show(ref, updated);
+      case _Action.timeLog:
+        await _showTimeLog(context, milestone);
       case _Action.undoTime:
         final yes = await confirm(
           context,
@@ -296,7 +304,51 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> with Searching {
   }
 }
 
-enum _Action { issue, logTime, undoTime, edit, remove, openInvoice }
+enum _Action { issue, logTime, timeLog, undoTime, edit, remove, openInvoice }
+
+/// Every time entry on [milestone], newest logged first: when, what was done and how long
+Future<void> _showTimeLog(BuildContext context, MilestoneRow milestone) {
+  return showModalBottomSheet<void>(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (context) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.6,
+      maxChildSize: 0.95,
+      builder: (context, controller) => ListView(
+        controller: controller,
+        children: [
+          ListTile(
+            title: Text(
+              milestone.name,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            subtitle: Text(
+              '${milestone.logged} logged · ${milestone.timeLog.length} '
+              '${milestone.timeLog.length == 1 ? 'entry' : 'entries'}',
+            ),
+          ),
+          const Divider(),
+          // Not a RecordTile: a note is what was done, so it wraps instead of being cut off
+          for (final entry in milestone.timeLog)
+            ListTile(
+              title: Text(entry.note.isEmpty ? 'No note' : entry.note),
+              subtitle: Text(entry.date),
+              trailing: Text(
+                entry.duration,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontFeatures: tabular),
+              ),
+            ),
+          const SizedBox(height: gutter),
+        ],
+      ),
+    ),
+  );
+}
 
 class _ProjectBody extends StatelessWidget {
   const _ProjectBody(

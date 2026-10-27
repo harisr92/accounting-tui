@@ -269,6 +269,29 @@ void main() {
     expect(find.textContaining('0h 00m'), findsNWidgets(2));
   });
 
+  testWidgets('a milestone shows its time log, even once invoiced', (
+    tester,
+  ) async {
+    await launchDemo(tester);
+    await tester.tap(find.text('Mobile App'));
+    await settle(tester);
+    await tester.tap(find.text('Prototype'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Time log · 10h 30m'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('10h 30m logged · 2 entries'), findsOneWidget);
+    expect(find.text('Navigation shell'), findsOneWidget);
+    expect(find.text('2026-10-06'), findsOneWidget);
+    expect(find.text('6h 00m'), findsOneWidget);
+    // Newest logged first
+    expect(
+      tester.getTopLeft(find.text('Navigation shell')).dy,
+      lessThan(tester.getTopLeft(find.text('Wireframes')).dy),
+    );
+  });
+
   testWidgets('a project with nothing invoiced is deleted', (tester) async {
     await newProject(tester, 'Website');
 
