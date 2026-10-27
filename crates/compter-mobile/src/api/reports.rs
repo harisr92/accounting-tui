@@ -48,9 +48,11 @@ pub struct ReportRow {
     /// `FY 2026-27`
     pub year: String,
     pub income: Vec<FigureRow>,
-    /// 44ADA income, expenses and books profit
+    /// Gross receipts on the profile's basis, 44ADA income, expenses and books profit
     pub income_tax: Vec<FigureRow>,
     pub income_tax_note: String,
+    /// In the first year on a new basis: what crossed over from the old one, to check by hand
+    pub income_tax_switch: Option<String>,
     pub income_tax_tone: Tone,
     pub gst: Vec<QuarterGstRow>,
     /// Largest invoiced first
@@ -96,13 +98,18 @@ impl From<&YearReport> for ReportRow {
             income,
             income_tax: vec![
                 figure(
+                    &format!("Receipts ({})", report.basis.label()),
+                    &report.tax_receipts,
+                ),
+                figure(
                     &format!("44ADA income ({PRESUMPTIVE_PERCENT}%)"),
                     &report.presumptive_income(),
                 ),
                 figure("Expenses", &report.expenses),
                 figure("Books profit", &report.books_profit()),
             ],
-            income_tax_note: check.message().to_owned(),
+            income_tax_note: report.presumptive_note().to_owned(),
+            income_tax_switch: report.switch_note(),
             income_tax_tone: match check {
                 PresumptiveCheck::OverLimit => Tone::Error,
                 PresumptiveCheck::BooksBelow => Tone::Warning,

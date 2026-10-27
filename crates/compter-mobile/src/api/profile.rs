@@ -1,5 +1,7 @@
+use chrono::Local;
 use compter_core::domain::{
-    BusinessProfile, Currency, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, ProfileDraft,
+    BusinessProfile, Currency, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, FiscalYear, IncomeBasis,
+    ProfileDraft,
 };
 
 /// The business profile as shown in Settings
@@ -16,6 +18,10 @@ pub struct ProfileRow {
     pub terms: Vec<String>,
     /// What new projects are billed in: `INR`, `USD`, `GBP` or `EUR`
     pub currency: String,
+    /// This year's reports count fees received for 44ADA, not invoices dated in it
+    pub cash_basis: bool,
+    /// Every year's basis: `accrual, cash from FY 2026-27`
+    pub income_basis: String,
 }
 
 impl From<&BusinessProfile> for ProfileRow {
@@ -32,6 +38,8 @@ impl From<&BusinessProfile> for ProfileRow {
             lut_arn: profile.lut_arn().map(str::to_owned),
             terms: profile.terms().to_vec(),
             currency: profile.currency().code().to_owned(),
+            cash_basis: profile.income_basis().basis(this_year()) == IncomeBasis::Cash,
+            income_basis: profile.income_basis().describe(),
         }
     }
 }
@@ -53,6 +61,11 @@ pub struct ProfileInput {
     pub terms: Vec<String>,
     /// `INR`, `USD`, `GBP` or `EUR`
     pub currency: String,
+    /// Count fees received in the year for 44ADA (cash basis), not invoices dated in it
+    pub cash_basis: bool,
+    /// The first year on `cash_basis`, `2026-27`; earlier years keep theirs. Blank means this
+    /// year.
+    pub basis_from: String,
 }
 
 impl From<ProfileDraft> for ProfileInput {
@@ -66,6 +79,8 @@ impl From<ProfileDraft> for ProfileInput {
             lut_arn: draft.lut_arn.unwrap_or_default(),
             terms: draft.terms,
             currency: draft.currency.code().to_owned(),
+            cash_basis: draft.income_basis.basis(this_year()) == IncomeBasis::Cash,
+            basis_from: this_year().label(),
         }
     }
 }
@@ -79,6 +94,11 @@ impl ProfileInput {
             ..ProfileDraft::default()
         })
     }
+}
+
+/// The financial year today is in
+pub(crate) fn this_year() -> FiscalYear {
+    FiscalYear::containing(Local::now().date_naive())
 }
 
 /// The currency with `code`, as `ProfileRow::currency` and `ProjectDetail::currency` give it

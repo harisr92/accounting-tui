@@ -2,7 +2,7 @@ mod support;
 
 use std::path::Path;
 
-use compter_mobile::api::{CompterApp, ReportRow, Tone};
+use compter_mobile::api::{CompterApp, ProfileInput, ReportRow, Tone};
 use support::demo;
 
 fn figure<'a>(report: &'a ReportRow, label: &str) -> &'a str {
@@ -39,6 +39,31 @@ fn a_year_report_has_income_tax_gst_and_clients() {
 }
 
 #[test]
+fn the_cash_basis_counts_what_was_received() {
+    let (_scratch, mut app) = demo();
+    assert_eq!(
+        figure(&app.report(2026).unwrap(), "Receipts (accrual)"),
+        "₹2,50,750.00"
+    );
+    let input = app.profile_input().unwrap();
+    assert!(!input.cash_basis);
+    let saved = app
+        .save_profile(ProfileInput {
+            cash_basis: true,
+            basis_from: "2026-27".to_owned(),
+            ..input
+        })
+        .unwrap();
+    assert_eq!(saved.income_basis, "accrual, cash from FY 2026-27");
+
+    let report = app.report(2026).unwrap();
+    assert_eq!(figure(&report, "Receipts (cash)"), "₹1,70,450.00");
+    assert_eq!(figure(&report, "44ADA income (50%)"), "₹85,225.00");
+    // The Income panel still shows what was invoiced
+    assert_eq!(figure(&report, "Receipts"), "₹2,50,750.00");
+}
+
+#[test]
 fn returns_are_written_for_the_gst_portal() {
     let (_scratch, app) = demo();
 
@@ -70,4 +95,21 @@ fn returns_need_a_gstin() {
 
     assert_eq!(error.field, None);
     assert!(error.message.contains("GSTIN"), "{}", error.message);
+}
+
+#[test]
+fn a_change_of_basis_needs_a_financial_year() {
+    let (_scratch, mut app) = demo();
+    let error = app
+        .save_profile(ProfileInput {
+            cash_basis: true,
+            basis_from: "April".to_owned(),
+            ..app.profile_input().unwrap()
+        })
+        .unwrap_err();
+    assert_eq!(error.field.as_deref(), Some("basis_from"));
+    // Earlier years keep accrual
+    let report = app.report(2025).unwrap();
+    assert_eq!(report.income_tax_switch, None);
+    assert_eq!(figure(&report, "Receipts (accrual)"), "₹45,000.00");
 }

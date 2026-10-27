@@ -21,4 +21,6 @@ pub use invoicing::{
 };
 pub use profile::{ProfileInput, ProfileRow};
 pub use reports::{ClientRow, ExportRow, FigureRow, QuarterGstRow, ReportRow, Tone};
-pub use rows::{MilestoneInput, MilestoneRow, ProjectDetail, ProjectInput, ProjectRow};
+pub use rows::{
+    MilestoneInput, MilestoneRow, ProjectDetail, ProjectInput, ProjectRow, TimeEntryRow,
+};
