@@ -368,9 +368,11 @@ impl SettingsRepository for RedbRepository {
         let txn = self.db.begin_read()?;
         let table = txn.open_table(SETTINGS)?;
         let row = table.get(APPEARANCE_KEY)?;
-        row.map(|value| decode(SETTINGS.name(), APPEARANCE_KEY, value.value()))
-            .transpose()
-            .map(Option::unwrap_or_default)
+        // A theme only a newer build knows (the database travels between devices) falls
+        // back to the default rather than stopping the app from starting
+        Ok(row
+            .and_then(|value| decode(SETTINGS.name(), APPEARANCE_KEY, value.value()).ok())
+            .unwrap_or_default())
     }
 
     fn save_appearance(&mut self, appearance: Appearance) -> Result<(), StorageError> {

@@ -6,6 +6,7 @@ import '../compter.dart';
 import '../router.dart';
 import '../ui/empty_state.dart';
 import '../ui/figures.dart';
+import '../ui/glass.dart';
 import '../ui/large_title.dart';
 import '../ui/record_tile.dart';
 import '../ui/search.dart';
@@ -27,6 +28,7 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen>
     final invoices = ref.watch(invoicesProvider);
     return LargeTitleScope(
       child: Scaffold(
+        extendBodyBehindAppBar: true,
         appBar: searchAppBar(
           title: 'Invoices',
           hint: 'Number, client, milestone or status',
@@ -45,41 +47,39 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen>
                 row.status,
               ],
             );
-            return RefreshIndicator(
+            return ScreenList(
               onRefresh: () => ref.refresh(invoicesProvider.future),
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 16),
-                children: [
-                  const LargeTitle(
-                    icon: Icons.receipt_long,
-                    title: 'Invoices',
-                    description:
-                        'Everything issued, newest first, and what is still due',
-                  ),
-                  if (list.invoices.isEmpty)
-                    const EmptyState(
-                      icon: Icons.receipt_long_outlined,
-                      message:
-                          'No invoices yet. Open a project and tap a pending '
-                          'milestone to issue one.',
-                    )
-                  else ...[
-                    FigureGrid([('Outstanding', list.outstanding)]),
-                    if (matches.isEmpty)
-                      noMatches(query)
-                    else
-                      const SectionHeader('Newest first'),
-                  ],
-                  for (final row in matches)
-                    RecordTile(
-                      title: row.clientName,
-                      supporting: [row.number, row.milestones].join(' · '),
-                      amount: row.due ?? row.total,
-                      status: row.status,
-                      onTap: () => context.go(invoicePath(row.number)),
-                    ),
+              bottom: 16,
+              children: [
+                const LargeTitle(
+                  icon: Icons.receipt_long,
+                  title: 'Invoices',
+                  description:
+                      'Everything issued, newest first, and what is still due',
+                ),
+                if (list.invoices.isEmpty)
+                  const EmptyState(
+                    icon: Icons.receipt_long_outlined,
+                    message:
+                        'No invoices yet. Open a project and tap a pending '
+                        'milestone to issue one.',
+                  )
+                else ...[
+                  FigureGrid([('Outstanding', list.outstanding)]),
+                  if (matches.isEmpty)
+                    noMatches(query)
+                  else
+                    const SectionHeader('Newest first'),
                 ],
-              ),
+                for (final row in matches)
+                  RecordTile(
+                    title: row.clientName,
+                    supporting: [row.number, row.milestones].join(' · '),
+                    amount: row.due ?? row.total,
+                    status: row.status,
+                    onTap: () => context.go(invoicePath(row.number)),
+                  ),
+              ],
             );
           },
         ),

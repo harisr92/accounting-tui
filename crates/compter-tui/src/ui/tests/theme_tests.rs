@@ -25,7 +25,10 @@ fn light_theme_avoids_yellow_and_cyan() {
 
 #[test]
 fn credited_has_a_colour_of_its_own() {
-    for appearance in [Appearance::Dark, Appearance::Light] {
+    for appearance in Appearance::ALL
+        .into_iter()
+        .filter(|&a| a != Appearance::Mono)
+    {
         let theme = Theme::new(appearance, false);
         let credited = theme.tone(Tone::Credited).fg;
         for other in [

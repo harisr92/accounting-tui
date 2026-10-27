@@ -39,6 +39,7 @@ impl Theme {
             (_, true) | (Appearance::Mono, _) => Self::mono(),
             (Appearance::Dark, false) => Self::dark(),
             (Appearance::Light, false) => Self::light(),
+            (Appearance::GruvboxDark, false) => Self::gruvbox_dark(),
         }
     }
 
@@ -98,6 +99,28 @@ impl Theme {
             success: Color::Indexed(28),
             error: Color::Red,
             credited: Color::Indexed(127),
+        }
+    }
+
+    /// The gruvbox dark palette in true colour; the background stays the terminal's own
+    fn gruvbox_dark() -> Self {
+        let gray = Color::Rgb(0x92, 0x83, 0x74);
+        let orange = Color::Rgb(0xfe, 0x80, 0x19);
+        Self {
+            accent: orange,
+            muted: gray,
+            border: Color::Rgb(0x66, 0x5c, 0x54),
+            border_focused: orange,
+            selected: Style::new()
+                .fg(Color::Rgb(0xeb, 0xdb, 0xb2))
+                .bg(Color::Rgb(0x50, 0x49, 0x45))
+                .add_modifier(Modifier::BOLD),
+            dim: Style::new().fg(gray),
+            info: Color::Rgb(0x83, 0xa5, 0x98),
+            warning: Color::Rgb(0xfa, 0xbd, 0x2f),
+            success: Color::Rgb(0xb8, 0xbb, 0x26),
+            error: Color::Rgb(0xfb, 0x49, 0x34),
+            credited: Color::Rgb(0xd3, 0x86, 0x9b),
         }
     }
 

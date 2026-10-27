@@ -7,6 +7,7 @@ import '../forms/project_forms.dart';
 import '../rust/api/rows.dart';
 import '../ui/collapsing_fab.dart';
 import '../ui/empty_state.dart';
+import '../ui/glass.dart';
 import '../ui/large_title.dart';
 import '../ui/record_tile.dart';
 import '../ui/search.dart';
@@ -29,6 +30,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
     return LargeTitleScope(
       child: FabScrollScope(
         child: Scaffold(
+          extendBodyBehindAppBar: true,
           appBar: searchAppBar(
             title: archivedOnly ? 'Archived' : 'Projects',
             hint: 'Name or client',
@@ -49,45 +51,43 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
               final listed = rows
                   .where((row) => row.archived == archivedOnly)
                   .toList();
-              return RefreshIndicator(
+              return ScreenList(
                 onRefresh: () => ref.refresh(projectsProvider.future),
-                child: ListView(
-                  padding: const EdgeInsets.only(bottom: 96),
-                  children: [
-                    if (archivedOnly)
-                      const LargeTitle(
-                        icon: Icons.inventory_2,
-                        title: 'Archived',
-                        description:
-                            'Finished projects put away; restore one to add work',
-                      )
-                    else
-                      const LargeTitle(
-                        icon: Icons.work,
-                        title: 'Projects',
-                        description: demoMode
-                            ? 'The demo business: nothing here is saved'
-                            : 'Clients, milestones and the time you bill',
-                      ),
-                    if (rows.isEmpty)
-                      const EmptyState(
-                        icon: Icons.work_outline,
-                        message: 'No projects yet. Add one to start billing.',
-                      )
-                    else if (listed.isEmpty && archivedOnly)
-                      const EmptyState(
-                        icon: Icons.inventory_2_outlined,
-                        message: 'No archived projects.',
-                      )
-                    else if (listed.isEmpty)
-                      const EmptyState(
-                        icon: Icons.inventory_2_outlined,
-                        message:
-                            'Every project is archived. Show archived to see them, or add one.',
-                      ),
-                    ..._matching(query, listed),
-                  ],
-                ),
+                bottom: 96,
+                children: [
+                  if (archivedOnly)
+                    const LargeTitle(
+                      icon: Icons.inventory_2,
+                      title: 'Archived',
+                      description:
+                          'Finished projects put away; restore one to add work',
+                    )
+                  else
+                    const LargeTitle(
+                      icon: Icons.work,
+                      title: 'Projects',
+                      description: demoMode
+                          ? 'The demo business: nothing here is saved'
+                          : 'Clients, milestones and the time you bill',
+                    ),
+                  if (rows.isEmpty)
+                    const EmptyState(
+                      icon: Icons.work_outline,
+                      message: 'No projects yet. Add one to start billing.',
+                    )
+                  else if (listed.isEmpty && archivedOnly)
+                    const EmptyState(
+                      icon: Icons.inventory_2_outlined,
+                      message: 'No archived projects.',
+                    )
+                  else if (listed.isEmpty)
+                    const EmptyState(
+                      icon: Icons.inventory_2_outlined,
+                      message:
+                          'Every project is archived. Show archived to see them, or add one.',
+                    ),
+                  ..._matching(query, listed),
+                ],
               );
             },
           ),

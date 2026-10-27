@@ -1,31 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'src/appearance.dart';
 import 'src/compter.dart';
 import 'src/router.dart';
 import 'src/rust/frb_generated.dart';
-import 'src/ui/theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await RustLib.init();
   final compter = await openCompter();
+  final theme = await savedAppTheme();
   runApp(
     ProviderScope(
-      overrides: [compterProvider.overrideWithValue(compter)],
+      overrides: [
+        compterProvider.overrideWithValue(compter),
+        appThemeProvider.overrideWith(() => AppThemeNotifier(theme)),
+      ],
       child: const CompterMobile(),
     ),
   );
 }
 
-class CompterMobile extends StatefulWidget {
+class CompterMobile extends ConsumerStatefulWidget {
   const CompterMobile({super.key});
 
   @override
-  State<CompterMobile> createState() => _CompterMobileState();
+  ConsumerState<CompterMobile> createState() => _CompterMobileState();
 }
 
-class _CompterMobileState extends State<CompterMobile> {
+class _CompterMobileState extends ConsumerState<CompterMobile> {
   final _router = buildRouter();
 
   @override
@@ -36,10 +40,12 @@ class _CompterMobileState extends State<CompterMobile> {
 
   @override
   Widget build(BuildContext context) {
+    final (light, dark, mode) = ref.watch(appThemeProvider).themes;
     return MaterialApp.router(
       title: 'compter',
-      theme: buildTheme(Brightness.light),
-      darkTheme: buildTheme(Brightness.dark),
+      theme: light,
+      darkTheme: dark,
+      themeMode: mode,
       routerConfig: _router,
     );
   }

@@ -9,17 +9,20 @@ pub enum Appearance {
     Dark,
     /// Dark text on a light terminal
     Light,
+    /// The warm, low-contrast gruvbox palette, for a dark terminal with true colour
+    GruvboxDark,
     /// No colours, only bold, dim and reverse: for monochrome terminals and `NO_COLOR`
     Mono,
 }
 
 impl Appearance {
-    pub const ALL: [Self; 3] = [Self::Dark, Self::Light, Self::Mono];
+    pub const ALL: [Self; 4] = [Self::Dark, Self::Light, Self::GruvboxDark, Self::Mono];
 
     pub const fn label(self) -> &'static str {
         match self {
             Self::Dark => "dark",
             Self::Light => "light",
+            Self::GruvboxDark => "gruvbox dark",
             Self::Mono => "monochrome",
         }
     }

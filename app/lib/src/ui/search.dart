@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'empty_state.dart';
+import 'glass.dart';
 import 'large_title.dart';
 
 /// Words a list is narrowed to, like the terminal's `/` search: a row matches when every word
@@ -75,6 +76,7 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
       );
     }
     return AppBar(
+      flexibleSpace: const Glass(),
       title: TextField(
         controller: controller,
         autofocus: true,

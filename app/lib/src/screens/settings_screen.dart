@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../appearance.dart';
 import '../compter.dart';
 import '../forms/profile_form.dart';
 import '../notice.dart';
 import '../rust/api/profile.dart';
+import '../ui/action_sheet.dart';
+import '../ui/glass.dart';
 import '../ui/large_title.dart';
 import '../ui/section.dart';
 import '../ui/theme.dart';
@@ -27,17 +30,19 @@ class SettingsScreen extends ConsumerWidget {
 
     return LargeTitleScope(
       child: Scaffold(
+        extendBodyBehindAppBar: true,
         appBar: const TitleBar(title: 'Settings'),
         body: profile.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => Center(child: Text('$error')),
-          data: (profile) => ListView(
-            padding: const EdgeInsets.only(bottom: gutter),
+          data: (profile) => ScreenList(
+            bottom: gutter,
             children: [
               const LargeTitle(
                 icon: Icons.settings,
                 title: 'Settings',
-                description: 'Your business as invoices print it, and syncing',
+                description:
+                    'Your business as invoices print it, the theme, and syncing',
               ),
               SectionHeader(
                 'Business profile',
@@ -58,6 +63,7 @@ class SettingsScreen extends ConsumerWidget {
                 )
               else
                 ..._profileRows(profile),
+              const _AppearanceSection(),
               const SyncSection(),
             ],
           ),
@@ -78,6 +84,56 @@ class SettingsScreen extends ConsumerWidget {
     _Field('Currency', profile.currency),
     _Field('44ADA basis', profile.incomeBasis),
   ];
+}
+
+/// The theme this phone draws the app in
+class _AppearanceSection extends ConsumerWidget {
+  const _AppearanceSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final current = ref.watch(appThemeProvider);
+    Future<void> choose() async {
+      final picked = await showActionSheet(
+        context,
+        title: 'Theme',
+        subtitle: 'For this phone only',
+        actions: [
+          for (final theme in AppTheme.values)
+            (
+              icon: theme == current
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+              label: theme.label,
+              value: theme,
+            ),
+        ],
+      );
+      if (picked == null) return;
+      try {
+        await ref.read(appThemeProvider.notifier).choose(picked);
+      } catch (error) {
+        // Drawn in it now, but the next start won't remember it
+        if (context.mounted) {
+          notify(context, 'Theme not saved: $error', error: true);
+        }
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SectionHeader('Appearance'),
+        ListTile(
+          leading: const Icon(Icons.palette_outlined),
+          title: const Text('Theme'),
+          subtitle: Text(current.label),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: choose,
+        ),
+      ],
+    );
+  }
 }
 
 /// A setting's label over its value

@@ -12,6 +12,7 @@ import '../rust/api/rows.dart';
 import '../ui/action_sheet.dart';
 import '../ui/collapsing_fab.dart';
 import '../ui/figures.dart';
+import '../ui/glass.dart';
 import '../ui/large_title.dart';
 import '../ui/record_tile.dart';
 import '../ui/search.dart';
@@ -39,6 +40,7 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> with Searching {
     return LargeTitleScope(
       child: FabScrollScope(
         child: Scaffold(
+          extendBodyBehindAppBar: true,
           appBar: searchAppBar(
             title: project.value?.name ?? 'Project',
             hint: 'Milestone name or amount',
@@ -373,8 +375,8 @@ class _ProjectBody extends StatelessWidget {
       listed,
       (m) => [m.name, m.amount, m.amount.replaceAll(',', '')],
     );
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 96),
+    return ScreenList(
+      bottom: 96,
       children: [
         LargeTitle(
           icon: Icons.work,

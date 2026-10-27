@@ -253,7 +253,10 @@ impl<R: Repository> View for SettingsView<R> {
         lines.push(Line::from(vec![
             Span::styled(format!("{:<16}", "Theme"), theme.dim()),
             Span::raw(self.appearance.label()),
-            Span::styled("   t switches: dark, light, monochrome", theme.dim()),
+            Span::styled(
+                "   t switches: dark, light, gruvbox dark, monochrome",
+                theme.dim(),
+            ),
         ]));
         lines.push(sync_line(self.sync.as_ref(), theme));
         let body = Paragraph::new(lines)

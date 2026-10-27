@@ -14,12 +14,13 @@ class StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final credited = CreditedColors.of(context);
     final (background, foreground) = switch (label) {
       'PAID' => (scheme.primaryContainer, scheme.onPrimaryContainer),
       'INVOICED' ||
       'ISSUED' ||
       'COMPLETED' => (scheme.tertiaryContainer, scheme.onTertiaryContainer),
-      'CREDITED' => creditedColors(theme.brightness),
+      'CREDITED' => (credited.background, credited.foreground),
       _ => (scheme.secondaryContainer, scheme.onSecondaryContainer),
     };
     return Container(

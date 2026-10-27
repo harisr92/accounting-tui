@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import 'glass.dart';
 import 'status_chip.dart';
 import 'theme.dart';
 
@@ -87,7 +88,8 @@ class _Collapsed extends InheritedNotifier<_TitleController> {
 }
 
 /// The fixed bar of a screen with a [LargeTitle]: empty over the large title, then the title
-/// slides in, centred, with a hairline under the bar once the large one has scrolled away
+/// slides in, centred, with a hairline under the bar once the large one has scrolled away. The
+/// bar is [Glass], so its [Scaffold] sets `extendBodyBehindAppBar` and lists scroll under it.
 class TitleBar extends StatelessWidget implements PreferredSizeWidget {
   const TitleBar({super.key, required this.title, this.actions = const []});
 
@@ -104,6 +106,7 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
     final collapsed = _Collapsed.of(context);
     return AppBar(
       centerTitle: true,
+      flexibleSpace: const Glass(),
       shape: collapsed
           ? Border(
               bottom: BorderSide(
@@ -179,7 +182,9 @@ class _LargeTitleState extends State<LargeTitle> {
     final viewport = RenderAbstractViewport.maybeOf(box);
     if (viewport == null) return;
     final top = viewport.getOffsetToReveal(box, 0).offset;
-    controller.threshold = top + box.size.height;
+    // The list runs under the glass bar, which covers the top of it as far as its padding
+    final covered = MediaQuery.paddingOf(context).top;
+    controller.threshold = top + box.size.height - covered;
   }
 
   /// The icon's side: the height of the title's line and the description's one or two lines,
