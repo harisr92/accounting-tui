@@ -160,3 +160,16 @@ fn a_stored_schedule_reads_as_its_real_changes() {
     assert_eq!(profile.income_basis(), &schedule);
     assert_eq!(profile.to_draft().income_basis, schedule);
 }
+
+#[test]
+fn saving_this_years_basis_again_keeps_a_switch_planned_for_later() {
+    let fy = FiscalYear::starting;
+    let mut schedule = BasisSchedule::default();
+    schedule.set(fy(2027), IncomeBasis::Cash);
+    // The Settings form is saved in 2026-27, still on accrual
+    schedule.set(fy(2026), IncomeBasis::Accrual);
+    assert_eq!(schedule.basis(fy(2027)), IncomeBasis::Cash);
+    // Choosing accrual for the planned year itself cancels it
+    schedule.set(fy(2027), IncomeBasis::Accrual);
+    assert_eq!(schedule, BasisSchedule::default());
+}

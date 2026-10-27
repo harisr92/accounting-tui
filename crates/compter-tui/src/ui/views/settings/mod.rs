@@ -15,8 +15,8 @@ use crate::ui::theme::Theme;
 use crate::ui::view::{Action, KeyHint, Notice, View};
 use crate::ui::widgets::panel;
 use compter_core::domain::{
-    Appearance, BusinessProfile, Currency, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, FiscalYear,
-    IncomeBasis, InvoiceNumber, LogoFormat, ProfileDraft,
+    Appearance, BasisSchedule, BusinessProfile, Currency, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC,
+    FiscalYear, IncomeBasis, InvoiceNumber, LogoFormat, ProfileDraft,
 };
 use compter_core::services::{InvoiceService, PreferencesService};
 use compter_core::storage::Repository;
@@ -98,14 +98,7 @@ impl<R: Repository> SettingsView<R> {
 
     fn submit(&mut self, form: &Form) -> Result<Notice, String> {
         let lines = |fields: &[usize]| fields.iter().map(|&i| form.value(i).to_owned()).collect();
-        let this_year = FiscalYear::containing(chrono::Local::now().date_naive());
-        let from = parse::fiscal_year_or(form.value(BASIS_FROM), this_year)?;
-        let mut income_basis = self
-            .profile
-            .as_ref()
-            .map(|p| p.income_basis().clone())
-            .unwrap_or_default();
-        income_basis.set(from, IncomeBasis::from_index(form.choice(BASIS)));
+        let from = parse::fiscal_year_or(form.value(BASIS_FROM), this_year())?;
         let draft = ProfileDraft {
             name: form.value(NAME).to_owned(),
             address: lines(&ADDRESS),
@@ -115,13 +108,14 @@ impl<R: Repository> SettingsView<R> {
             lut_arn: parse::optional(form.value(LUT)),
             terms: lines(&TERMS),
             currency: Currency::from_index(form.choice(CURRENCY)),
-            income_basis,
+            // Set from the stored schedule by `save_profile_with_basis`
+            income_basis: BasisSchedule::default(),
             // The logo is set on its own (`l`); editing the details keeps it
             logo: self.profile.as_ref().and_then(BusinessProfile::logo),
         };
         let profile = self
             .service
-            .save_profile(draft)
+            .save_profile_with_basis(draft, from, IncomeBasis::from_index(form.choice(BASIS)))
             .map_err(|e| e.to_string())?;
         self.profile = Some(profile);
         Ok(Notice::success("Business details saved"))
@@ -183,6 +177,11 @@ fn logo_form() -> Form {
     )
 }
 
+/// The financial year today is in
+fn this_year() -> FiscalYear {
+    FiscalYear::containing(chrono::Local::now().date_naive())
+}
+
 fn profile_form(profile: Option<&BusinessProfile>) -> Form {
     let draft = profile
         .map(BusinessProfile::to_draft)
@@ -192,7 +191,7 @@ fn profile_form(profile: Option<&BusinessProfile>) -> Form {
             ..ProfileDraft::default()
         });
     let line = |lines: &[String], i: usize| lines.get(i).cloned().unwrap_or_default();
-    let this_year = FiscalYear::containing(chrono::Local::now().date_naive());
+    let this_year = this_year();
     Form::new(
         "Business details",
         vec![
@@ -392,11 +391,7 @@ fn profile_lines<'a>(
         || "not registered: invoices are issued without GST".to_owned(),
         |g| g.as_str().to_owned(),
     );
-    let example = InvoiceNumber::new(
-        p.invoice_prefix(),
-        FiscalYear::containing(chrono::Local::now().date_naive()),
-        1,
-    );
+    let example = InvoiceNumber::new(p.invoice_prefix(), this_year(), 1);
     vec![
         row("Name", p.name().to_owned()),
         row("Address", p.address().join(", ")),

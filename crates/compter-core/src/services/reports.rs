@@ -7,7 +7,7 @@ use bigdecimal::{BigDecimal, Zero};
 
 use crate::domain::{
     BasisSchedule, CreditNote, Currency, Expense, ExpenseCategory, FiscalYear, IncomeBasis,
-    Invoice, InvoiceAmounts, InvoiceKind, Quarter, ReturnKind,
+    Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber, Quarter, ReturnKind,
 };
 
 /// Share of gross receipts deemed to be profit under section 44ADA
@@ -65,9 +65,11 @@ pub struct YearReport {
     pub year: FiscalYear,
     /// The year's basis for income tax, from the business profile's schedule
     pub basis: IncomeBasis,
+    /// The year is the first on a new basis, so invoices may cross between the two
+    pub switched: bool,
     pub invoice_count: usize,
-    /// Taxable value of invoices dated in the year, less credit notes dated in it: the gross
-    /// receipts for income tax
+    /// Taxable value of invoices dated in the year, less credit notes dated in it: what the year
+    /// billed. Income tax counts `tax_receipts`, which differs on the cash basis.
     pub gross_receipts: BigDecimal,
     /// The gross receipts 44ADA takes 50% of. Each invoice counts once, on the basis of the
     /// year it is dated in: on accrual its taxable value counts in that year (less credit notes,
@@ -128,6 +130,9 @@ impl YearReport {
     /// In the first year on a new basis, what crossed over from the old one, so the invoices
     /// at the boundary can be checked; `None` when nothing did
     pub fn switch_note(&self) -> Option<String> {
+        if !self.switched {
+            return None;
+        }
         let rupees = |amount: &BigDecimal| Currency::Inr.display(amount);
         if !self.already_counted.is_zero() {
             Some(format!(
@@ -201,7 +206,7 @@ pub struct YearReportBuilder {
     clients: BTreeMap<String, ClientYear>,
     /// Invoices counted on cash that have credit notes dated in the year; only refunds take
     /// anything off their receipts
-    cash_credited: BTreeSet<String>,
+    cash_credited: BTreeSet<InvoiceNumber>,
 }
 
 impl YearReportBuilder {
@@ -211,6 +216,7 @@ impl YearReportBuilder {
             report: YearReport {
                 year,
                 basis: schedule.basis(year),
+                switched: schedule.switched_in(year),
                 invoice_count: 0,
                 gross_receipts: zero(),
                 tax_receipts: zero(),
@@ -307,8 +313,7 @@ impl YearReportBuilder {
         // received)
         let credits = invoice.credits().iter().filter(|c| year.contains(c.date));
         if on_cash && credits.clone().next().is_some() {
-            self.cash_credited
-                .insert(invoice.number().as_str().to_owned());
+            self.cash_credited.insert(invoice.number().clone());
         }
         for returned in credits.filter_map(|c| c.returned.as_ref()) {
             if let Some(tds) = &returned.tds_reversed {
@@ -355,7 +360,7 @@ impl YearReportBuilder {
         let amounts = note.inr_amounts();
         let r = &mut self.report;
         r.gross_receipts -= &amounts.taxable_value;
-        if !self.cash_credited.contains(note.invoice().as_str()) {
+        if !self.cash_credited.contains(note.invoice()) {
             r.tax_receipts -= &amounts.taxable_value;
         }
         r.credited += &amounts.taxable_value;

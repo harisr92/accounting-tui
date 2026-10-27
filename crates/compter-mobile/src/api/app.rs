@@ -5,9 +5,9 @@ use flutter_rust_bridge::frb;
 
 use compter_core::demo;
 use compter_core::domain::{
-    Billing, ClientDetails, ClientRegion, Currency, Discount, DomainError, ExchangeRate, ExpenseId,
-    IncomeBasis, Invoice, InvoiceNumber, MilestoneId, ProfileDraft, Project, ProjectId, ReturnKind,
-    ReturnTerms, TimeEntry,
+    BasisSchedule, Billing, ClientDetails, ClientRegion, Currency, Discount, DomainError,
+    ExchangeRate, ExpenseId, IncomeBasis, Invoice, InvoiceNumber, MilestoneId, ProfileDraft,
+    Project, ProjectId, ReturnKind, ReturnTerms, TimeEntry,
 };
 use compter_core::input;
 use compter_core::services::{
@@ -250,18 +250,11 @@ impl CompterApp {
         let saved = self.invoices.profile()?;
         let from = input::fiscal_year_or(&input.basis_from, this_year())
             .map_err(|message| ApiError::invalid("basis_from", message))?;
-        let mut income_basis = saved
-            .as_ref()
-            .map(|p| p.income_basis().clone())
-            .unwrap_or_default();
-        income_basis.set(
-            from,
-            if input.cash_basis {
-                IncomeBasis::Cash
-            } else {
-                IncomeBasis::Accrual
-            },
-        );
+        let basis = if input.cash_basis {
+            IncomeBasis::Cash
+        } else {
+            IncomeBasis::Accrual
+        };
         let draft = ProfileDraft {
             name: input.name.trim().to_owned(),
             address: lines(input.address),
@@ -272,9 +265,12 @@ impl CompterApp {
             terms: lines(input.terms),
             currency,
             logo: saved.and_then(|p| p.logo()),
-            income_basis,
+            // Set from the stored schedule by `save_profile_with_basis`
+            income_basis: BasisSchedule::default(),
         };
-        Ok(ProfileRow::from(&self.invoices.save_profile(draft)?))
+        Ok(ProfileRow::from(
+            &self.invoices.save_profile_with_basis(draft, from, basis)?,
+        ))
     }
 
     /// Every issued invoice, newest first

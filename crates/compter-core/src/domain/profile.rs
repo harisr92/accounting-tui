@@ -79,8 +79,8 @@ impl IncomeBasis {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BasisChange {
     /// Start year of the first financial year on `basis` (`2026` for 2026-27)
-    pub from: i32,
-    pub basis: IncomeBasis,
+    from: i32,
+    basis: IncomeBasis,
 }
 
 /// Which basis each financial year was filed on: accrual until the first change. A year keeps
@@ -117,8 +117,12 @@ impl BasisSchedule {
     }
 
     /// Use `basis` from `from` on. Years before `from` keep theirs; later changes are dropped,
-    /// as the new basis is meant to be kept.
+    /// as the new basis is meant to be kept. When `from` is already on `basis` nothing changes,
+    /// so saving a form again keeps a switch planned for a later year.
     pub fn set(&mut self, from: FiscalYear, basis: IncomeBasis) {
+        if self.basis(from) == basis {
+            return;
+        }
         self.0.retain(|change| change.from < from.start_year());
         if self.basis(from) != basis {
             self.0.push(BasisChange {
