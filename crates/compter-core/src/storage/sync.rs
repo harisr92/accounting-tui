@@ -11,9 +11,11 @@
 //! generation check is what keeps records from being lost.
 
 use std::env;
+use std::error::Error;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -74,8 +76,60 @@ pub enum SyncError {
         #[source]
         source: serde_json::Error,
     },
+    #[error("could not reach {place}")]
+    Remote {
+        place: String,
+        #[source]
+        source: Box<dyn Error + Send + Sync>,
+    },
+    #[error("signed out of {0}; sign in again to sync")]
+    SignedOut(String),
     #[error(transparent)]
     Storage(#[from] StorageError),
+}
+
+/// Where devices hand the database over: whole files by name. A local folder a sync client
+/// shares ([`SyncDir`]), or a cloud drive reached through its API.
+pub trait SyncFolder: Send + Sync {
+    /// The file's contents, or `None` when there is no file by that name
+    fn read(&self, name: &str) -> Result<Option<Vec<u8>>, SyncError>;
+
+    /// Replace the file's contents in place, creating it if missing; never a second copy
+    fn write(&self, name: &str, bytes: &[u8]) -> Result<(), SyncError>;
+
+    /// Remove the file, if there is one
+    fn delete(&self, name: &str) -> Result<(), SyncError>;
+
+    /// Where it is, for messages: a path, or the cloud drive's name
+    fn place(&self) -> String;
+
+    /// Files a sync client made when two devices wrote the same file, worth telling the user
+    /// about; a cloud API never makes them
+    fn conflict_copies(&self) -> Vec<String> {
+        Vec::new()
+    }
+}
+
+impl<F: SyncFolder + ?Sized> SyncFolder for Box<F> {
+    fn read(&self, name: &str) -> Result<Option<Vec<u8>>, SyncError> {
+        (**self).read(name)
+    }
+
+    fn write(&self, name: &str, bytes: &[u8]) -> Result<(), SyncError> {
+        (**self).write(name, bytes)
+    }
+
+    fn delete(&self, name: &str) -> Result<(), SyncError> {
+        (**self).delete(name)
+    }
+
+    fn place(&self) -> String {
+        (**self).place()
+    }
+
+    fn conflict_copies(&self) -> Vec<String> {
+        (**self).conflict_copies()
+    }
 }
 
 /// The folder a sync client shares between devices
@@ -114,8 +168,9 @@ impl SyncDir {
         Ok(settings.and_then(|s| s.sync_dir).map(Self::new))
     }
 
-    /// Sync this device through `dir` from the next start, or stop syncing when `None`. The
-    /// folder must exist and be apart from the data folder, whose database it would clash with.
+    /// Sync this device through `dir` from the next start, or stop syncing when `None`; either
+    /// way it stops syncing through Google Drive. The folder must exist and be apart from the
+    /// data folder, whose database it would clash with.
     pub fn save(data: &DataDir, dir: Option<&Path>) -> Result<(), SyncError> {
         if let Some(dir) = dir {
             check_folder(data, dir)?;
@@ -123,6 +178,7 @@ impl SyncDir {
         let path = data.device_settings_path();
         let mut settings = read_json::<DeviceSettings>(&path)?.unwrap_or_default();
         settings.sync_dir = dir.map(Path::to_path_buf);
+        settings.google_drive = None;
         write_json(&path, &settings)
     }
 
@@ -141,9 +197,39 @@ impl SyncDir {
     pub fn lease_path(&self) -> PathBuf {
         self.root.join(LEASE_FILE)
     }
+}
 
-    /// Files a sync client made when two devices wrote the same file, e.g. `compter (1).redb`
-    pub fn conflict_copies(&self) -> Vec<String> {
+impl SyncFolder for SyncDir {
+    fn read(&self, name: &str) -> Result<Option<Vec<u8>>, SyncError> {
+        let path = self.root.join(name);
+        match fs::read(&path) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(source) => Err(SyncError::Io { path, source }),
+        }
+    }
+
+    fn write(&self, name: &str, bytes: &[u8]) -> Result<(), SyncError> {
+        Ok(write_file(&self.root.join(name), bytes)?)
+    }
+
+    fn delete(&self, name: &str) -> Result<(), SyncError> {
+        let path = self.root.join(name);
+        match fs::remove_file(&path) {
+            Err(error) if error.kind() != io::ErrorKind::NotFound => Err(SyncError::Io {
+                path,
+                source: error,
+            }),
+            _ => Ok(()),
+        }
+    }
+
+    fn place(&self) -> String {
+        self.root.display().to_string()
+    }
+
+    /// e.g. `compter (1).redb`
+    fn conflict_copies(&self) -> Vec<String> {
         let Ok(entries) = fs::read_dir(&self.root) else {
             return Vec::new();
         };
@@ -153,6 +239,45 @@ impl SyncDir {
             .collect();
         found.sort();
         found
+    }
+}
+
+/// How this device syncs, when it does
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncBackend {
+    /// A folder a sync client shares
+    Folder(SyncDir, SyncSource),
+    /// Google Drive's hidden app folder, reached through the API as `account`. Only a front end
+    /// that can sign in builds the folder; the core just remembers the choice.
+    GoogleDrive { account: String },
+}
+
+impl SyncBackend {
+    /// How this device syncs: `env` (see [`SyncDir::from_env`]), else what Settings saved
+    pub fn configured(data: &DataDir, env: Option<SyncDir>) -> Result<Option<Self>, SyncError> {
+        if let Some(dir) = env {
+            return Ok(Some(Self::Folder(dir, SyncSource::Env)));
+        }
+        let settings = read_json::<DeviceSettings>(&data.device_settings_path())?;
+        Ok(settings.and_then(
+            |settings| match (settings.google_drive, settings.sync_dir) {
+                (Some(account), _) => Some(Self::GoogleDrive { account }),
+                (None, Some(dir)) => Some(Self::Folder(SyncDir::new(dir), SyncSource::Settings)),
+                (None, None) => None,
+            },
+        ))
+    }
+
+    /// Sync through Google Drive as `account` from the next start, in place of any folder; or
+    /// stop syncing through it when `None`
+    pub fn save_google_drive(data: &DataDir, account: Option<&str>) -> Result<(), SyncError> {
+        let path = data.device_settings_path();
+        let mut settings = read_json::<DeviceSettings>(&path)?.unwrap_or_default();
+        if account.is_some() {
+            settings.sync_dir = None;
+        }
+        settings.google_drive = account.map(str::to_owned);
+        write_json(&path, &settings)
     }
 }
 
@@ -169,6 +294,9 @@ pub enum SyncSource {
 struct DeviceSettings {
     #[serde(default)]
     sync_dir: Option<PathBuf>,
+    /// The Google account this device syncs through, when it syncs through Google Drive
+    #[serde(default)]
+    google_drive: Option<String>,
 }
 
 fn check_folder(data: &DataDir, dir: &Path) -> Result<(), SyncError> {
@@ -245,7 +373,7 @@ pub enum Resolution {
 /// Holds the lease while compter runs; [`Self::finish`] publishes what changed
 pub struct SyncSession {
     data: DataDir,
-    sync: SyncDir,
+    sync: Arc<dyn SyncFolder>,
     state: LocalState,
     device_name: String,
     heartbeat: Option<Heartbeat>,
@@ -255,17 +383,18 @@ impl SyncSession {
     /// Take the lease and bring the local database up to date. Call before [`Store::open`].
     pub fn begin(
         data: &DataDir,
-        sync: SyncDir,
+        sync: impl SyncFolder + 'static,
         device_name: impl Into<String>,
     ) -> Result<Self, SyncError> {
+        let sync: Arc<dyn SyncFolder> = Arc::new(sync);
         let device_name = device_name.into();
         let mut state = load_state(data)?;
-        take_lease(&sync, &state, &device_name)?;
-        if let Err(error) = catch_up(data, &sync, &mut state) {
-            release_lease(&sync, &state)?;
+        take_lease(&*sync, &state, &device_name)?;
+        if let Err(error) = catch_up(data, &*sync, &mut state) {
+            release_lease(&*sync, &state)?;
             return Err(error);
         }
-        let heartbeat = Heartbeat::spawn(sync.lease_path(), state.device_id, &device_name);
+        let heartbeat = Heartbeat::spawn(Arc::clone(&sync), state.device_id, &device_name);
         Ok(Self {
             data: data.clone(),
             sync,
@@ -288,7 +417,7 @@ impl SyncSession {
             heartbeat.stop();
         }
         let published = self.publish_changes();
-        release_lease(&self.sync, &self.state)?;
+        release_lease(&*self.sync, &self.state)?;
         published
     }
 
@@ -296,7 +425,7 @@ impl SyncSession {
         if !local_changed(&self.data, &self.state)? {
             return Ok(None);
         }
-        let remote = read_json::<Manifest>(&self.sync.manifest_path())?;
+        let remote = read_synced::<Manifest>(&*self.sync, MANIFEST_FILE)?;
         // Another device published while this one ran (its lease hadn't synced yet): keep ours
         // local, so the next start reports the conflict instead of overwriting theirs
         if let Some(remote) = remote.filter(|m| m.generation > self.state.base_generation) {
@@ -308,7 +437,7 @@ impl SyncSession {
         let generation = self.state.base_generation + 1;
         publish(
             &self.data,
-            &self.sync,
+            &*self.sync,
             &mut self.state,
             &self.device_name,
             generation,
@@ -319,7 +448,7 @@ impl SyncSession {
     /// Settle a conflict that [`Self::begin`] refused to open with
     pub fn resolve(
         data: &DataDir,
-        sync: &SyncDir,
+        sync: &dyn SyncFolder,
         device_name: &str,
         resolution: Resolution,
     ) -> Result<(), SyncError> {
@@ -333,12 +462,12 @@ impl SyncSession {
 
 fn settle(
     data: &DataDir,
-    sync: &SyncDir,
+    sync: &dyn SyncFolder,
     state: &mut LocalState,
     device_name: &str,
     resolution: Resolution,
 ) -> Result<(), SyncError> {
-    let manifest = read_json::<Manifest>(&sync.manifest_path())?;
+    let manifest = read_synced::<Manifest>(sync, MANIFEST_FILE)?;
     match resolution {
         Resolution::KeepLocal => {
             if !data.database_path().exists() {
@@ -349,10 +478,11 @@ fn settle(
             publish(data, sync, state, device_name, generation)
         }
         Resolution::KeepRemote => {
-            let manifest =
-                manifest.ok_or_else(|| SyncError::NoSnapshot(sync.root().to_path_buf()))?;
+            let manifest = manifest.ok_or_else(|| no_snapshot(sync))?;
             // Check before moving the local copy aside, so a half-synced snapshot replaces nothing
-            if hash_file(&sync.snapshot_path())?.as_deref() != Some(manifest.sha256.as_str()) {
+            let snapshot = sync.read(SNAPSHOT_FILE)?;
+            if snapshot.map(|bytes| sha256_hex(&bytes)).as_deref() != Some(manifest.sha256.as_str())
+            {
                 return Err(SyncError::Incomplete {
                     device: manifest.device_name,
                 });
@@ -437,10 +567,14 @@ pub fn held_by_other(data: &DataDir, lease: &Lease) -> Result<Option<Lease>, Syn
 /// [`send`] wrote, or a sync app may store it as a copy. So the folder's snapshot must be the
 /// very one this device last synced, or a newer one; an older or different one is refused as
 /// [`SyncError::Undelivered`], since taking it or sending over it would lose records.
-pub fn receive(data: &DataDir, from: &SyncDir, blank: bool) -> Result<Option<u64>, SyncError> {
+pub fn receive(
+    data: &DataDir,
+    from: &dyn SyncFolder,
+    blank: bool,
+) -> Result<Option<u64>, SyncError> {
     let mut state = load_state(data)?;
-    let manifest = read_json::<Manifest>(&from.manifest_path())?
-        .ok_or_else(|| SyncError::NoSnapshot(from.root().to_path_buf()))?;
+    let manifest =
+        read_synced::<Manifest>(from, MANIFEST_FILE)?.ok_or_else(|| no_snapshot(from))?;
     if state.base_sha256.as_deref() == Some(manifest.sha256.as_str()) {
         return Ok(None);
     }
@@ -463,7 +597,7 @@ pub fn receive(data: &DataDir, from: &SyncDir, blank: bool) -> Result<Option<u64
 /// Write this device's database to `to` as a snapshot and manifest, for the user to put in the
 /// sync folder. A database changed since it last synced gets the next generation; an unchanged
 /// one is written again under its own. Returns the generation written.
-pub fn send(data: &DataDir, to: &SyncDir, device_name: &str) -> Result<u64, SyncError> {
+pub fn send(data: &DataDir, to: &dyn SyncFolder, device_name: &str) -> Result<u64, SyncError> {
     if !data.database_path().exists() {
         return Err(SyncError::NoLocalDatabase);
     }
@@ -477,13 +611,27 @@ pub fn send(data: &DataDir, to: &SyncDir, device_name: &str) -> Result<u64, Sync
     Ok(generation)
 }
 
+/// Publish this device's database to `to` when `to` has no snapshot yet, so the next device to
+/// sync finds one; a folder that has one is left for [`SyncSession::begin`] to catch up from.
+/// Returns the generation published, if any. Close the store first.
+pub fn seed(
+    data: &DataDir,
+    to: &dyn SyncFolder,
+    device_name: &str,
+) -> Result<Option<u64>, SyncError> {
+    if !data.database_path().exists() || read_synced::<Manifest>(to, MANIFEST_FILE)?.is_some() {
+        return Ok(None);
+    }
+    send(data, to, device_name).map(Some)
+}
+
 /// Settle a conflict or undelivered hand-off [`receive`] refused. [`Resolution::KeepRemote`]
 /// takes the snapshot in `from`, keeping the local database beside it as a backup;
 /// [`Resolution::KeepLocal`] keeps this device's, so the next [`send`] goes out as new, above
 /// the snapshot's generation.
 pub fn settle_received(
     data: &DataDir,
-    from: &SyncDir,
+    from: &dyn SyncFolder,
     device_name: &str,
     resolution: Resolution,
 ) -> Result<(), SyncError> {
@@ -491,8 +639,8 @@ pub fn settle_received(
     match resolution {
         Resolution::KeepRemote => settle(data, from, &mut state, device_name, resolution),
         Resolution::KeepLocal => {
-            let manifest = read_json::<Manifest>(&from.manifest_path())?
-                .ok_or_else(|| SyncError::NoSnapshot(from.root().to_path_buf()))?;
+            let manifest =
+                read_synced::<Manifest>(from, MANIFEST_FILE)?.ok_or_else(|| no_snapshot(from))?;
             state.base_generation = state.base_generation.max(manifest.generation);
             // Counts as changed, so the next send takes a new generation
             state.base_sha256 = None;
@@ -531,8 +679,12 @@ fn save_state(data: &DataDir, state: &LocalState) -> Result<(), SyncError> {
 }
 
 /// Pull a newer snapshot, unless this device changed its own copy since it last synced
-fn catch_up(data: &DataDir, sync: &SyncDir, state: &mut LocalState) -> Result<(), SyncError> {
-    let Some(manifest) = read_json::<Manifest>(&sync.manifest_path())? else {
+fn catch_up(
+    data: &DataDir,
+    sync: &dyn SyncFolder,
+    state: &mut LocalState,
+) -> Result<(), SyncError> {
+    let Some(manifest) = read_synced::<Manifest>(sync, MANIFEST_FILE)? else {
         return Ok(());
     };
     if manifest.generation <= state.base_generation {
@@ -547,8 +699,12 @@ fn catch_up(data: &DataDir, sync: &SyncDir, state: &mut LocalState) -> Result<()
     pull(data, sync, &manifest, state)
 }
 
-fn take_lease(sync: &SyncDir, state: &LocalState, device_name: &str) -> Result<(), SyncError> {
-    if let Some(lease) = read_json::<Lease>(&sync.lease_path())?
+fn take_lease(
+    sync: &dyn SyncFolder,
+    state: &LocalState,
+    device_name: &str,
+) -> Result<(), SyncError> {
+    if let Some(lease) = read_synced::<Lease>(sync, LEASE_FILE)?
         && lease.device_id != state.device_id
         && is_fresh(&lease)
     {
@@ -557,7 +713,7 @@ fn take_lease(sync: &SyncDir, state: &LocalState, device_name: &str) -> Result<(
             seen: lease.heartbeat,
         });
     }
-    write_lease(&sync.lease_path(), state.device_id, device_name)
+    write_lease(sync, state.device_id, device_name)
 }
 
 /// Refreshed within [`LEASE_TTL`]; a heartbeat in the future (clocks disagree) counts as fresh
@@ -566,21 +722,18 @@ fn is_fresh(lease: &Lease) -> bool {
     !matches!(age.to_std(), Ok(age) if age >= LEASE_TTL)
 }
 
-fn write_lease(path: &Path, device_id: Uuid, device_name: &str) -> Result<(), SyncError> {
+fn write_lease(sync: &dyn SyncFolder, device_id: Uuid, device_name: &str) -> Result<(), SyncError> {
     let lease = Lease {
         device_id,
         device_name: device_name.to_owned(),
         heartbeat: Utc::now(),
     };
-    write_json(path, &lease)
+    write_synced(sync, LEASE_FILE, &lease)
 }
 
-fn release_lease(sync: &SyncDir, state: &LocalState) -> Result<(), SyncError> {
-    let path = sync.lease_path();
-    match read_json::<Lease>(&path)? {
-        Some(lease) if lease.device_id == state.device_id => {
-            fs::remove_file(&path).map_err(io_error(&path))
-        }
+fn release_lease(sync: &dyn SyncFolder, state: &LocalState) -> Result<(), SyncError> {
+    match read_synced::<Lease>(sync, LEASE_FILE)? {
+        Some(lease) if lease.device_id == state.device_id => sync.delete(LEASE_FILE),
         _ => Ok(()),
     }
 }
@@ -608,12 +761,12 @@ fn content_hash(data: &DataDir) -> Result<Option<String>, SyncError> {
 
 fn pull(
     data: &DataDir,
-    sync: &SyncDir,
+    sync: &dyn SyncFolder,
     manifest: &Manifest,
     state: &mut LocalState,
 ) -> Result<(), SyncError> {
-    let path = sync.snapshot_path();
-    let bytes = fs::read(&path).map_err(io_error(&path))?;
+    // Not there yet is the same as half there: the manifest arrived first
+    let bytes = sync.read(SNAPSHOT_FILE)?.unwrap_or_default();
     let sha256 = sha256_hex(&bytes);
     if sha256 != manifest.sha256 {
         return Err(SyncError::Incomplete {
@@ -632,7 +785,7 @@ fn pull(
 /// arrives finds a hash mismatch and waits
 fn publish(
     data: &DataDir,
-    sync: &SyncDir,
+    sync: &dyn SyncFolder,
     state: &mut LocalState,
     device_name: &str,
     generation: u64,
@@ -640,7 +793,7 @@ fn publish(
     let local = data.database_path();
     let bytes = fs::read(&local).map_err(io_error(&local))?;
     let sha256 = sha256_hex(&bytes);
-    write_file(&sync.snapshot_path(), &bytes)?;
+    sync.write(SNAPSHOT_FILE, &bytes)?;
     let manifest = Manifest {
         generation,
         sha256: sha256.clone(),
@@ -648,7 +801,7 @@ fn publish(
         device_name: device_name.to_owned(),
         written_at: Utc::now(),
     };
-    write_json(&sync.manifest_path(), &manifest)?;
+    write_synced(sync, MANIFEST_FILE, &manifest)?;
     state.base_generation = generation;
     state.base_sha256 = Some(sha256);
     state.base_content = content_hash(data)?;
@@ -701,6 +854,38 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), SyncError> {
     Ok(write_file(path, &bytes)?)
 }
 
+/// A file in the sync folder, `None` when there isn't one
+fn read_synced<T: DeserializeOwned>(
+    sync: &dyn SyncFolder,
+    name: &str,
+) -> Result<Option<T>, SyncError> {
+    let Some(bytes) = sync.read(name)? else {
+        return Ok(None);
+    };
+    serde_json::from_slice(&bytes)
+        .map(Some)
+        .map_err(|source| SyncError::Json {
+            path: Path::new(&sync.place()).join(name),
+            source,
+        })
+}
+
+fn write_synced<T: Serialize>(
+    sync: &dyn SyncFolder,
+    name: &str,
+    value: &T,
+) -> Result<(), SyncError> {
+    let bytes = serde_json::to_vec_pretty(value).map_err(|source| SyncError::Json {
+        path: Path::new(&sync.place()).join(name),
+        source,
+    })?;
+    sync.write(name, &bytes)
+}
+
+fn no_snapshot(sync: &dyn SyncFolder) -> SyncError {
+    SyncError::NoSnapshot(PathBuf::from(sync.place()))
+}
+
 fn io_error(path: &Path) -> impl FnOnce(io::Error) -> SyncError + '_ {
     move |source| SyncError::Io {
         path: path.to_path_buf(),
@@ -715,13 +900,13 @@ struct Heartbeat {
 }
 
 impl Heartbeat {
-    fn spawn(path: PathBuf, device_id: Uuid, device_name: &str) -> Self {
+    fn spawn(sync: Arc<dyn SyncFolder>, device_id: Uuid, device_name: &str) -> Self {
         let (stop, stopped) = mpsc::sync_channel(1);
         let device_name = device_name.to_owned();
         let thread = thread::spawn(move || {
             while let Err(RecvTimeoutError::Timeout) = stopped.recv_timeout(HEARTBEAT) {
                 // A missed beat only lets the lease go stale sooner; the next one retries
-                let _ = write_lease(&path, device_id, &device_name);
+                let _ = write_lease(&*sync, device_id, &device_name);
             }
         });
         Self { stop, thread }

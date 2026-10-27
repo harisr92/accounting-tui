@@ -16,7 +16,7 @@ fn themes_are_saved_as_they_cycle() {
 fn demo_mode_has_no_sync_folder_to_set() {
     let store = Store::in_memory().unwrap();
     let mut service = PreferencesService::new(store.repository(), None);
-    assert!(service.sync_folder().unwrap().is_none());
+    assert!(service.sync_backend().unwrap().is_none());
     let folder = tempfile::tempdir().unwrap();
     assert!(matches!(
         service.set_sync_folder(Some(folder.path())),

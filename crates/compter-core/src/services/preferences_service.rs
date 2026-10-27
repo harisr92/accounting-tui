@@ -2,7 +2,7 @@ use std::path::Path;
 
 use super::ServiceError;
 use crate::domain::Appearance;
-use crate::storage::sync::{SyncDir, SyncSource};
+use crate::storage::sync::{SyncBackend, SyncDir};
 use crate::storage::{DataDir, SettingsRepository};
 
 /// How the app looks and how this device syncs, kept apart from the business profile
@@ -40,15 +40,16 @@ impl<R: SettingsRepository> PreferencesService<R> {
         Ok(next)
     }
 
-    /// The folder this device syncs through on its next start, and where that was set
-    pub fn sync_folder(&self) -> Result<Option<(SyncDir, SyncSource)>, ServiceError> {
+    /// How this device syncs from its next start
+    pub fn sync_backend(&self) -> Result<Option<SyncBackend>, ServiceError> {
         let Some(data) = &self.data_dir else {
             return Ok(None);
         };
-        Ok(SyncDir::configured(data, self.sync_override.clone())?)
+        Ok(SyncBackend::configured(data, self.sync_override.clone())?)
     }
 
-    /// Sync this device through `dir` from its next start, or stop when `None`
+    /// Sync this device through `dir` from its next start, or stop when `None` (Google Drive
+    /// too)
     pub fn set_sync_folder(&mut self, dir: Option<&Path>) -> Result<(), ServiceError> {
         let data = self.data_dir.as_ref().ok_or(ServiceError::NoSyncInDemo)?;
         Ok(SyncDir::save(data, dir)?)
