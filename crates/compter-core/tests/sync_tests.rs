@@ -5,7 +5,8 @@ use std::fs;
 use chrono::{Duration, Utc};
 use compter_core::domain::{Billing, Project};
 use compter_core::storage::sync::{
-    self, Lease, Manifest, Resolution, SyncDir, SyncError, SyncSession, SyncSource, SyncState,
+    self, Lease, Manifest, Resolution, SyncBackend, SyncDir, SyncError, SyncSession, SyncSource,
+    SyncState,
 };
 use compter_core::storage::{DataDir, ProjectRepository, StorageError, Store};
 use tempfile::TempDir;
@@ -298,17 +299,24 @@ fn keeping_a_half_synced_snapshot_leaves_the_local_copy_in_place() {
 fn the_folder_saved_in_settings_is_used_unless_the_variable_overrides_it() {
     let device = Device::new("laptop");
     let (_folder, sync) = sync_dir();
-    assert!(SyncDir::configured(&device.data, None).unwrap().is_none());
+    assert!(
+        SyncBackend::configured(&device.data, None)
+            .unwrap()
+            .is_none()
+    );
 
     SyncDir::save(&device.data, Some(sync.root())).unwrap();
     assert_eq!(
-        SyncDir::configured(&device.data, None).unwrap(),
-        Some((sync.clone(), SyncSource::Settings))
+        SyncBackend::configured(&device.data, None).unwrap(),
+        Some(SyncBackend::Folder(sync.clone(), SyncSource::Settings))
     );
     let other = tempfile::tempdir().unwrap();
     assert_eq!(
-        SyncDir::configured(&device.data, Some(SyncDir::new(other.path()))).unwrap(),
-        Some((SyncDir::new(other.path()), SyncSource::Env))
+        SyncBackend::configured(&device.data, Some(SyncDir::new(other.path()))).unwrap(),
+        Some(SyncBackend::Folder(
+            SyncDir::new(other.path()),
+            SyncSource::Env
+        ))
     );
 
     SyncDir::save(&device.data, None).unwrap();

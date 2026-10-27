@@ -78,6 +78,8 @@ jobs:
           COMPTER_UPLOAD_KEY_PASSWORD: ${{ secrets.COMPTER_UPLOAD_KEY_PASSWORD }}
           COMPTER_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.COMPTER_PLAY_SERVICE_ACCOUNT_JSON }}
           COMPTER_PLAY_RELEASE_STATUS: ${{ vars.COMPTER_PLAY_RELEASE_STATUS }}
+          # Google sign-in for Drive sync: the Web client's ID, which Android's sign-in needs
+          COMPTER_GOOGLE_SERVER_CLIENT_ID: ${{ secrets.COMPTER_GOOGLE_SERVER_CLIENT_ID }}
         run: bundle exec fastlane internal
 
       - name: Remove the upload key
@@ -113,6 +115,21 @@ jobs:
         run: |
           echo "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/distribution.p12"
           echo "$PROFILE" | base64 --decode > "$RUNNER_TEMP/compter.mobileprovision"
+
+      # Google sign-in for Drive sync: the iOS client, read by Info.plist through
+      # Release.xcconfig (gitignored locally, so written here)
+      - name: Google sign-in client
+        working-directory: app/ios/Flutter
+        env:
+          IOS_CLIENT_ID: ${{ secrets.COMPTER_GOOGLE_IOS_CLIENT_ID }}
+          REVERSED_CLIENT_ID: ${{ secrets.COMPTER_GOOGLE_REVERSED_CLIENT_ID }}
+        run: |
+          if [ -z "$IOS_CLIENT_ID" ] || [ -z "$REVERSED_CLIENT_ID" ]; then
+            echo "::error::Set the COMPTER_GOOGLE_IOS_CLIENT_ID and COMPTER_GOOGLE_REVERSED_CLIENT_ID repository secrets"
+            exit 1
+          fi
+          printf 'GOOGLE_IOS_CLIENT_ID = %s\nGOOGLE_REVERSED_CLIENT_ID = %s\n' \
+            "$IOS_CLIENT_ID" "$REVERSED_CLIENT_ID" > Google.xcconfig
 
       - name: Build and upload
         working-directory: app/ios

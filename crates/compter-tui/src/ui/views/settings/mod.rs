@@ -1,5 +1,6 @@
 //! Settings tab: the business profile invoices are issued under, and this device's preferences
 
+use std::borrow::Cow;
 use std::path::Path;
 
 use crate::ui::key::Key;
@@ -131,16 +132,23 @@ impl<R: Repository> SettingsView<R> {
     }
 
     fn submit_sync(&mut self, path: Option<&Path>) -> Result<Notice, String> {
+        let left_drive = matches!(self.sync, Some(SyncBackend::GoogleDrive { .. }));
         self.preferences
             .set_sync_folder(path)
             .map_err(|e| e.to_string())?;
         self.sync = self.preferences.sync_backend().map_err(|e| e.to_string())?;
-        Ok(Notice::success(match (path.is_some(), &self.sync) {
+        let saved = match (path.is_some(), &self.sync) {
             (_, Some(SyncBackend::Folder(_, SyncSource::Env))) => {
                 "Saved, but $COMPTER_SYNC_DIR overrides it while it is set"
             }
             (true, _) => "Sync folder saved: compter syncs through it from the next start",
             (false, _) => "Sync turned off from the next start",
+        };
+        // The Google sign-in stays in the keychain; only the terminal can remove it
+        Ok(Notice::success(if left_drive {
+            format!("{saved}; `compter drive sign-out` removes the Google sign-in").into()
+        } else {
+            Cow::Borrowed(saved)
         }))
     }
 }

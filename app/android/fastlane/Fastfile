@@ -9,11 +9,15 @@ platform :android do
     # Without the upload key, android/app/build.gradle.kts signs with the debug key, which
     # Play rejects; say so here instead
     UI.user_error!("COMPTER_UPLOAD_STORE_FILE is not set") unless ENV["COMPTER_UPLOAD_STORE_FILE"]
+    # Without it the app builds, but Google Drive sync can't sign in
+    server_client_id = ENV["COMPTER_GOOGLE_SERVER_CLIENT_ID"].to_s
+    UI.user_error!("COMPTER_GOOGLE_SERVER_CLIENT_ID is not set") if server_client_id.empty?
 
     Dir.chdir("../..") do
       sh("flutter", "build", "appbundle", "--release",
          "--build-name=#{ENV.fetch("COMPTER_BUILD_NAME")}",
-         "--build-number=#{ENV.fetch("COMPTER_BUILD_NUMBER")}")
+         "--build-number=#{ENV.fetch("COMPTER_BUILD_NUMBER")}",
+         "--dart-define=COMPTER_GOOGLE_SERVER_CLIENT_ID=#{server_client_id}")
     end
 
     upload_to_play_store(

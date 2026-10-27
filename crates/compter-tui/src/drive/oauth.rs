@@ -151,14 +151,16 @@ pub fn sign_in(client: &Client, open: impl FnOnce(&str)) -> Result<Granted, Driv
 
     let code = loop {
         let (stream, _) = listener.accept()?;
-        match answer(stream, &state)? {
+        // A browser may open a connection it never sends on (a preconnect), which times out;
+        // that one connection failing isn't the sign-in failing
+        match answer(stream, &state).unwrap_or(Redirect::Other) {
             Redirect::Code(code) => break code,
             Redirect::Refused(error) => return Err(DriveError::Refused(error)),
             Redirect::Other => {}
         }
     };
     let tokens = exchange(
-        &agent(),
+        &agent(SHORT),
         client,
         &[
             ("grant_type", "authorization_code"),
@@ -195,13 +197,19 @@ pub fn refresh(
     Ok(tokens.access_token)
 }
 
-/// Requests to Google: statuses are checked by the caller, and a slow link still finishes
-/// uploading a snapshot
-pub fn agent() -> ureq::Agent {
+/// The longest a small request (a token, a lookup, the lease, the manifest) may take. Quitting
+/// waits for the lease's last refresh, so this bounds how long a stalled network holds it up.
+pub const SHORT: Duration = Duration::from_secs(20);
+
+/// The longest the snapshot may take to upload or download, so a slow link still finishes it
+pub const TRANSFER: Duration = Duration::from_secs(300);
+
+/// Requests to Google, giving up after `timeout`; statuses are checked by the caller
+pub fn agent(timeout: Duration) -> ureq::Agent {
     ureq::Agent::config_builder()
         .http_status_as_error(false)
-        .timeout_connect(Some(Duration::from_secs(15)))
-        .timeout_global(Some(Duration::from_secs(300)))
+        .timeout_connect(Some(Duration::from_secs(10)))
+        .timeout_global(Some(timeout))
         .build()
         .into()
 }

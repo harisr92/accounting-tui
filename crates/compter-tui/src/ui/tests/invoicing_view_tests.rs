@@ -682,5 +682,10 @@ fn settings_shows_the_google_account_this_device_syncs_through() {
     app.handle_key(Key::Char('x'));
     let shown = screen(&app, W, H);
     assert!(shown.contains("Sync folder     off"), "{shown}");
+    assert!(shown.contains("drive sign-out"), "{shown}");
     assert_eq!(SyncBackend::configured(&data_dir, None).unwrap(), None);
+    assert_eq!(
+        SyncBackend::google_account(&data_dir).unwrap().as_deref(),
+        Some("me@example.com")
+    );
 }
