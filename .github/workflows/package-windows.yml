@@ -17,10 +17,24 @@ jobs:
     env:
       # Link the C runtime statically, so the .exe runs without the Visual C++ redistributable
       RUSTFLAGS: -C target-feature=+crt-static
+      # Google sign-in for Drive sync (`compter drive sign-in`), compiled in: the Desktop OAuth
+      # client of the Cloud project the phone app uses. Repository secrets.
+      COMPTER_GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.COMPTER_GOOGLE_DESKTOP_CLIENT_ID }}
+      COMPTER_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.COMPTER_GOOGLE_DESKTOP_CLIENT_SECRET }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # A release without them can't sign in to Drive, and the phone syncs only through Drive
+      - name: Check the Google sign-in client is set
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          if [ -z "$COMPTER_GOOGLE_DESKTOP_CLIENT_ID" ] || [ -z "$COMPTER_GOOGLE_DESKTOP_CLIENT_SECRET" ]; then
+            echo "::error::Set the COMPTER_GOOGLE_DESKTOP_CLIENT_ID and _SECRET repository secrets"
+            exit 1
+          fi
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
