@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1232" height="784" viewBox="0 0 1232 784">
+<style>text{font-family:"SF Mono",Menlo,Consolas,"DejaVu Sans Mono","Liberation Mono",monospace;font-size:17px;white-space:pre}</style>
+<rect width="1232" height="784" rx="10" fill="#ffffff"/>
+<circle cx="20" cy="16" r="6" fill="#ff5f57"/><circle cx="40" cy="16" r="6" fill="#febc2e"/><circle cx="60" cy="16" r="6" fill="#28c840"/>
+<text x="16" y="63" textLength="70" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">compter</text>
+<text x="106" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">1</text>
+<text x="116" y="63" textLength="110" lengthAdjust="spacingAndGlyphs" fill="#24292f"> Dashboard </text>
+<text x="226" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#808080">│</text>
+<text x="246" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">2</text>
+<text x="256" y="63" textLength="100" lengthAdjust="spacingAndGlyphs" fill="#24292f"> Projects </text>
+<text x="356" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#808080">│</text>
+<text x="376" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">3</text>
+<text x="386" y="63" textLength="100" lengthAdjust="spacingAndGlyphs" fill="#24292f"> Invoices </text>
+<text x="486" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#808080">│</text>
+<text x="506" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">4</text>
+<text x="516" y="63" textLength="100" lengthAdjust="spacingAndGlyphs" fill="#24292f"> Expenses </text>
+<text x="616" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#808080">│</text>
+<rect x="636" y="48" width="10" height="20" fill="#0969da"/>
+<text x="636" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#ffffff" font-weight="bold">5</text>
+<rect x="646" y="48" width="80" height="20" fill="#24292f"/>
+<text x="646" y="63" textLength="80" lengthAdjust="spacingAndGlyphs" fill="#ffffff" font-weight="bold"> Reports</text>
+<text x="736" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#808080">│</text>
+<text x="756" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">6</text>
+<text x="766" y="63" textLength="350" lengthAdjust="spacingAndGlyphs" fill="#24292f"> Settings                          </text>
+<text x="1116" y="63" textLength="100" lengthAdjust="spacingAndGlyphs" fill="#808080">FY 2026-27</text>
+<text x="16" y="83" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#0969da">┌</text>
+<text x="26" y="83" textLength="160" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold"> Income 2026-27 </text>
+<text x="186" y="83" textLength="1030" lengthAdjust="spacingAndGlyphs" fill="#0969da">──────────────────────────────────────────────────────────────────────────────────────────────────────┐</text>
+<text x="16" y="103" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#0969da">│</text>
+<text x="26" y="103" textLength="80" lengthAdjust="spacingAndGlyphs" fill="#808080">Invoices</text>
+<text x="196" y="103" textLength="80" lengthAdjust="spacingAndGlyphs" fill="#808080">Receipts</text>
+<text x="366" y="103" textLength="70" lengthAdjust="spacingAndGlyphs" fill="#808080">Exports</text>
+<text x="536" y="103" textLength="80" lengthAdjust="spacingAndGlyphs" fill="#808080">Received</text>
+<text x="706" y="103" textLength="30" lengthAdjust="spacingAndGlyphs" fill="#808080">TDS</text>
+<text x="876" y="103" textLength="110" lengthAdjust="spacingAndGlyphs" fill="#808080">Outstanding</text>
+<text x="1046" y="103" textLength="130" lengthAdjust="spacingAndGlyphs" fill="#808080">Exchange gain</text>
+<text x="1206" y="103" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#0969da">│</text>
+<text x="16" y="123" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#0969da">│</text>
+<text x="26" y="123" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">5</text>
+<text x="196" y="123" textLength="120" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">₹2,50,750.00</text>
+<text x="366" y="123" textLength="100" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">₹90,000.00</text>
+<text x="536" y="123" textLength="120" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">₹1,79,850.00</text>
+<text x="706" y="123" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">₹5,000.00</text>
+<text x="876" y="123" textLength="100" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">₹95,285.00</text>
+<text x="1046" y="123" textLength="70" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">₹450.00</text>
+<text x="1206" y="123" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#0969da">│</text>
+<text x="16" y="143" textLength="1200" lengthAdjust="spacingAndGlyphs" fill="#0969da">└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘</text>
+<text x="16" y="163" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">┌</text>
+<text x="26" y="163" textLength="120" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc" font-weight="bold"> Income tax </text>
+<text x="146" y="163" textLength="1070" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">──────────────────────────────────────────────────────────────────────────────────────────────────────────┐</text>
+<text x="16" y="183" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="26" y="183" textLength="180" lengthAdjust="spacingAndGlyphs" fill="#808080">Receipts (accrual)</text>
+<text x="326" y="183" textLength="180" lengthAdjust="spacingAndGlyphs" fill="#808080">44ADA income (50%)</text>
+<text x="626" y="183" textLength="80" lengthAdjust="spacingAndGlyphs" fill="#808080">Expenses</text>
+<text x="916" y="183" textLength="120" lengthAdjust="spacingAndGlyphs" fill="#808080">Books profit</text>
+<text x="1206" y="183" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="203" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="26" y="203" textLength="120" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">₹2,50,750.00</text>
+<text x="326" y="203" textLength="120" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">₹1,25,375.00</text>
+<text x="626" y="203" textLength="120" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">₹1,62,000.00</text>
+<text x="916" y="203" textLength="100" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">₹89,200.00</text>
+<text x="1206" y="203" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="223" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="26" y="223" textLength="1150" lengthAdjust="spacingAndGlyphs" fill="#af5f00" font-weight="bold">Books profit is below 44ADA income: declaring the lower figure needs a tax audit (44AB) if income is over the basic</text>
+<text x="1206" y="223" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="243" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="26" y="243" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#af5f00" font-weight="bold">exemption</text>
+<text x="1206" y="243" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="263" textLength="1200" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘</text>
+<text x="16" y="283" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">┌</text>
+<text x="26" y="283" textLength="50" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc" font-weight="bold"> GST </text>
+<text x="76" y="283" textLength="1140" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">─────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐</text>
+<text x="16" y="303" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="26" y="303" textLength="1180" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">Quarter                        CGST                 SGST                IGST         Input credit       Net (- credit)</text>
+<text x="1206" y="303" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="323" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="26" y="323" textLength="1180" lengthAdjust="spacingAndGlyphs" fill="#24292f">Q1 (Apr-Jun)                  ₹0.00                ₹0.00               ₹0.00                ₹0.00                ₹0.00</text>
+<text x="1206" y="323" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="343" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="26" y="343" textLength="1180" lengthAdjust="spacingAndGlyphs" fill="#24292f">Q2 (Jul-Sep)              ₹4,500.00            ₹4,500.00           ₹6,300.00           ₹28,980.00          -₹13,680.00</text>
+<text x="1206" y="343" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="363" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="26" y="363" textLength="1180" lengthAdjust="spacingAndGlyphs" fill="#24292f">Q3 (Oct-Dec)              ₹5,400.00            ₹5,400.00           ₹2,835.00              ₹180.00           ₹13,455.00</text>
+<text x="1206" y="363" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="383" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="26" y="383" textLength="1180" lengthAdjust="spacingAndGlyphs" fill="#24292f">Q4 (Jan-Mar)                  ₹0.00                ₹0.00               ₹0.00                ₹0.00                ₹0.00</text>
+<text x="1206" y="383" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="403" textLength="1200" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘</text>
+<text x="16" y="423" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">┌</text>
+<text x="26" y="423" textLength="360" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc" font-weight="bold"> Clients · match TDS with Form 26AS </text>
+<text x="386" y="423" textLength="830" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">──────────────────────────────────────────────────────────────────────────────────┐</text>
+<text x="16" y="443" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="26" y="443" textLength="1180" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">Client                                                        Invoiced                Received                     TDS</text>
+<text x="1206" y="443" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="463" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="26" y="463" textLength="1180" lengthAdjust="spacingAndGlyphs" fill="#24292f">Acme Pvt Ltd                                              ₹1,10,000.00              ₹89,400.00               ₹5,000.00</text>
+<text x="1206" y="463" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="483" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="26" y="483" textLength="1180" lengthAdjust="spacingAndGlyphs" fill="#24292f">Initrode GmbH                                               ₹90,000.00              ₹90,450.00                   ₹0.00</text>
+<text x="1206" y="483" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="503" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="26" y="503" textLength="1180" lengthAdjust="spacingAndGlyphs" fill="#24292f">Umbrella Analytics                                          ₹35,000.00                   ₹0.00                   ₹0.00</text>
+<text x="1206" y="503" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="523" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="26" y="523" textLength="1180" lengthAdjust="spacingAndGlyphs" fill="#24292f">Globex Labs                                                 ₹15,750.00                   ₹0.00                   ₹0.00</text>
+<text x="1206" y="523" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="543" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="1206" y="543" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="563" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="1206" y="563" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="583" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="1206" y="583" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="603" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="1206" y="603" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="623" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="1206" y="623" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="643" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="1206" y="643" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="663" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="1206" y="663" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="683" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="1206" y="683" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="703" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="1206" y="703" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="723" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="1206" y="723" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">│</text>
+<text x="16" y="743" textLength="1200" lengthAdjust="spacingAndGlyphs" fill="#bcbcbc">└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘</text>
+<text x="16" y="763" textLength="30" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">[ ]</text>
+<text x="46" y="763" textLength="50" lengthAdjust="spacingAndGlyphs" fill="#24292f"> year</text>
+<text x="96" y="763" textLength="30" lengthAdjust="spacingAndGlyphs" fill="#808080"> · </text>
+<text x="126" y="763" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">g</text>
+<text x="136" y="763" textLength="140" lengthAdjust="spacingAndGlyphs" fill="#24292f"> export GSTR-1</text>
+<text x="276" y="763" textLength="30" lengthAdjust="spacingAndGlyphs" fill="#808080"> · </text>
+<text x="306" y="763" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">i</text>
+<text x="316" y="763" textLength="750" lengthAdjust="spacingAndGlyphs" fill="#24292f"> export IFF                                                                </text>
+<text x="1066" y="763" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">?</text>
+<text x="1076" y="763" textLength="50" lengthAdjust="spacingAndGlyphs" fill="#24292f"> help</text>
+<text x="1126" y="763" textLength="30" lengthAdjust="spacingAndGlyphs" fill="#808080"> · </text>
+<text x="1156" y="763" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#0969da" font-weight="bold">q</text>
+<text x="1166" y="763" textLength="50" lengthAdjust="spacingAndGlyphs" fill="#24292f"> quit</text>
+</svg>

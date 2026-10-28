@@ -6,23 +6,20 @@ A terminal app for freelancers who work for several clients, billed by the hour 
 
 Built with [ratatui](https://ratatui.rs) (crossterm backend) on top of [`accounting-core`](https://github.com/harisr92/accounting-blue), which provides double-entry bookkeeping, GST invoices with PDF export, GSTR-1 and financial reports.
 
-```
-┌ compter ─────────────────────────────────────────────────────────────────── FY 2026-27 ┐
-│ 1 Dashboard │ 2 Projects │ 3 Invoices │ 4 Reports                                      │
-└────────────────────────────────────────────────────────────────────────────────────────┘
-┌ Projects ─────────────────┐┌ Website Revamp ─────────────────────────────────── ACTIVE ┐
-│> Website Revamp  ACTIVE   ││Client Acme Pvt Ltd   GSTIN 29ABCDE1234F1Z5                │
-│  Mobile App      ACTIVE   ││Total               Paid               Outstanding         │
-│  API Audit       PAID     ││₹1,50,000.00        ₹50,000.00         ₹1,00,000.00        │
-│  Data Pipeline   COMPLETED│└───────────────────────────────────────────────────────────┘
-│                           │┌ Milestones ───────────────────────────────────────────────┐
-│                           ││  Name               Amount          Due         Status    │
-│                           ││> Design                 ₹50,000.00  2026-09-01  PAID      │
-│                           ││  Frontend               ₹60,000.00  2026-10-20  INVOICED  │
-│                           ││  Launch                 ₹40,000.00  2026-11-15  PENDING   │
-└───────────────────────────┘└───────────────────────────────────────────────────────────┘
-Tab focus · j/k move · n new · i invoice · 1-9/←→ tabs · ? help · q quit
-```
+![Projects: a project's totals and its milestones](crates/compter-tui/screenshots/projects.svg)
+
+<table>
+  <tr>
+    <td><img src="crates/compter-tui/screenshots/dashboard.svg" alt="Dashboard: the year's figures and invoices waiting for payment"></td>
+    <td><img src="crates/compter-tui/screenshots/issue.svg" alt="Issuing an invoice: the GST worked out before it is confirmed"></td>
+  </tr>
+  <tr>
+    <td><img src="crates/compter-tui/screenshots/invoices.svg" alt="Invoices in the gruvbox theme, with what is still due"></td>
+    <td><img src="crates/compter-tui/screenshots/reports.svg" alt="Reports in the light theme: income, 44ADA, GST by quarter and TDS by client"></td>
+  </tr>
+</table>
+
+These are drawn from the demo business by `cargo run -p compter-tui --example screenshots`; run it again after a UI change.
 
 The same books are on your phone: the Android and iPhone app syncs with the terminal app through your own Google Drive. See the [screenshots](app/SCREENSHOTS.md).
 
