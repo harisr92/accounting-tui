@@ -5,6 +5,22 @@ require "tmpdir"
 
 default_platform(:android)
 
+# Play refuses a version code it has seen on any track, and builds uploaded by hand used the
+# low ones (0.2.5 was 2), so the workflow's run number, which starts again at 1, can't be the
+# version code. Take the one after the highest Play has; the run number only when Play can't
+# be asked, or is higher.
+def next_version_code(json_key, run_number)
+  codes = %w[internal alpha beta production].flat_map do |track|
+    google_play_track_version_codes(track: track, json_key_data: json_key)
+  rescue StandardError => e
+    UI.important("Couldn't read the #{track} track's version codes: #{e.message}")
+    []
+  end
+  code = [codes.map(&:to_i).max.to_i + 1, run_number.to_i].max
+  UI.message("Version code #{code} (Play's highest: #{codes.map(&:to_i).max || 'none'})")
+  code.to_s
+end
+
 platform :android do
   desc "Build a signed app bundle and upload it to the internal testing track"
   lane :internal do
@@ -15,7 +31,8 @@ platform :android do
     server_client_id = ENV["COMPTER_GOOGLE_SERVER_CLIENT_ID"].to_s
     UI.user_error!("COMPTER_GOOGLE_SERVER_CLIENT_ID is not set") if server_client_id.empty?
     build_name = ENV.fetch("COMPTER_BUILD_NAME")
-    build_number = ENV.fetch("COMPTER_BUILD_NUMBER")
+    json_key = ENV.fetch("COMPTER_PLAY_SERVICE_ACCOUNT_JSON")
+    build_number = next_version_code(json_key, ENV.fetch("COMPTER_BUILD_NUMBER"))
 
     # What's new in this build, from app/release-notes/<version>.txt. Play wants the notes
     # under the build number, known only now, so they are staged in a metadata folder of
@@ -36,7 +53,7 @@ platform :android do
     upload_to_play_store(
       track: "internal",
       aab: File.expand_path("../../build/app/outputs/bundle/release/app-release.aab", __dir__),
-      json_key_data: ENV.fetch("COMPTER_PLAY_SERVICE_ACCOUNT_JSON"),
+      json_key_data: json_key,
       # "draft" until Play has published the app once; then "completed"
       release_status: ENV.fetch("COMPTER_PLAY_RELEASE_STATUS", "draft"),
       metadata_path: File.dirname(File.dirname(changelogs)),
