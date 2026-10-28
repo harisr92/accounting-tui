@@ -10,6 +10,7 @@ import 'screens/project_screen.dart';
 import 'screens/projects_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/welcome_screen.dart';
 import 'sync/sync_controller.dart';
 import 'ui/glass.dart';
 
@@ -22,17 +23,22 @@ String invoicePath(String number) => '/invoices/${Uri.encodeComponent(number)}';
 Page<void> _detail(GoRouterState state, Widget screen) =>
     MaterialPage<void>(key: state.pageKey, child: screen);
 
-/// A new router at `/projects`: one per app, so a rebuilt app (or the next test) starts on the
-/// list. Each tab keeps its own stack, like the terminal app's tabs keep their selection. A
-/// project or invoice opens full screen over the tabs (Material's detail pattern), so its own
-/// bottom actions never sit on top of the navigation bar.
-GoRouter buildRouter() {
+/// A new router at `/projects`, or at the welcome pages on a first start ([welcome]): one per
+/// app, so a rebuilt app (or the next test) starts on the list. Each tab keeps its own stack,
+/// like the terminal app's tabs keep their selection. A project or invoice opens full screen
+/// over the tabs (Material's detail pattern), so its own bottom actions never sit on top of
+/// the navigation bar.
+GoRouter buildRouter({bool welcome = false}) {
   final root = GlobalKey<NavigatorState>();
   return GoRouter(
     navigatorKey: root,
-    initialLocation: '/projects',
+    initialLocation: welcome ? '/welcome' : '/projects',
     routes: [
       GoRoute(path: '/', redirect: (_, _) => '/projects'),
+      GoRoute(
+        path: '/welcome',
+        builder: (context, state) => const WelcomeScreen(),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => _Tabs(shell),
         branches: [
@@ -148,50 +154,61 @@ class _TabsState extends ConsumerState<_Tabs> {
           );
         },
       ),
-      bottomNavigationBar: CupertinoTabBar(
-        currentIndex: shell.currentIndex,
-        // A second tap on the current tab goes back to its list
-        onTap: (i) =>
-            shell.goBranch(i, initialLocation: i == shell.currentIndex),
-        backgroundColor: Glass.tint(scheme),
-        activeColor: scheme.primary,
-        inactiveColor: scheme.onSurfaceVariant,
-        border: Border(
-          top: BorderSide(color: scheme.outlineVariant, width: 0.5),
+      // The bar's height is fixed, so its labels grow no more than 130% however large the
+      // phone's text: like the system's own tab bars
+      bottomNavigationBar: MediaQuery.withClampedTextScaling(
+        maxScaleFactor: 1.3,
+        child: CupertinoTabBar(
+          currentIndex: shell.currentIndex,
+          // A second tap on the current tab goes back to its list
+          onTap: (i) =>
+              shell.goBranch(i, initialLocation: i == shell.currentIndex),
+          backgroundColor: Glass.tint(scheme),
+          activeColor: scheme.primary,
+          // Its 10 pt labels sit over glass: halfway to the foreground keeps them at 4.5:1
+          // whatever scrolls under, in every theme
+          inactiveColor: Color.lerp(
+            scheme.onSurfaceVariant,
+            scheme.onSurface,
+            0.5,
+          )!,
+          border: Border(
+            top: BorderSide(color: scheme.outlineVariant, width: 0.5),
+          ),
+          items: [
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.work_outline),
+              activeIcon: Icon(Icons.work),
+              label: 'Projects',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.receipt_long_outlined),
+              activeIcon: Icon(Icons.receipt_long),
+              label: 'Invoices',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              activeIcon: Icon(Icons.account_balance_wallet),
+              label: 'Expenses',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.insights_outlined),
+              activeIcon: Icon(Icons.insights),
+              label: 'Reports',
+            ),
+            BottomNavigationBarItem(
+              icon: Badge(
+                isLabelVisible: attention,
+                child: const Icon(Icons.settings_outlined),
+              ),
+              activeIcon: Badge(
+                isLabelVisible: attention,
+                child: const Icon(Icons.settings),
+              ),
+              label: 'Settings',
+            ),
+          ],
         ),
-        items: [
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.work_outline),
-            activeIcon: Icon(Icons.work),
-            label: 'Projects',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long_outlined),
-            activeIcon: Icon(Icons.receipt_long),
-            label: 'Invoices',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            activeIcon: Icon(Icons.account_balance_wallet),
-            label: 'Expenses',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.insights_outlined),
-            activeIcon: Icon(Icons.insights),
-            label: 'Reports',
-          ),
-          BottomNavigationBarItem(
-            icon: Badge(
-              isLabelVisible: attention,
-              child: const Icon(Icons.settings_outlined),
-            ),
-            activeIcon: Badge(
-              isLabelVisible: attention,
-              child: const Icon(Icons.settings),
-            ),
-            label: 'Settings',
-          ),
-        ],
       ),
     );
   }

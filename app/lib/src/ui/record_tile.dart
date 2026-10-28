@@ -31,35 +31,62 @@ class RecordTile extends StatelessWidget {
 
   final VoidCallback? onTap;
 
+  /// Text this much larger than standard doesn't fit the column at the right, so the amount
+  /// and status move under the facts instead
+  static const _stackAbove = 1.5;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final status = this.status;
     final detail = this.detail;
+    final amount = this.amount;
+    final supporting = this.supporting;
+    final hasFigures = amount != null || status != null;
+    final stacked =
+        hasFigures && MediaQuery.textScalerOf(context).scale(1) > _stackAbove;
+    final amountText = amount == null
+        ? null
+        : Text(
+            amount,
+            style: theme.textTheme.titleSmall?.copyWith(fontFeatures: tabular),
+          );
+    final second = status != null
+        ? StatusChip(status)
+        : detail != null
+        ? Text(detail, style: theme.textTheme.bodySmall)
+        : null;
     return ListTile(
       title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: supporting == null
+      subtitle: stacked
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (supporting != null) ...[
+                  Text(supporting),
+                  const SizedBox(height: 4),
+                ],
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [?amountText, ?second],
+                ),
+              ],
+            )
+          : supporting == null
           ? null
-          : Text(supporting!, maxLines: 2, overflow: TextOverflow.ellipsis),
-      trailing: amount == null && status == null
+          : Text(supporting, maxLines: 2, overflow: TextOverflow.ellipsis),
+      trailing: stacked || !hasFigures
           ? null
           : Column(
               // ListTile gives its trailing widget unbounded height
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                if (amount != null)
-                  Text(
-                    amount!,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontFeatures: tabular,
-                    ),
-                  ),
-                if (status != null) ...[
-                  const SizedBox(height: 4),
-                  StatusChip(status),
-                ] else if (detail != null)
-                  Text(detail, style: theme.textTheme.bodySmall),
+                ?amountText,
+                if (status != null) const SizedBox(height: 4),
+                ?second,
               ],
             ),
       onTap: onTap,

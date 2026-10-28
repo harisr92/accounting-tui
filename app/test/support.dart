@@ -103,6 +103,15 @@ Future<void> pumpUntil(
   await settle(tester);
 }
 
+/// Scroll [finder] to the middle of the screen: scrolled only to the edge, a row sits under
+/// the frosted title or tab bar, which takes the tap
+Future<void> scrollToMiddle(WidgetTester tester, Finder finder) async {
+  await tester.scrollUntilVisible(finder, 200);
+  // Jumps without animating, so one frame shows it; settling could wait on a spinner forever
+  await Scrollable.ensureVisible(tester.element(finder), alignment: 0.5);
+  await tester.pump();
+}
+
 /// Pick [date] in the form's date field called [label], typing it into the picker's input mode
 Future<void> pickDate(WidgetTester tester, String label, DateTime date) async {
   await tester.tap(find.widgetWithText(TextField, label));

@@ -73,15 +73,19 @@ ThemeData gruvboxDarkTheme() {
   const purple = Color(0xFFD3869B);
   Color faded(Color color) =>
       Color.alphaBlend(color.withValues(alpha: 0.22), bg0);
+  // [color] mixed toward the foreground by [toFg]: each the least that reaches WCAG AA's
+  // 4.5:1 for small text (test/accessibility_test.dart). Yellow needs none.
+  Color lighter(Color color, double toFg) => Color.lerp(color, fg, toFg)!;
   final scheme =
       ColorScheme.fromSeed(
         seedColor: orange,
         brightness: Brightness.dark,
       ).copyWith(
-        primary: orange,
+        // Small orange labels (the selected tab) over the glass need a touch more light
+        primary: lighter(orange, 0.15),
         onPrimary: bg0,
         primaryContainer: faded(orange),
-        onPrimaryContainer: orange,
+        onPrimaryContainer: lighter(orange, 0.25),
         secondary: yellow,
         onSecondary: bg0,
         secondaryContainer: faded(yellow),
@@ -89,20 +93,23 @@ ThemeData gruvboxDarkTheme() {
         tertiary: aqua,
         onTertiary: bg0,
         tertiaryContainer: faded(aqua),
-        onTertiaryContainer: aqua,
+        onTertiaryContainer: lighter(aqua, 0.1),
         error: red,
         onError: bg0,
         errorContainer: faded(red),
-        onErrorContainer: red,
+        onErrorContainer: lighter(red, 0.45),
         surface: bg0,
         onSurface: fg,
-        onSurfaceVariant: const Color(0xFFA89984),
+        // gruvbox fg3: fg4 falls below 4.5:1 on the raised tiles, and fg2 is too close to
+        // the foreground to tell secondary text from primary
+        onSurfaceVariant: const Color(0xFFBDAE93),
         surfaceDim: const Color(0xFF1D2021),
         surfaceBright: const Color(0xFF504945),
         surfaceContainerLowest: const Color(0xFF1D2021),
         surfaceContainerLow: const Color(0xFF32302F),
         surfaceContainer: const Color(0xFF3C3836),
-        surfaceContainerHigh: const Color(0xFF504945),
+        // Between bg1 and bg2: bg2 leaves fg3 short of 4.5:1
+        surfaceContainerHigh: const Color(0xFF45403D),
         surfaceContainerHighest: const Color(0xFF665C54),
         outline: const Color(0xFF928374),
         outlineVariant: const Color(0xFF504945),
@@ -113,7 +120,7 @@ ThemeData gruvboxDarkTheme() {
       );
   return _build(
     scheme,
-    CreditedColors(background: faded(purple), foreground: purple),
+    CreditedColors(background: faded(purple), foreground: lighter(purple, 0.3)),
   );
 }
 

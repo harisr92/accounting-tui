@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +8,7 @@ import '../compter.dart';
 import '../forms/invoice_forms.dart';
 import '../forms/project_forms.dart';
 import '../notice.dart';
+import '../review_prompt.dart';
 import '../router.dart';
 import '../rust/api/error.dart';
 import '../rust/api/rows.dart';
@@ -241,6 +244,8 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> with Searching {
               : "Issued $number, but its PDF wasn't saved ($pdfError)",
           error: pdfError != null,
         );
+        // An invoice whose PDF failed isn't a win to ask a review on
+        if (pdfError == null) unawaited(ref.read(reviewPromptProvider).win());
         context.go(invoicePath(number));
       case _Action.logTime:
         final updated = await logTime(context, app, project, milestone);

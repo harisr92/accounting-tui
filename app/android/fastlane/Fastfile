@@ -1,6 +1,8 @@
 # Builds the app bundle signed with the upload key and uploads it to Google Play's internal
 # track. Every value comes from COMPTER_* variables, which mobile-release.yml fills from
 # repository secrets; app/README.md lists them.
+require "tmpdir"
+
 default_platform(:android)
 
 platform :android do
@@ -12,11 +14,22 @@ platform :android do
     # Without it the app builds, but Google Drive sync can't sign in
     server_client_id = ENV["COMPTER_GOOGLE_SERVER_CLIENT_ID"].to_s
     UI.user_error!("COMPTER_GOOGLE_SERVER_CLIENT_ID is not set") if server_client_id.empty?
+    build_name = ENV.fetch("COMPTER_BUILD_NAME")
+    build_number = ENV.fetch("COMPTER_BUILD_NUMBER")
+
+    # What's new in this build, from app/release-notes/<version>.txt. Play wants the notes
+    # under the build number, known only now, so they are staged in a metadata folder of
+    # their own; the listing itself is the metadata lane's
+    notes = File.expand_path("../../release-notes/#{build_name}.txt", __dir__)
+    UI.user_error!("#{notes} is missing: write #{build_name}'s release notes") unless File.exist?(notes)
+    changelogs = File.join(Dir.mktmpdir, "en-US", "changelogs")
+    FileUtils.mkdir_p(changelogs)
+    FileUtils.cp(notes, File.join(changelogs, "#{build_number}.txt"))
 
     Dir.chdir("../..") do
       sh("flutter", "build", "appbundle", "--release",
-         "--build-name=#{ENV.fetch("COMPTER_BUILD_NAME")}",
-         "--build-number=#{ENV.fetch("COMPTER_BUILD_NUMBER")}",
+         "--build-name=#{build_name}",
+         "--build-number=#{build_number}",
          "--dart-define=COMPTER_GOOGLE_SERVER_CLIENT_ID=#{server_client_id}")
     end
 
@@ -26,15 +39,19 @@ platform :android do
       json_key_data: ENV.fetch("COMPTER_PLAY_SERVICE_ACCOUNT_JSON"),
       # "draft" until Play has published the app once; then "completed"
       release_status: ENV.fetch("COMPTER_PLAY_RELEASE_STATUS", "draft"),
+      metadata_path: File.dirname(File.dirname(changelogs)),
       skip_upload_metadata: true,
+      skip_upload_changelogs: false,
       skip_upload_images: true,
       skip_upload_screenshots: true,
     )
   end
 
   # The listing lives in metadata/android: the text is kept in the repo, so the search
-  # keywords are reviewed like code. Only its images are still added in Play Console
-  desc "Upload the store listing text and the release notes, without a build"
+  # keywords are reviewed like code, and the images are drawn by
+  # integration_test/screenshots_test.dart (see app/README.md). Play's current screenshots are
+  # replaced by these
+  desc "Upload the store listing text and images, without a build"
   lane :metadata do
     upload_to_play_store(
       json_key_data: ENV.fetch("COMPTER_PLAY_SERVICE_ACCOUNT_JSON"),
@@ -42,8 +59,8 @@ platform :android do
       skip_upload_aab: true,
       skip_upload_apk: true,
       skip_upload_changelogs: true,
-      skip_upload_images: true,
-      skip_upload_screenshots: true,
+      skip_upload_images: false,
+      skip_upload_screenshots: false,
     )
   end
 end

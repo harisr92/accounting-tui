@@ -15,11 +15,7 @@ void main() {
     await launchDemo(tester);
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await settle(tester);
-    await tester.scrollUntilVisible(
-      find.text(AppTheme.system.label),
-      200,
-      scrollable: find.byType(Scrollable).last,
-    );
+    await scrollToMiddle(tester, find.text(AppTheme.system.label));
 
     await tester.tap(find.text('Theme'));
     await settle(tester);

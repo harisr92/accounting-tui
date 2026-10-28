@@ -9,13 +9,16 @@ lib/main.dart              opens the database, starts the app
 lib/src/compter.dart       the opened CompterApp and the Riverpod providers over it
 lib/src/router.dart        go_router: the tabs, each with its own stack
 lib/src/screens/           one per tab (projects, invoices, expenses, reports, settings), plus a
-                           project and an invoice
+                           project, an invoice, the welcome pages and the Get started card
 lib/src/forms/             FormDialog (every form) and the forms and flows built on it
 lib/src/notice.dart        snack bars, yes/no questions, opening and sharing files
 lib/src/handoff.dart       picking and staging the snapshot and manifest carried to and from the
                            computer's sync folder (see "Phones" in the main README)
 lib/src/sync/              automatic sync through Google Drive (see "Google Drive sync")
 lib/src/year_picker.dart   the financial year a tab shows, stepped like [ and ] in the terminal
+lib/src/about.dart         the store links, sharing the app, rating it and emailing feedback
+lib/src/review_prompt.dart asking for a store review after the third invoice issued or paid
+lib/src/onboarding.dart    whether to show the welcome pages and the Get started card
 lib/src/appearance.dart    the theme this phone draws in (like the phone, light, dark, gruvbox
                            dark), kept in its preferences
 lib/src/ui/glass.dart      the frosted header and tab bar, and ScreenList, which scrolls under them
@@ -23,7 +26,8 @@ lib/src/rust/              generated bindings: never edit, re-run codegen
 hook/build.dart            builds ../crates/compter-mobile whenever Flutter builds (see below)
 ios/fastlane, android/fastlane   store uploads, run by the release workflow (see Releasing)
 test/                      widget tests on the host, against the library the hook built for it
-integration_test/          tests on a simulator or emulator: smoke test, hand-off round trip
+integration_test/          tests on a simulator or emulator: smoke test, hand-off round trip, and
+                           the Play Store screenshots (written by test_driver/screenshots.dart)
 ```
 
 Money and dates cross the bridge as text: Rust formats amounts (`₹1,50,000.00`) and parses
@@ -129,10 +133,22 @@ A tag `mobile-v<version>` (matching `version:` in `pubspec.yaml`) runs
 internal track and a signed IPA for TestFlight. The build number is the workflow's run number.
 Desktop releases keep their own `v<version>` tags.
 
+Each release:
+
+1. Bump `version:` in `pubspec.yaml`.
+2. Write what changed for users in `release-notes/<version>.txt` (Play allows 500 characters).
+   Play shows it as the build's "What's new"; the release stops before building without it.
+3. If the screens changed, regenerate the store screenshots (below) and run the `metadata` lane.
+4. Tag and push:
+
 ```bash
-# bump version: in pubspec.yaml first
 git tag mobile-v0.3.0 && git push origin mobile-v0.3.0
 ```
+
+Aim for a release every two to three weeks: testers and reviewers on Play see an app that is
+looked after, and each release stays small enough to describe in five lines. TestFlight builds
+carry no notes yet: setting them makes fastlane wait for Apple's processing, which costs macOS
+runner time.
 
 ### One-time setup
 
@@ -182,9 +198,16 @@ To run a lane yourself, export the same `COMPTER_*` variables, then from `ios/` 
 
 The Play listing's text (title, short and full description) lives in
 `android/fastlane/metadata/android/en-US/`, so its search keywords are reviewed like code.
-Play allows 30, 80 and 4000 characters. After changing it, run the `metadata` lane from
-`android/` with `COMPTER_PLAY_SERVICE_ACCOUNT_JSON` set; it uploads the text only, no build.
-Screenshots and the feature graphic are still added in Play Console.
+Play allows 30, 80 and 4000 characters. Its screenshots and feature graphic, under `images/`,
+are drawn by the app itself on the demo business: each real screen under a caption, rendered
+to the size Play wants. After a UI change, regenerate them on a running emulator:
+
+```bash
+flutter drive --driver=test_driver/screenshots.dart --target=integration_test/screenshots_test.dart
+```
+
+Then run the `metadata` lane from `android/` with `COMPTER_PLAY_SERVICE_ACCOUNT_JSON` set. It
+uploads the text and images, no build, and replaces the screenshots Play has.
 
 Before the first store submission the app still needs its own launcher icon and store
 listing (screenshots, description, privacy policy); the icon is Flutter's default.

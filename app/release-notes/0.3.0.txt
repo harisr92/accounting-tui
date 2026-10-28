@@ -1,0 +1,5 @@
+• Dark mode: light, dark or gruvbox, or follow your phone (Settings → Appearance)
+• A short welcome and a Get started checklist: business details, first project, first invoice
+• Share compter, rate it or send feedback from Settings → About
+• Easier to read: stronger contrast, and screens that fit the largest text sizes
+• Clearer hints when a list is empty

@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../compter.dart';
 import '../forms/invoice_forms.dart';
 import '../notice.dart';
+import '../review_prompt.dart';
 import '../rust/api/error.dart';
 import '../rust/api/invoicing.dart';
 import '../ui/collapsing_fab.dart';
@@ -131,6 +134,7 @@ class InvoiceScreen extends ConsumerWidget {
           ? '${paid.number} paid in full'
           : 'Payment recorded; ${paid.balance} still due',
     );
+    if (paid.settled) unawaited(ref.read(reviewPromptProvider).win());
   }
 
   Future<void> _credit(

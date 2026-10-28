@@ -11,6 +11,7 @@ import '../ui/glass.dart';
 import '../ui/large_title.dart';
 import '../ui/record_tile.dart';
 import '../ui/search.dart';
+import 'setup_checklist.dart';
 
 /// Every project that isn't archived, or only the archived ones, like the terminal's Projects
 /// tab
@@ -51,6 +52,8 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
               final listed = rows
                   .where((row) => row.archived == archivedOnly)
                   .toList();
+              final checklist =
+                  !archivedOnly && SetupChecklist.shows(ref, rows);
               return ScreenList(
                 onRefresh: () => ref.refresh(projectsProvider.future),
                 bottom: 96,
@@ -70,12 +73,16 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                           ? 'The demo business: nothing here is saved'
                           : 'Clients, milestones and the time you bill',
                     ),
-                  if (rows.isEmpty)
-                    const EmptyState(
-                      icon: Icons.work_outline,
-                      message: 'No projects yet. Add one to start billing.',
-                    )
-                  else if (listed.isEmpty && archivedOnly)
+                  if (checklist)
+                    SetupChecklist(projects: rows, onNewProject: _newProject),
+                  // The card already says to add a project, but not that every one is archived
+                  if (rows.isEmpty) ...[
+                    if (!checklist)
+                      const EmptyState(
+                        icon: Icons.work_outline,
+                        message: 'No projects yet. Add one to start billing.',
+                      ),
+                  ] else if (listed.isEmpty && archivedOnly)
                     const EmptyState(
                       icon: Icons.inventory_2_outlined,
                       message: 'No archived projects.',
@@ -96,21 +103,20 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
             heroTag: null,
             icon: Icons.add,
             label: 'New project',
-            onPressed: () async {
-              final created = await projectForm(
-                context,
-                ref.read(compterProvider),
-              );
-              if (created == null || !context.mounted) return;
-              // A new project isn't archived: back on the list, show it
-              ref.read(archivedOnlyProvider.notifier).choose(false);
-              ref.invalidate(projectsProvider);
-              context.go('/projects/${created.id}');
-            },
+            onPressed: _newProject,
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _newProject() async {
+    final created = await projectForm(context, ref.read(compterProvider));
+    if (created == null || !mounted) return;
+    // A new project isn't archived: back on the list, show it
+    ref.read(archivedOnlyProvider.notifier).choose(false);
+    ref.invalidate(projectsProvider);
+    context.go('/projects/${created.id}');
   }
 
   /// A tile for each project that matches the search

@@ -1,0 +1,197 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1232" height="784" viewBox="0 0 1232 784">
+<style>text{font-family:"SF Mono",Menlo,Consolas,"DejaVu Sans Mono","Liberation Mono",monospace;font-size:17px;white-space:pre}</style>
+<rect width="1232" height="784" rx="10" fill="#1e2127"/>
+<circle cx="20" cy="16" r="6" fill="#ff5f57"/><circle cx="40" cy="16" r="6" fill="#febc2e"/><circle cx="60" cy="16" r="6" fill="#28c840"/>
+<text x="16" y="63" textLength="70" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">compter</text>
+<text x="106" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">1</text>
+<text x="116" y="63" textLength="110" lengthAdjust="spacingAndGlyphs" fill="#abb2bf"> Dashboard </text>
+<text x="226" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<rect x="246" y="48" width="10" height="20" fill="#56b6c2"/>
+<text x="246" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#1e2127" font-weight="bold">2</text>
+<rect x="256" y="48" width="90" height="20" fill="#abb2bf"/>
+<text x="256" y="63" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#1e2127" font-weight="bold"> Projects</text>
+<text x="356" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="376" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">3</text>
+<text x="386" y="63" textLength="100" lengthAdjust="spacingAndGlyphs" fill="#abb2bf"> Invoices </text>
+<text x="486" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="506" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">4</text>
+<text x="516" y="63" textLength="100" lengthAdjust="spacingAndGlyphs" fill="#abb2bf"> Expenses </text>
+<text x="616" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="636" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">5</text>
+<text x="646" y="63" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#abb2bf"> Reports </text>
+<text x="736" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="756" y="63" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">6</text>
+<text x="766" y="63" textLength="350" lengthAdjust="spacingAndGlyphs" fill="#abb2bf"> Settings                          </text>
+<text x="1116" y="63" textLength="100" lengthAdjust="spacingAndGlyphs" fill="#5c6370">FY 2026-27</text>
+<text x="16" y="83" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">┌</text>
+<text x="26" y="83" textLength="100" lengthAdjust="spacingAndGlyphs" fill="#5c6370" font-weight="bold"> Projects </text>
+<text x="126" y="83" textLength="300" lengthAdjust="spacingAndGlyphs" fill="#5c6370">────────────────────────────┐┌</text>
+<text x="426" y="83" textLength="160" lengthAdjust="spacingAndGlyphs" fill="#5c6370" font-weight="bold"> Website Revamp </text>
+<text x="586" y="83" textLength="550" lengthAdjust="spacingAndGlyphs" fill="#5c6370">────────────────────────────────────────────────────── </text>
+<text x="1136" y="83" textLength="60" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">ACTIVE</text>
+<text x="1196" y="83" textLength="20" lengthAdjust="spacingAndGlyphs" fill="#5c6370"> ┐</text>
+<text x="16" y="103" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="26" y="103" textLength="290" lengthAdjust="spacingAndGlyphs" fill="#abb2bf">  API Audit                  </text>
+<text x="316" y="103" textLength="40" lengthAdjust="spacingAndGlyphs" fill="#98c379" font-weight="bold">PAID</text>
+<text x="406" y="103" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#5c6370">││Client </text>
+<text x="496" y="103" textLength="120" lengthAdjust="spacingAndGlyphs" fill="#abb2bf">Acme Pvt Ltd</text>
+<text x="616" y="103" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#5c6370">   GSTIN </text>
+<text x="706" y="103" textLength="500" lengthAdjust="spacingAndGlyphs" fill="#abb2bf">27AAPFU0939F2ZU                                   </text>
+<text x="1206" y="103" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="16" y="123" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="26" y="123" textLength="290" lengthAdjust="spacingAndGlyphs" fill="#abb2bf">  Data Pipeline              </text>
+<text x="316" y="123" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#e5c07b" font-weight="bold">COMPLETED</text>
+<text x="406" y="123" textLength="100" lengthAdjust="spacingAndGlyphs" fill="#5c6370">││Billing </text>
+<text x="506" y="123" textLength="700" lengthAdjust="spacingAndGlyphs" fill="#abb2bf">Fixed price                                                           </text>
+<text x="1206" y="123" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="16" y="143" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="26" y="143" textLength="290" lengthAdjust="spacingAndGlyphs" fill="#abb2bf">  Mobile App                 </text>
+<text x="316" y="143" textLength="60" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">ACTIVE</text>
+<text x="406" y="143" textLength="170" lengthAdjust="spacingAndGlyphs" fill="#5c6370">││Total excl. GST</text>
+<text x="686" y="143" textLength="40" lengthAdjust="spacingAndGlyphs" fill="#5c6370">Paid</text>
+<text x="956" y="143" textLength="110" lengthAdjust="spacingAndGlyphs" fill="#5c6370">Outstanding</text>
+<text x="1206" y="143" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="16" y="163" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<rect x="26" y="148" width="290" height="20" fill="#5c6370"/>
+<text x="26" y="163" textLength="290" lengthAdjust="spacingAndGlyphs" fill="#abb2bf" font-weight="bold">&gt; Website Revamp             </text>
+<rect x="316" y="148" width="60" height="20" fill="#5c6370"/>
+<text x="316" y="163" textLength="60" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">ACTIVE</text>
+<rect x="376" y="148" width="30" height="20" fill="#5c6370"/>
+<text x="406" y="163" textLength="20" lengthAdjust="spacingAndGlyphs" fill="#5c6370">││</text>
+<text x="426" y="163" textLength="120" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">₹1,50,000.00</text>
+<text x="686" y="163" textLength="100" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">₹50,000.00</text>
+<text x="956" y="163" textLength="120" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">₹1,00,000.00</text>
+<text x="1206" y="163" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="16" y="183" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="183" textLength="810" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│└──────────────────────────────────────────────────────────────────────────────┘</text>
+<text x="16" y="203" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="203" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="203" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">┌</text>
+<text x="426" y="203" textLength="260" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold"> Milestones · by due date </text>
+<text x="686" y="203" textLength="530" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">────────────────────────────────────────────────────┐</text>
+<text x="16" y="223" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="223" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="223" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="426" y="223" textLength="780" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">  Name                                             Amount Due        Status   </text>
+<text x="1206" y="223" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="243" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="243" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="243" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="426" y="243" textLength="690" lengthAdjust="spacingAndGlyphs" fill="#abb2bf">  Design                                       ₹50,000.00 2026-09-01 </text>
+<text x="1116" y="243" textLength="40" lengthAdjust="spacingAndGlyphs" fill="#98c379" font-weight="bold">PAID</text>
+<text x="1206" y="243" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="263" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="263" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="263" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="426" y="263" textLength="690" lengthAdjust="spacingAndGlyphs" fill="#abb2bf">  Frontend                                     ₹60,000.00 2026-10-05 </text>
+<text x="1116" y="263" textLength="80" lengthAdjust="spacingAndGlyphs" fill="#e5c07b" font-weight="bold">INVOICED</text>
+<text x="1206" y="263" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="283" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="283" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="283" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<rect x="426" y="268" width="690" height="20" fill="#5c6370"/>
+<text x="426" y="283" textLength="690" lengthAdjust="spacingAndGlyphs" fill="#abb2bf" font-weight="bold">&gt; Launch                                       ₹40,000.00 2026-11-15 </text>
+<rect x="1116" y="268" width="70" height="20" fill="#5c6370"/>
+<text x="1116" y="283" textLength="70" lengthAdjust="spacingAndGlyphs" fill="#5c6370" font-weight="bold">PENDING</text>
+<rect x="1186" y="268" width="20" height="20" fill="#5c6370"/>
+<text x="1206" y="283" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="303" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="303" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="303" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="303" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="323" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="323" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="323" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="323" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="343" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="336" y="343" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">┌</text>
+<text x="346" y="343" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold"> Confirm </text>
+<text x="436" y="343" textLength="460" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">─────────────────────────────────────────────┐</text>
+<text x="1206" y="343" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="363" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="336" y="363" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="886" y="363" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="363" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="383" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="336" y="383" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="346" y="383" textLength="540" lengthAdjust="spacingAndGlyphs" fill="#abb2bf"> Issue NDC/26-27/006 to Acme Pvt Ltd for ₹47,200.00   </text>
+<text x="886" y="383" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="383" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="403" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="336" y="403" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="346" y="403" textLength="540" lengthAdjust="spacingAndGlyphs" fill="#abb2bf">(40,000.00 + CGST 3,600.00 + SGST 3,600.00)?          </text>
+<text x="886" y="403" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="403" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="423" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="336" y="423" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="886" y="423" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="423" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="443" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="336" y="443" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="346" y="443" textLength="130" lengthAdjust="spacingAndGlyphs" fill="#5c6370"> y yes · n no</text>
+<text x="886" y="443" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="443" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="463" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="336" y="463" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="886" y="463" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="463" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="483" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="336" y="483" textLength="560" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">└──────────────────────────────────────────────────────┘</text>
+<text x="1206" y="483" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="503" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="503" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="503" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="503" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="523" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="523" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="523" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="523" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="543" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="543" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="543" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="543" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="563" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="563" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="563" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="563" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="583" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="583" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="583" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="583" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="603" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="603" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="603" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="603" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="623" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="623" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="623" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="623" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="643" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="643" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="643" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="643" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="663" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="663" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="663" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="663" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="683" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="683" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="683" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="683" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="703" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="703" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="703" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="703" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="723" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="406" y="723" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
+<text x="416" y="723" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="1206" y="723" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
+<text x="16" y="743" textLength="400" lengthAdjust="spacingAndGlyphs" fill="#5c6370">└──────────────────────────────────────┘</text>
+<text x="416" y="743" textLength="800" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">└──────────────────────────────────────────────────────────────────────────────┘</text>
+<text x="16" y="763" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">y</text>
+<text x="26" y="763" textLength="40" lengthAdjust="spacingAndGlyphs" fill="#abb2bf"> yes</text>
+<text x="66" y="763" textLength="30" lengthAdjust="spacingAndGlyphs" fill="#5c6370"> · </text>
+<text x="96" y="763" textLength="50" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">n/Esc</text>
+<text x="146" y="763" textLength="720" lengthAdjust="spacingAndGlyphs" fill="#abb2bf"> no                                                                     </text>
+<text x="866" y="763" textLength="350" lengthAdjust="spacingAndGlyphs" fill="#e5c07b" font-weight="bold">Check the invoice before issuing it</text>
+</svg>
