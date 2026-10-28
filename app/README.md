@@ -180,5 +180,11 @@ variable `COMPTER_PLAY_RELEASE_STATUS` to `completed`.
 To run a lane yourself, export the same `COMPTER_*` variables, then from `ios/` or `android/`:
 `BUNDLE_GEMFILE=../Gemfile bundle exec fastlane beta` (or `internal`).
 
+The Play listing's text (title, short and full description) lives in
+`android/fastlane/metadata/android/en-US/`, so its search keywords are reviewed like code.
+Play allows 30, 80 and 4000 characters. After changing it, run the `metadata` lane from
+`android/` with `COMPTER_PLAY_SERVICE_ACCOUNT_JSON` set; it uploads the text only, no build.
+Screenshots and the feature graphic are still added in Play Console.
+
 Before the first store submission the app still needs its own launcher icon and store
 listing (screenshots, description, privacy policy); the icon is Flutter's default.
