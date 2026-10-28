@@ -1,0 +1,43 @@
+compter is bookkeeping for freelancers in India: track projects and milestones, raise GST invoices, record payments with TDS, and get the figures you need for income tax and GST returns. Your books stay on your phone.
+
+WHO IT IS FOR
+• A developer billing an Indian client per milestone, with CGST and SGST or IGST worked out for you
+• A designer working for a client in the US or UK, sending an export invoice under LUT in USD, GBP or EUR
+• A consultant billed by the hour: log time against a milestone and invoice it when it's done
+• Anyone filing quarterly GSTR-1 (QRMP) or the monthly IFF, or declaring income under section 44ADA
+
+PROJECTS AND TIME TRACKING
+• Projects for each client, split into milestones at a fixed price or an hourly rate
+• Log hours on hourly milestones; the amount updates until you invoice it
+• See what is pending, invoiced and paid for every project at a glance
+• Archive finished projects without losing them from your reports
+
+GST INVOICE MAKER
+• Tax invoices with your GSTIN, the client's GSTIN, SAC code and the right GST split
+• Export invoices for clients abroad, with your LUT ARN and the exchange rate
+• Plain invoices when you are not registered for GST
+• Bill several milestones on one invoice and give a discount by amount or percent
+• Your logo, address and payment terms on a clean PDF invoice you can share on WhatsApp or email
+• Invoice numbers follow your prefix and the financial year, with no gaps or repeats
+
+PAYMENTS, TDS AND CREDIT NOTES
+• Record full or part payments and the TDS your client deducted
+• Foreign payments record the rupees that reached your bank, with the exchange gain or loss
+• Correct an invoice with a GST credit note: refund the client or keep it as an advance
+• Invoices are never edited after issue, so your records stay audit-ready
+
+EXPENSES AND REPORTS
+• Record business expenses, with input tax credit when you are GST registered
+• Yearly reports by financial year: billed, received, TDS, expenses and GST
+• Income on a cash or accrual basis for presumptive tax under 44ADA
+• Export GSTR-1 and IFF files to upload on the GST portal
+
+PRIVATE BY DESIGN
+• No account and no sign-up: your data is stored on your phone and works offline
+• Optional sync with your computer through your own Google Drive, in a hidden app folder only compter can see
+• No ads, no tracking
+
+ON YOUR COMPUTER TOO
+compter also runs in the terminal on macOS, Linux and Windows, and syncs with the phone app. It is open source (MIT): https://github.com/harisr92/accounting-tui
+
+Light, dark and gruvbox themes included.
