@@ -26,7 +26,8 @@ lib/src/rust/              generated bindings: never edit, re-run codegen
 hook/build.dart            builds ../crates/compter-mobile whenever Flutter builds (see below)
 ios/fastlane, android/fastlane   store uploads, run by the release workflow (see Releasing)
 test/                      widget tests on the host, against the library the hook built for it
-integration_test/          tests on a simulator or emulator: smoke test, hand-off round trip
+integration_test/          tests on a simulator or emulator: smoke test, hand-off round trip, and
+                           the Play Store screenshots (written by test_driver/screenshots.dart)
 ```
 
 Money and dates cross the bridge as text: Rust formats amounts (`₹1,50,000.00`) and parses
@@ -185,9 +186,16 @@ To run a lane yourself, export the same `COMPTER_*` variables, then from `ios/` 
 
 The Play listing's text (title, short and full description) lives in
 `android/fastlane/metadata/android/en-US/`, so its search keywords are reviewed like code.
-Play allows 30, 80 and 4000 characters. After changing it, run the `metadata` lane from
-`android/` with `COMPTER_PLAY_SERVICE_ACCOUNT_JSON` set; it uploads the text only, no build.
-Screenshots and the feature graphic are still added in Play Console.
+Play allows 30, 80 and 4000 characters. Its screenshots and feature graphic, under `images/`,
+are drawn by the app itself on the demo business: each real screen under a caption, rendered
+to the size Play wants. After a UI change, regenerate them on a running emulator:
+
+```bash
+flutter drive --driver=test_driver/screenshots.dart --target=integration_test/screenshots_test.dart
+```
+
+Then run the `metadata` lane from `android/` with `COMPTER_PLAY_SERVICE_ACCOUNT_JSON` set. It
+uploads the text and images, no build, and replaces the screenshots Play has.
 
 Before the first store submission the app still needs its own launcher icon and store
 listing (screenshots, description, privacy policy); the icon is Flutter's default.

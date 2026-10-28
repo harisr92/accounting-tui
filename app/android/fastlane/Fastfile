@@ -33,8 +33,10 @@ platform :android do
   end
 
   # The listing lives in metadata/android: the text is kept in the repo, so the search
-  # keywords are reviewed like code. Only its images are still added in Play Console
-  desc "Upload the store listing text and the release notes, without a build"
+  # keywords are reviewed like code, and the images are drawn by
+  # integration_test/screenshots_test.dart (see app/README.md). Play's current screenshots are
+  # replaced by these
+  desc "Upload the store listing text and images, without a build"
   lane :metadata do
     upload_to_play_store(
       json_key_data: ENV.fetch("COMPTER_PLAY_SERVICE_ACCOUNT_JSON"),
@@ -42,8 +44,8 @@ platform :android do
       skip_upload_aab: true,
       skip_upload_apk: true,
       skip_upload_changelogs: true,
-      skip_upload_images: true,
-      skip_upload_screenshots: true,
+      skip_upload_images: false,
+      skip_upload_screenshots: false,
     )
   end
 end

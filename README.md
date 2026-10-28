@@ -24,6 +24,8 @@ Built with [ratatui](https://ratatui.rs) (crossterm backend) on top of [`account
 Tab focus · j/k move · n new · i invoice · 1-9/←→ tabs · ? help · q quit
 ```
 
+The same books are on your phone: the Android and iPhone app syncs with the terminal app through your own Google Drive. See the [screenshots](app/SCREENSHOTS.md).
+
 ## Status
 
 **All 7 steps are done.** Track projects, milestones and hours, and archive finished projects. Issue GST tax invoices, export invoices under LUT or plain invoices as PDFs, record payments including TDS, and correct invoices with credit notes. Record and edit business expenses. See each financial year for income tax (44ADA and regular books) and GST, and export the quarterly GSTR-1 and the monthly IFF. Search the project, invoice and expense lists, and pick a dark, light, gruvbox dark or monochrome theme. Everything is posted to an accounting-core ledger and saved as you go.
@@ -391,6 +393,8 @@ Each device keeps its own database in its data folder. compter hands it over thr
 Conflict copies made by the sync client (`compter (1).redb` and the like) are never read; compter shows a warning in the footer when it finds them. Invoice PDFs and returns stay in each device's data folder.
 
 ### Phones
+
+The phone app is in `app/` ([screenshots](app/SCREENSHOTS.md)).
 
 With the computer signed in to Google Drive (`compter drive sign-in`), the phone app syncs with it automatically: **Settings → Sync method → Google Drive**, signed in to the same account. It takes the computer's newer snapshot whenever you open the app, sends its changes every minute and when you put it away, and holds a lease while open, so compter on the computer waits for it (and the other way round). Setting up the Google sign-in it needs is described in `app/README.md`.
 
