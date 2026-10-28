@@ -69,7 +69,9 @@ impl Theme {
             muted: Color::DarkGray,
             border: Color::DarkGray,
             border_focused: Color::Cyan,
+            // Its own text colour: muted text is DarkGray too, and would vanish on the bar
             selected: Style::new()
+                .fg(Color::White)
                 .bg(Color::DarkGray)
                 .add_modifier(Modifier::BOLD),
             dim: Style::new().fg(Color::DarkGray),

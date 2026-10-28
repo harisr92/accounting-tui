@@ -42,3 +42,56 @@ fn credited_has_a_colour_of_its_own() {
         }
     }
 }
+
+#[test]
+fn a_selected_row_keeps_muted_text_readable() {
+    use crate::app::App;
+    use crate::ui::draw;
+    use crate::ui::tests::support::type_keys;
+    use crate::ui::view::View;
+    use crate::ui::views::ProjectsView;
+    use compter_core::demo;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    for appearance in Appearance::ALL {
+        let store = demo::store().unwrap();
+        let views: Vec<Box<dyn View>> = vec![Box::new(
+            ProjectsView::new(store.repository(), None).unwrap(),
+        )];
+        let mut app = App::new(views, Theme::new(appearance, false));
+        // Website Revamp's milestones, on Launch: PENDING, in the muted colour
+        type_keys(&mut app, "jjj\tjj");
+        let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+        terminal.draw(|frame| draw(frame, &app)).unwrap();
+        let buffer = terminal.backend().buffer();
+
+        let row = buffer
+            .content()
+            .chunks(120)
+            .find(|row| {
+                let text: String = row.iter().map(|cell| cell.symbol()).collect();
+                text.contains("> Launch")
+            })
+            .expect("Launch is selected");
+        // By cell, not byte: ₹ and the borders are several bytes each
+        let word = "PENDING".len();
+        let start = (0..=row.len() - word)
+            .find(|&i| {
+                row[i..i + word]
+                    .iter()
+                    .map(|cell| cell.symbol())
+                    .collect::<String>()
+                    == "PENDING"
+            })
+            .expect("Launch shows its status");
+        for cell in &row[start..start + word] {
+            assert!(
+                cell.modifier.contains(Modifier::REVERSED) || cell.fg != cell.bg,
+                "{appearance:?}: PENDING is drawn {:?} on {:?}",
+                cell.fg,
+                cell.bg
+            );
+        }
+    }
+}

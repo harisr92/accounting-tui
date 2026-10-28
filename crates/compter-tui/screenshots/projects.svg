@@ -56,11 +56,8 @@
 <text x="956" y="143" textLength="110" lengthAdjust="spacingAndGlyphs" fill="#5c6370">Outstanding</text>
 <text x="1206" y="143" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
 <text x="16" y="163" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
-<rect x="26" y="148" width="290" height="20" fill="#5c6370"/>
-<text x="26" y="163" textLength="290" lengthAdjust="spacingAndGlyphs" fill="#abb2bf" font-weight="bold">&gt; Website Revamp             </text>
-<rect x="316" y="148" width="60" height="20" fill="#5c6370"/>
-<text x="316" y="163" textLength="60" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">ACTIVE</text>
-<rect x="376" y="148" width="30" height="20" fill="#5c6370"/>
+<rect x="26" y="148" width="380" height="20" fill="#5c6370"/>
+<text x="26" y="163" textLength="380" lengthAdjust="spacingAndGlyphs" fill="#ffffff" font-weight="bold">&gt; Website Revamp             ACTIVE   </text>
 <text x="406" y="163" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
 <text x="416" y="163" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
 <text x="426" y="163" textLength="120" lengthAdjust="spacingAndGlyphs" fill="#56b6c2" font-weight="bold">₹1,50,000.00</text>
@@ -83,11 +80,8 @@
 <text x="16" y="243" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
 <text x="406" y="243" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
 <text x="416" y="243" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
-<rect x="426" y="228" width="690" height="20" fill="#5c6370"/>
-<text x="426" y="243" textLength="690" lengthAdjust="spacingAndGlyphs" fill="#abb2bf" font-weight="bold">&gt; Design                                       ₹50,000.00 2026-09-01 </text>
-<rect x="1116" y="228" width="40" height="20" fill="#5c6370"/>
-<text x="1116" y="243" textLength="40" lengthAdjust="spacingAndGlyphs" fill="#98c379" font-weight="bold">PAID</text>
-<rect x="1156" y="228" width="50" height="20" fill="#5c6370"/>
+<rect x="426" y="228" width="780" height="20" fill="#5c6370"/>
+<text x="426" y="243" textLength="780" lengthAdjust="spacingAndGlyphs" fill="#ffffff" font-weight="bold">&gt; Design                                       ₹50,000.00 2026-09-01 PAID     </text>
 <text x="1206" y="243" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#5c6370">│</text>
 <text x="16" y="263" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>
 <text x="406" y="263" textLength="10" lengthAdjust="spacingAndGlyphs" fill="#56b6c2">│</text>

@@ -6,20 +6,29 @@ A terminal app for freelancers who work for several clients, billed by the hour 
 
 Built with [ratatui](https://ratatui.rs) (crossterm backend) on top of [`accounting-core`](https://github.com/harisr92/accounting-blue), which provides double-entry bookkeeping, GST invoices with PDF export, GSTR-1 and financial reports.
 
-![Projects: a project's totals and its milestones](crates/compter-tui/screenshots/projects.svg)
+![compter in a terminal: the dashboard, a project's milestones, issuing a GST invoice, the reports and the help](crates/compter-tui/screenshots/demo.gif)
+
+<details>
+<summary>More screenshots</summary>
 
 <table>
   <tr>
+    <td><img src="crates/compter-tui/screenshots/projects.svg" alt="Projects: a project's totals and its milestones"></td>
     <td><img src="crates/compter-tui/screenshots/dashboard.svg" alt="Dashboard: the year's figures and invoices waiting for payment"></td>
-    <td><img src="crates/compter-tui/screenshots/issue.svg" alt="Issuing an invoice: the GST worked out before it is confirmed"></td>
   </tr>
   <tr>
+    <td><img src="crates/compter-tui/screenshots/issue.svg" alt="Issuing an invoice: the GST worked out before it is confirmed"></td>
     <td><img src="crates/compter-tui/screenshots/invoices.svg" alt="Invoices in the gruvbox theme, with what is still due"></td>
+  </tr>
+  <tr>
     <td><img src="crates/compter-tui/screenshots/reports.svg" alt="Reports in the light theme: income, 44ADA, GST by quarter and TDS by client"></td>
+    <td></td>
   </tr>
 </table>
 
-These are drawn from the demo business by `cargo run -p compter-tui --example screenshots`; run it again after a UI change.
+</details>
+
+All of these come from the demo business. After a UI change, redraw the screenshots with `cargo run -p compter-tui --example screenshots` and re-record the GIF with `python3 scripts/record_demo.py` (needs [asciinema](https://asciinema.org) 3 and [agg](https://github.com/asciinema/agg)).
 
 The same books are on your phone: the Android and iPhone app syncs with the terminal app through your own Google Drive. See the [screenshots](app/SCREENSHOTS.md).
 
