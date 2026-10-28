@@ -34,7 +34,7 @@ void main() {
     );
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await settle(tester);
-    await tester.scrollUntilVisible(find.text('Sync method'), 200);
+    await scrollToMiddle(tester, find.text('Sync method'));
     await settle(tester);
 
     await tester.tap(find.text('Sync method'));

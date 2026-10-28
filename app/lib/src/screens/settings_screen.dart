@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../about.dart';
 import '../appearance.dart';
 import '../compter.dart';
 import '../forms/profile_form.dart';
@@ -42,7 +43,7 @@ class SettingsScreen extends ConsumerWidget {
                 icon: Icons.settings,
                 title: 'Settings',
                 description:
-                    'Your business as invoices print it, the theme, and syncing',
+                    'Your business as invoices print it, the theme, syncing, and support',
               ),
               SectionHeader(
                 'Business profile',
@@ -65,6 +66,7 @@ class SettingsScreen extends ConsumerWidget {
                 ..._profileRows(profile),
               const _AppearanceSection(),
               const SyncSection(),
+              const _AboutSection(),
             ],
           ),
         ),
@@ -131,6 +133,87 @@ class _AppearanceSection extends ConsumerWidget {
           trailing: const Icon(Icons.chevron_right),
           onTap: choose,
         ),
+      ],
+    );
+  }
+}
+
+/// Telling others about compter, rating it, and reporting what could be better
+class _AboutSection extends ConsumerWidget {
+  const _AboutSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final store = ref.watch(storefrontProvider);
+    final version = ref.watch(appVersionProvider).value;
+
+    Future<void> go(
+      Future<bool> Function() open, {
+      String failed = 'Couldn’t open the link',
+    }) async {
+      var opened = false;
+      try {
+        opened = await open();
+      } catch (_) {}
+      if (!opened && context.mounted) {
+        notify(context, failed, error: true);
+      }
+    }
+
+    final shareText = store.shareText;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SectionHeader('About'),
+        if (shareText != null)
+          Builder(
+            // Its own context, so the iPad's share popover points at this row
+            builder: (row) => ListTile(
+              leading: const Icon(Icons.share_outlined),
+              title: const Text('Share compter'),
+              subtitle: const Text('Send the link to a fellow freelancer'),
+              onTap: () {
+                final box = row.findRenderObject() as RenderBox?;
+                store.share(
+                  shareText,
+                  box == null
+                      ? null
+                      : box.localToGlobal(Offset.zero) & box.size,
+                );
+              },
+            ),
+          ),
+        if (store.storeUrl != null)
+          ListTile(
+            leading: const Icon(Icons.star_outline),
+            title: const Text('Rate compter'),
+            subtitle: const Text('A review helps others find it'),
+            trailing: const Icon(Icons.open_in_new),
+            onTap: () => go(store.rate),
+          ),
+        ListTile(
+          leading: const Icon(Icons.feedback_outlined),
+          title: const Text('Send feedback'),
+          subtitle: const Text('Report a problem or suggest an idea'),
+          trailing: const Icon(Icons.open_in_new),
+          onTap: () => go(
+            () => store.sendFeedback(version ?? 'unknown'),
+            failed: 'No email app: write to $feedbackEmail',
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.privacy_tip_outlined),
+          title: const Text('Privacy policy'),
+          trailing: const Icon(Icons.open_in_new),
+          onTap: () => go(() => store.open(Uri.parse(privacyUrl))),
+        ),
+        ListTile(
+          leading: const Icon(Icons.description_outlined),
+          title: const Text('Terms'),
+          trailing: const Icon(Icons.open_in_new),
+          onTap: () => go(() => store.open(Uri.parse(termsUrl))),
+        ),
+        if (version != null) _Field('Version', version),
       ],
     );
   }

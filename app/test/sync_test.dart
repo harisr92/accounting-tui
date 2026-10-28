@@ -65,7 +65,7 @@ void main() {
   Future<void> openSync(WidgetTester tester) async {
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await settle(tester);
-    await tester.scrollUntilVisible(find.text('Send to computer'), 200);
+    await scrollToMiddle(tester, find.text('Send to computer'));
     // The section's status loads once it scrolls into view
     await settle(tester);
   }
@@ -104,9 +104,7 @@ void main() {
         .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
         .removeCurrentSnackBar();
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text(label), 200);
-    await tester.ensureVisible(find.text(label));
-    await tester.pumpAndSettle();
+    await scrollToMiddle(tester, find.text(label));
     await tester.tap(find.text(label));
   }
 
