@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:compter/src/compter.dart';
+import 'package:compter/src/review_prompt.dart';
 import 'package:compter/src/rust/api/app.dart';
 import 'package:compter/src/rust/api/rows.dart';
 import 'package:flutter/material.dart';
@@ -55,6 +56,8 @@ void main() {
     expect(find.text('Nothing received yet'), findsOneWidget);
     expect(find.textContaining('Issued NDC/'), findsOneWidget);
     expect(find.text('After ₹4,000.00 discount, before GST'), findsOneWidget);
+    // An issued invoice is a win toward asking for a review
+    expect(await tester.runAsync(ReviewPrompt.savedWins), 1);
   });
 
   testWidgets(
@@ -142,6 +145,23 @@ void main() {
 
     expect(find.text('Payment recorded; ₹25,400.00 still due'), findsOneWidget);
     expect(find.text('Payment'), findsNWidgets(2));
+    // Only an invoice paid in full counts toward asking for a review
+    expect(await tester.runAsync(ReviewPrompt.savedWins), 0);
+  });
+
+  testWidgets('paying the rest settles the invoice and counts a win', (
+    tester,
+  ) async {
+    await launchDemo(tester);
+    await openInvoice(tester, 'Frontend');
+
+    await tester.tap(find.text('Record payment'));
+    await settle(tester);
+    await tester.tap(find.text('Record'));
+    await settle(tester);
+
+    expect(find.textContaining('paid in full'), findsOneWidget);
+    expect(await tester.runAsync(ReviewPrompt.savedWins), 1);
   });
 
   testWidgets('a refused payment stays in the form under its field', (
