@@ -1,7 +1,7 @@
 name: Mobile release
 
 # A tag like mobile-v0.3.0 uploads that version to TestFlight and Google Play's internal track.
-# The version must match app/pubspec.yaml; the build number is this workflow's run number, so
+# The version must match app/pubspec.yaml and have its notes in app/release-notes/; the build number is this workflow's run number, so
 # every upload is higher than the last. One-time setup and the secrets: app/README.md.
 # The Rust library is built by app/hook/build.dart, with the Rust pinned in
 # crates/compter-mobile/rust-toolchain.toml.
@@ -31,6 +31,16 @@ jobs:
           name=$(sed -n 's/^version: \([0-9.]*\).*/\1/p' app/pubspec.yaml)
           if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "mobile-v$name" ]]; then
             echo "::error::tag $GITHUB_REF_NAME doesn't match app/pubspec.yaml version $name"
+            exit 1
+          fi
+          # Play shows them as the build's "What's new" and allows 500 characters
+          notes="app/release-notes/$name.txt"
+          if [[ ! -f "$notes" ]]; then
+            echo "::error::$notes is missing: write this version's release notes"
+            exit 1
+          fi
+          if (( $(wc -m < "$notes") > 500 )); then
+            echo "::error::$notes is over Play's 500 characters"
             exit 1
           fi
           echo "name=$name" >> "$GITHUB_OUTPUT"

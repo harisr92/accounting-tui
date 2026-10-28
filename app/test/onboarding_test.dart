@@ -93,8 +93,9 @@ void main() {
     await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Shop');
     await tester.enterText(find.widgetWithText(TextField, 'Client'), 'Acme');
     await tester.tap(find.text('Save'));
-    await settle(tester);
-    // The new project opens over the tabs; back on the list, the card has moved on
+    // The new project opens over the tabs once saved, with no spinner for settle to wait on;
+    // back on the list, the card has moved on
+    await pumpUntil(tester, find.text('Add milestone'));
     await tester.pageBack();
     await pumpUntil(tester, find.text('1 of 3 done'));
     expect(

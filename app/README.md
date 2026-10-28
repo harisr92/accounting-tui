@@ -133,10 +133,22 @@ A tag `mobile-v<version>` (matching `version:` in `pubspec.yaml`) runs
 internal track and a signed IPA for TestFlight. The build number is the workflow's run number.
 Desktop releases keep their own `v<version>` tags.
 
+Each release:
+
+1. Bump `version:` in `pubspec.yaml`.
+2. Write what changed for users in `release-notes/<version>.txt` (Play allows 500 characters).
+   Play shows it as the build's "What's new"; the release stops before building without it.
+3. If the screens changed, regenerate the store screenshots (below) and run the `metadata` lane.
+4. Tag and push:
+
 ```bash
-# bump version: in pubspec.yaml first
 git tag mobile-v0.3.0 && git push origin mobile-v0.3.0
 ```
+
+Aim for a release every two to three weeks: testers and reviewers on Play see an app that is
+looked after, and each release stays small enough to describe in five lines. TestFlight builds
+carry no notes yet: setting them makes fastlane wait for Apple's processing, which costs macOS
+runner time.
 
 ### One-time setup
 
