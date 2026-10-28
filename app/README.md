@@ -9,7 +9,7 @@ lib/main.dart              opens the database, starts the app
 lib/src/compter.dart       the opened CompterApp and the Riverpod providers over it
 lib/src/router.dart        go_router: the tabs, each with its own stack
 lib/src/screens/           one per tab (projects, invoices, expenses, reports, settings), plus a
-                           project and an invoice
+                           project, an invoice, the welcome pages and the Get started card
 lib/src/forms/             FormDialog (every form) and the forms and flows built on it
 lib/src/notice.dart        snack bars, yes/no questions, opening and sharing files
 lib/src/handoff.dart       picking and staging the snapshot and manifest carried to and from the
@@ -18,6 +18,7 @@ lib/src/sync/              automatic sync through Google Drive (see "Google Driv
 lib/src/year_picker.dart   the financial year a tab shows, stepped like [ and ] in the terminal
 lib/src/about.dart         the store links, sharing the app, rating it and emailing feedback
 lib/src/review_prompt.dart asking for a store review after the third invoice issued or paid
+lib/src/onboarding.dart    whether to show the welcome pages and the Get started card
 lib/src/appearance.dart    the theme this phone draws in (like the phone, light, dark, gruvbox
                            dark), kept in its preferences
 lib/src/ui/glass.dart      the frosted header and tab bar, and ScreenList, which scrolls under them

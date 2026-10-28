@@ -73,3 +73,9 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Google Play's in-app review, asked for through MainActivity; a Flutter plugin for it
+    // would apply the Kotlin Gradle Plugin, which Flutter is dropping for plugins
+    implementation("com.google.android.play:review:2.0.2")
+}

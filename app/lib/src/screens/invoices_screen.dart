@@ -58,11 +58,13 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen>
                       'Everything issued, newest first, and what is still due',
                 ),
                 if (list.invoices.isEmpty)
-                  const EmptyState(
+                  EmptyState(
                     icon: Icons.receipt_long_outlined,
-                    message:
-                        'No invoices yet. Open a project and tap a pending '
-                        'milestone to issue one.',
+                    message: _noProfile(ref.watch(profileProvider))
+                        ? 'No invoices yet. Add your business details in '
+                              'Settings first: every invoice prints them.'
+                        : 'No invoices yet. Open a project and tap a pending '
+                              'milestone to issue one.',
                   )
                 else ...[
                   FigureGrid([('Outstanding', list.outstanding)]),
@@ -87,3 +89,7 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen>
     );
   }
 }
+
+/// Loaded and not set up yet: while the profile loads, or if it fails, the usual hint shows
+bool _noProfile(AsyncValue<Object?> profile) =>
+    profile.hasValue && profile.value == null;

@@ -10,6 +10,7 @@ import 'screens/project_screen.dart';
 import 'screens/projects_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/welcome_screen.dart';
 import 'sync/sync_controller.dart';
 import 'ui/glass.dart';
 
@@ -22,17 +23,22 @@ String invoicePath(String number) => '/invoices/${Uri.encodeComponent(number)}';
 Page<void> _detail(GoRouterState state, Widget screen) =>
     MaterialPage<void>(key: state.pageKey, child: screen);
 
-/// A new router at `/projects`: one per app, so a rebuilt app (or the next test) starts on the
-/// list. Each tab keeps its own stack, like the terminal app's tabs keep their selection. A
-/// project or invoice opens full screen over the tabs (Material's detail pattern), so its own
-/// bottom actions never sit on top of the navigation bar.
-GoRouter buildRouter() {
+/// A new router at `/projects`, or at the welcome pages on a first start ([welcome]): one per
+/// app, so a rebuilt app (or the next test) starts on the list. Each tab keeps its own stack,
+/// like the terminal app's tabs keep their selection. A project or invoice opens full screen
+/// over the tabs (Material's detail pattern), so its own bottom actions never sit on top of
+/// the navigation bar.
+GoRouter buildRouter({bool welcome = false}) {
   final root = GlobalKey<NavigatorState>();
   return GoRouter(
     navigatorKey: root,
-    initialLocation: '/projects',
+    initialLocation: welcome ? '/welcome' : '/projects',
     routes: [
       GoRoute(path: '/', redirect: (_, _) => '/projects'),
+      GoRoute(
+        path: '/welcome',
+        builder: (context, state) => const WelcomeScreen(),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => _Tabs(shell),
         branches: [

@@ -1,5 +1,5 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:in_app_review/in_app_review.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'about.dart';
@@ -53,10 +53,11 @@ class ReviewPrompt {
   }
 }
 
-Future<void> _askStore() async {
-  final review = InAppReview.instance;
-  if (await review.isAvailable()) await review.requestReview();
-}
+/// Play's in-app review, asked for by MainActivity.kt. iOS has no handler yet: the prompt is
+/// off there until compter is in the App Store (see [reviewPromptProvider]).
+const _review = MethodChannel('app.compter/review');
+
+Future<void> _askStore() => _review.invokeMethod<void>('requestReview');
 
 /// Off where compter isn't listed in the store yet, like rate in About
 final reviewPromptProvider = Provider<ReviewPrompt>(

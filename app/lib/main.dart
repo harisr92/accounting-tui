@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'src/appearance.dart';
 import 'src/compter.dart';
+import 'src/onboarding.dart';
 import 'src/router.dart';
 import 'src/rust/frb_generated.dart';
 
@@ -11,11 +12,13 @@ Future<void> main() async {
   await RustLib.init();
   final compter = await openCompter();
   final theme = await savedAppTheme();
+  final welcome = await needsWelcome(compter);
   runApp(
     ProviderScope(
       overrides: [
         compterProvider.overrideWithValue(compter),
         appThemeProvider.overrideWith(() => AppThemeNotifier(theme)),
+        showWelcomeProvider.overrideWithValue(welcome),
       ],
       child: const CompterMobile(),
     ),
@@ -30,7 +33,7 @@ class CompterMobile extends ConsumerStatefulWidget {
 }
 
 class _CompterMobileState extends ConsumerState<CompterMobile> {
-  final _router = buildRouter();
+  late final _router = buildRouter(welcome: ref.read(showWelcomeProvider));
 
   @override
   void dispose() {

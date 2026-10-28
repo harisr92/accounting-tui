@@ -14,6 +14,14 @@ import '../ui/section.dart';
 import '../ui/theme.dart';
 import 'sync_section.dart';
 
+/// The profile form, saved and shown again; Settings and the "Get started" card both open it
+Future<void> editProfile(BuildContext context, WidgetRef ref) async {
+  final saved = await profileForm(context, ref.read(compterProvider));
+  if (saved == null || !context.mounted) return;
+  ref.invalidate(profileProvider);
+  notify(context, 'Business details saved');
+}
+
 /// The business profile printed on invoices, and syncing with a computer, like the
 /// terminal's Settings tab
 class SettingsScreen extends ConsumerWidget {
@@ -22,12 +30,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(profileProvider);
-    Future<void> edit() async {
-      final saved = await profileForm(context, ref.read(compterProvider));
-      if (saved == null || !context.mounted) return;
-      ref.invalidate(profileProvider);
-      notify(context, 'Business details saved');
-    }
+    Future<void> edit() => editProfile(context, ref);
 
     return LargeTitleScope(
       child: Scaffold(
