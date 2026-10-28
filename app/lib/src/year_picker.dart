@@ -32,7 +32,14 @@ class FiscalYearPicker extends ConsumerWidget {
           icon: const Icon(Icons.chevron_left),
           onPressed: () => ref.read(year.notifier).previous(),
         ),
-        Text(label, style: Theme.of(context).textTheme.titleMedium),
+        // Wraps at very large text rather than pushing the arrows off the screen
+        Flexible(
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ),
         IconButton(
           tooltip: 'Next year',
           icon: const Icon(Icons.chevron_right),
