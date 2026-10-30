@@ -7,6 +7,7 @@ import '../compter.dart';
 import '../forms/profile_form.dart';
 import '../notice.dart';
 import '../rust/api/profile.dart';
+import '../subscription/subscription_section.dart';
 import '../ui/action_sheet.dart';
 import '../ui/glass.dart';
 import '../ui/large_title.dart';
@@ -69,6 +70,7 @@ class SettingsScreen extends ConsumerWidget {
                 ..._profileRows(profile),
               const _AppearanceSection(),
               const SyncSection(),
+              const SubscriptionSection(),
               const _AboutSection(),
             ],
           ),

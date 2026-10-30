@@ -12,6 +12,7 @@ import '../review_prompt.dart';
 import '../router.dart';
 import '../rust/api/error.dart';
 import '../rust/api/rows.dart';
+import '../subscription/paywall.dart';
 import '../ui/action_sheet.dart';
 import '../ui/collapsing_fab.dart';
 import '../ui/figures.dart';
@@ -136,6 +137,7 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> with Searching {
     ProjectDetail project,
     bool archive,
   ) async {
+    if (!await requireWrite(context) || !context.mounted) return;
     try {
       final saved = await ref
           .read(compterProvider)
@@ -161,6 +163,7 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> with Searching {
     WidgetRef ref,
     ProjectDetail project,
   ) async {
+    if (!await requireWrite(context) || !context.mounted) return;
     final yes = await confirm(
       context,
       title: 'Delete ${project.name}?',
@@ -253,6 +256,7 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> with Searching {
       case _Action.timeLog:
         await _showTimeLog(context, milestone);
       case _Action.undoTime:
+        if (!await requireWrite(context) || !context.mounted) return;
         final yes = await confirm(
           context,
           title: 'Undo time on ${milestone.name}?',
@@ -274,6 +278,7 @@ class _ProjectScreenState extends ConsumerState<ProjectScreen> with Searching {
         );
         if (updated != null) _show(ref, updated);
       case _Action.remove:
+        if (!await requireWrite(context) || !context.mounted) return;
         final yes = await confirm(
           context,
           title: 'Remove ${milestone.name}?',

@@ -6,6 +6,7 @@ import '../forms/expense_form.dart';
 import '../notice.dart';
 import '../rust/api/error.dart';
 import '../rust/api/expenses.dart';
+import '../subscription/paywall.dart';
 import '../ui/action_sheet.dart';
 import '../ui/collapsing_fab.dart';
 import '../ui/empty_state.dart';
@@ -126,6 +127,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
       notify(context, 'Saved ${saved.description} for ${saved.amount}');
       return;
     }
+    if (!await requireWrite(context) || !mounted) return;
     final yes = await confirm(
       context,
       title: 'Delete ${expense.description}?',

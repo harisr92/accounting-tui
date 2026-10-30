@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../rust/api/error.dart';
+import '../subscription/paywall.dart';
 import '../ui/theme.dart';
 
 /// One field of a [FormDialog]. [key] is the name Rust uses in `ApiError.field`, so a refused
@@ -48,14 +49,18 @@ class FormDialog<T> extends StatefulWidget {
   /// `Preview` when a confirmation follows, `Save` otherwise
   final String submitLabel;
 
-  /// The submitted result, or `null` when cancelled
+  /// The submitted result, or `null` when cancelled. A form that [writes] a record asks for a
+  /// subscription first ([requireWrite]); one that only exports doesn't.
   static Future<T?> show<T>(
     BuildContext context, {
     required String title,
     required List<FieldSpec> fields,
     required Future<T> Function(Map<String, String> values) submit,
     String submitLabel = 'Save',
-  }) {
+    bool writes = true,
+  }) async {
+    if (writes && !await requireWrite(context)) return null;
+    if (!context.mounted) return null;
     return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: true,

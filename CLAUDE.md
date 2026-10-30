@@ -32,6 +32,8 @@ compter-mobile/src/
              plain rows of strings, ApiError { field, message }
 ```
 
+On iOS compter is sold as a subscription (StoreKit 2 in `app/ios/Runner/Store.swift`, `app/lib/src/subscription/`). Without one the app is read-only, so every Dart path that creates or changes a record calls `requireWrite` first (`FormDialog.show` does unless `writes: false`, for exports). Billing stays out of Rust.
+
 `compter-mobile` follows the view rules: it calls services only and hands Dart plain rows (formatted money, `YYYY-MM-DD` dates), never domain types. Typed text goes to Rust unparsed and is parsed by `compter_core::input`, the parsers the terminal's `ui/form/parse.rs` re-exports. No data-carrying enums under `api` (Dart would need freezed). After changing `api`, run `flutter_rust_bridge_codegen generate && cargo fmt --all` in `app/` (see `app/README.md`). It is not a default workspace member, because flutter_rust_bridge compiles C that desktop cross-builds can't.
 
 Dependencies point inward: `ui -> app -> services -> domain`, `storage -> domain`. `domain` depends on nothing in this workspace. `compter-core` never depends on ratatui, crossterm, color-eyre, or anything that assumes a desktop: no spawning processes, and env vars are read only by the `from_env` helpers (`DataDir::from_env`, `SyncDir::from_env`, `sync::device_name_from_env`), which only a desktop binary calls; other front ends inject the values (`DataDir::new`). Services return file paths; showing a file is the front end's job (`viewer::open`).
