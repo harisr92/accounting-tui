@@ -34,7 +34,7 @@ void main() {
     await settle(tester);
 
     expect(find.text('Start your free month'), findsOneWidget);
-    expect(find.text('1 month free, then ₹299.00 a month'), findsOneWidget);
+    expect(find.text('Free month, then ₹299.00 a month'), findsOneWidget);
     expect(field('Name'), findsNothing);
 
     await tester.tap(find.text('Not now'));
@@ -49,7 +49,7 @@ void main() {
 
     await tester.tap(find.byTooltip('New project'));
     await settle(tester);
-    await tester.tap(find.text('1 month free, then ₹2,999.00 a year'));
+    await tester.tap(find.text('Free month, then ₹2,999.00 a year'));
     await settle(tester);
 
     expect(store.purchased, ['app.compter.pro.yearly']);
@@ -102,6 +102,7 @@ void main() {
           active: true,
           expiresAt: DateTime(2026, 11, 30),
           inTrial: true,
+          freePeriod: 'month',
         ),
       ),
     );
@@ -130,7 +131,7 @@ void main() {
 
       await tester.tap(find.byTooltip('New project'));
       await settle(tester);
-      await tester.tap(find.text('1 month free, then ₹299.00 a month'));
+      await tester.tap(find.text('Free month, then ₹299.00 a month'));
       await settle(tester);
 
       expect(
@@ -170,6 +171,18 @@ void main() {
     );
   });
 
+  testWidgets('the paywall names the offer the store has', (tester) async {
+    final store = FakeStore();
+    await launchSelling(tester, store);
+    store.freePeriod = '2 weeks';
+
+    await tester.tap(find.byTooltip('New project'));
+    await settle(tester);
+
+    expect(find.text('Start your 2 free weeks'), findsOneWidget);
+    expect(find.text('2 free weeks, then ₹299.00 a month'), findsOneWidget);
+  });
+
   test('settings words each state of the subscription', () {
     final ends = DateTime(2026, 12, 1);
     expect(
@@ -182,10 +195,28 @@ void main() {
           active: true,
           expiresAt: ends,
           inTrial: true,
+          freePeriod: 'month',
           willRenew: false,
         ),
       ),
       'Free month, ends 1 Dec 2026',
+    );
+    expect(
+      describeEntitlement(
+        Entitlement(
+          active: true,
+          expiresAt: ends,
+          inTrial: true,
+          freePeriod: '2 weeks',
+        ),
+      ),
+      '2 free weeks, then billed on 1 Dec 2026',
+    );
+    expect(
+      describeEntitlement(
+        Entitlement(active: true, expiresAt: ends, inTrial: true),
+      ),
+      'Free trial, then billed on 1 Dec 2026',
     );
     expect(
       describeEntitlement(Entitlement(active: true, expiresAt: ends)),

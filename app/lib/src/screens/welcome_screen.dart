@@ -56,7 +56,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     try {
       await welcomeSeen();
     } catch (_) {}
-    // The free month starts only when they take it, so it is offered here, once; closed, the
+    // The free period starts only when they take it, so it is offered here, once; closed, the
     // app opens read-only, with the offer in Settings and on the project list
     if (!mounted) return;
     await requireWrite(context);

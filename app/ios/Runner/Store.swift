@@ -108,6 +108,12 @@ final class CompterStore {
     if let ends = current.expirationDate {
       entitlement["expiresAt"] = Int(ends.timeIntervalSince1970 * 1000)
     }
+    if current.offerType == .introductory,
+      let product = try? await Product.products(for: [current.productID]).first,
+      let offer = product.subscription?.introductoryOffer
+    {
+      entitlement["freePeriod"] = describe(offer.period)
+    }
     return entitlement
   }
 

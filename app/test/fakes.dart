@@ -67,6 +67,9 @@ class FakeStore implements Store {
   Entitlement held;
   bool eligible;
   bool askToBuy;
+
+  /// The introductory offer's length, as StoreKit's bridge words it
+  String freePeriod = 'month';
   Completer<void>? holdRestore;
   var restores = 0;
   final purchased = <String>[];
@@ -84,13 +87,13 @@ class FakeStore implements Store {
       id: 'app.compter.pro.monthly',
       price: '₹299.00',
       period: 'month',
-      freePeriod: eligible ? 'month' : null,
+      freePeriod: eligible ? freePeriod : null,
     ),
     Plan(
       id: 'app.compter.pro.yearly',
       price: '₹2,999.00',
       period: 'year',
-      freePeriod: eligible ? 'month' : null,
+      freePeriod: eligible ? freePeriod : null,
     ),
   ];
 
@@ -103,6 +106,7 @@ class FakeStore implements Store {
       productId: planId,
       expiresAt: DateTime(2026, 11, 30),
       inTrial: eligible,
+      freePeriod: eligible ? freePeriod : null,
     );
     eligible = false;
     return Purchase.bought(held);

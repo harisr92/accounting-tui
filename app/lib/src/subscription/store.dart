@@ -6,14 +6,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../compter.dart';
 
-/// What this phone's Apple ID has bought. [active] covers the free first month too: Apple
-/// starts it as a subscription that costs nothing until it ends.
+/// What this phone's Apple ID has bought. [active] covers the free period too: Apple starts
+/// it as a subscription that costs nothing until it ends.
 class Entitlement {
   const Entitlement({
     required this.active,
     this.productId,
     this.expiresAt,
     this.inTrial = false,
+    this.freePeriod,
     this.willRenew = true,
   });
 
@@ -31,6 +32,7 @@ class Entitlement {
           ? null
           : DateTime.fromMillisecondsSinceEpoch(ends).toLocal(),
       inTrial: map['inTrial'] as bool? ?? false,
+      freePeriod: map['freePeriod'] as String?,
       willRenew: map['willRenew'] as bool? ?? true,
     );
   }
@@ -38,9 +40,12 @@ class Entitlement {
   final bool active;
   final String? productId;
 
-  /// When the current period ends: the free month's end while [inTrial]
+  /// When the current period ends: the free period's end while [inTrial]
   final DateTime? expiresAt;
   final bool inTrial;
+
+  /// How long the free period is while [inTrial] (`month`, `2 weeks`), as the plan offers it
+  final String? freePeriod;
 
   /// False once cancelled: it stays [active] until [expiresAt], then ends
   final bool willRenew;
@@ -68,7 +73,8 @@ class Plan {
   /// `month` or `year`
   final String period;
 
-  /// `month` while this Apple ID can still have the free first month, otherwise null
+  /// How long it is free (`month`, `2 weeks`) while this Apple ID can still have its
+  /// introductory offer, otherwise null
   final String? freePeriod;
 }
 

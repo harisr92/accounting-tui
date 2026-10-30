@@ -56,6 +56,8 @@ Future<IssuedRow?> issueInvoice(
     context,
     title: 'Invoice',
     submitLabel: 'Preview',
+    // Asked once at the start, before the milestones are picked
+    writes: false,
     fields: [
       const FieldSpec(
         'discount',
@@ -279,6 +281,8 @@ Future<(CreditInput, CreditPreviewRow)?> _creditTerms(
     context,
     title: 'Credit note',
     submitLabel: 'Preview',
+    // Asked once at the start of [issueCreditNote], not on each return to the lines
+    writes: false,
     fields: [
       _date,
       const FieldSpec(

@@ -59,7 +59,7 @@ Future<bool> restorePurchases(BuildContext context) async {
   }
 }
 
-/// The plans, each with its price and any free month, plus restore. `true` when it closes
+/// The plans, each with its price and any free period, plus restore. `true` when it closes
 /// with a subscription.
 Future<bool> showPaywall(BuildContext context) async {
   final subscribed = await showModalBottomSheet<bool>(
@@ -141,7 +141,7 @@ class _PaywallState extends ConsumerState<Paywall> {
                 Text(
                   free == null
                       ? 'Subscribe to compter'
-                      : 'Start your free $free',
+                      : 'Start your ${freePeriodLabel(free)}',
                   style: theme.textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 8),
@@ -213,14 +213,23 @@ class _PaywallState extends ConsumerState<Paywall> {
   }
 }
 
-/// `1 month free, then ₹299.00 a month`, or the price alone without a free period
+/// `Free month, then ₹299.00 a month`, or the price alone without a free period
 String _offer(Plan plan) {
   final price = '${plan.price} a ${plan.period}';
   final free = plan.freePeriod;
   if (free == null) return price;
-  // `month`, or with its count already, `2 weeks`
-  return '${free.contains(' ') ? free : '1 $free'} free, then $price';
+  return '${_capitalised(freePeriodLabel(free))}, then $price';
 }
+
+/// A free [period] as StoreKit's bridge words it: `month` is a `free month`, `2 weeks` are
+/// `2 free weeks`
+String freePeriodLabel(String period) {
+  final words = period.split(' ');
+  return words.length == 2 ? '${words[0]} free ${words[1]}' : 'free $period';
+}
+
+String _capitalised(String text) =>
+    text.isEmpty ? text : text[0].toUpperCase() + text.substring(1);
 
 /// How Settings says where the subscription stands
 String describeEntitlement(Entitlement entitlement) {
@@ -229,9 +238,13 @@ String describeEntitlement(Entitlement entitlement) {
   if (ends == null) return 'Active';
   final date = shortDate(ends);
   if (entitlement.inTrial) {
+    final free = entitlement.freePeriod;
+    final trial = free == null
+        ? 'Free trial'
+        : _capitalised(freePeriodLabel(free));
     return entitlement.willRenew
-        ? 'Free month, then billed on $date'
-        : 'Free month, ends $date';
+        ? '$trial, then billed on $date'
+        : '$trial, ends $date';
   }
   return entitlement.willRenew ? 'Renews $date' : 'Ends $date';
 }
