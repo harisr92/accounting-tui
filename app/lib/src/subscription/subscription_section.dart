@@ -17,20 +17,12 @@ class SubscriptionSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final store = ref.watch(storeProvider);
     if (!store.sells) return const SizedBox.shrink();
-    final entitlement = ref.watch(entitlementProvider).value;
+    final status = ref.watch(entitlementProvider);
+    final entitlement = status.value;
 
-    Future<void> restore() async {
+    Future<void> manage() async {
       try {
-        final restored = await store.restore();
-        ref.read(entitlementProvider.notifier).show(restored);
-        if (context.mounted) {
-          notify(
-            context,
-            restored.active
-                ? 'Subscription restored'
-                : 'No subscription found for this Apple ID',
-          );
-        }
+        await store.manage();
       } on PlatformException catch (error) {
         if (context.mounted) {
           notify(context, error.message ?? error.code, error: true);
@@ -50,7 +42,11 @@ class SubscriptionSection extends ConsumerWidget {
           ),
           title: const Text('compter'),
           subtitle: Text(
-            entitlement == null ? '…' : describeEntitlement(entitlement),
+            entitlement != null
+                ? describeEntitlement(entitlement)
+                : status.hasError
+                ? 'The App Store can’t be reached'
+                : '…',
           ),
         ),
         if (entitlement != null && !entitlement.active)
@@ -66,13 +62,13 @@ class SubscriptionSection extends ConsumerWidget {
             title: const Text('Manage subscription'),
             subtitle: const Text('Change plan or cancel'),
             trailing: const Icon(Icons.open_in_new),
-            onTap: store.manage,
+            onTap: manage,
           ),
         ListTile(
           leading: const Icon(Icons.restore),
           title: const Text('Restore purchases'),
           subtitle: const Text('After a reinstall or on a new iPhone'),
-          onTap: restore,
+          onTap: () => restorePurchases(context),
         ),
       ],
     );

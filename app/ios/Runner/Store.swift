@@ -66,8 +66,8 @@ final class CompterStore {
     }
   }
 
-  /// `nil` when cancelled, or waiting for a parent's approval (Ask to Buy), which arrives
-  /// later through [updates]
+  /// The new entitlement; `nil` when cancelled; `pending` while a parent approves it (Ask to
+  /// Buy), which then arrives through [updates]
   @MainActor
   private static func purchase(_ product: Product) async throws -> [String: Any]? {
     switch try await product.purchase() {
@@ -76,7 +76,9 @@ final class CompterStore {
       return await entitlement()
     case .success(.unverified(_, let error)):
       throw error
-    case .userCancelled, .pending:
+    case .pending:
+      return ["pending": true]
+    case .userCancelled:
       return nil
     @unknown default:
       return nil
@@ -93,7 +95,8 @@ final class CompterStore {
         transaction.revocationDate == nil
       else { continue }
       let ends = transaction.expirationDate ?? .distantFuture
-      if ends > (current?.expirationDate ?? .distantPast) { current = transaction }
+      let held = current.map { $0.expirationDate ?? .distantFuture } ?? .distantPast
+      if ends > held { current = transaction }
     }
     guard let current else { return ["active": false] }
     var entitlement: [String: Any] = [

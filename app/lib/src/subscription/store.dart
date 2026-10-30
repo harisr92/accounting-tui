@@ -72,6 +72,21 @@ class Plan {
   final String? freePeriod;
 }
 
+/// What came of tapping a plan
+class Purchase {
+  const Purchase.bought(Entitlement this.entitlement) : pending = false;
+
+  const Purchase.cancelled() : entitlement = null, pending = false;
+
+  /// Asked a parent's approval (Ask to Buy); the subscription arrives later through
+  /// [Store.changes]
+  const Purchase.pending() : entitlement = null, pending = true;
+
+  /// What the phone holds after buying; `null` when cancelled or [pending]
+  final Entitlement? entitlement;
+  final bool pending;
+}
+
 /// Where compter is sold. Only the iPhone sells it ([AppStore]); elsewhere it is free
 /// ([FreeStore]). Tests replace it.
 abstract interface class Store {
@@ -83,9 +98,8 @@ abstract interface class Store {
   /// Cheapest first; empty when the store can't be reached
   Future<List<Plan>> plans();
 
-  /// The entitlement after buying [planId], or `null` when cancelled or waiting for a
-  /// parent's approval (Ask to Buy, which arrives later through [changes])
-  Future<Entitlement?> purchase(String planId);
+  /// Buy [planId], through the App Store's own confirmation sheet
+  Future<Purchase> purchase(String planId);
 
   /// Fetch what this Apple ID bought, for a new phone or a reinstall
   Future<Entitlement> restore();
@@ -110,7 +124,8 @@ class FreeStore implements Store {
   Future<List<Plan>> plans() async => const [];
 
   @override
-  Future<Entitlement?> purchase(String planId) async => Entitlement.unlimited;
+  Future<Purchase> purchase(String planId) async =>
+      const Purchase.bought(Entitlement.unlimited);
 
   @override
   Future<Entitlement> restore() async => Entitlement.unlimited;
@@ -152,12 +167,14 @@ class AppStore implements Store {
   }
 
   @override
-  Future<Entitlement?> purchase(String planId) async {
+  Future<Purchase> purchase(String planId) async {
     final bought = await _channel.invokeMethod<Map<Object?, Object?>>(
       'purchase',
       planId,
     );
-    return bought == null ? null : Entitlement.fromMap(bought);
+    if (bought == null) return const Purchase.cancelled();
+    if (bought['pending'] == true) return const Purchase.pending();
+    return Purchase.bought(Entitlement.fromMap(bought));
   }
 
   @override

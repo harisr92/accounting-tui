@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:compter/src/subscription/paywall.dart';
 import 'package:compter/src/subscription/store.dart';
 import 'package:flutter/material.dart';
@@ -119,6 +121,53 @@ void main() {
     await tester.tap(find.byTooltip('New project'));
     await settle(tester);
     expect(field('Name'), findsWidgets);
+  });
+
+  testWidgets(
+    'a purchase waiting for a parent says so, and unlocks on approval',
+    (tester) async {
+      final store = await launchSelling(tester, FakeStore(askToBuy: true));
+
+      await tester.tap(find.byTooltip('New project'));
+      await settle(tester);
+      await tester.tap(find.text('1 month free, then ₹299.00 a month'));
+      await settle(tester);
+
+      expect(
+        find.text('Asked for approval. compter unlocks once it’s approved.'),
+        findsOneWidget,
+      );
+      expect(find.text('Start your free month'), findsNothing);
+      expect(field('Name'), findsNothing);
+      expect(find.text('Read-only'), findsOneWidget);
+
+      store.change(const Entitlement(active: true));
+      await settle(tester);
+      expect(find.text('Read-only'), findsNothing);
+    },
+  );
+
+  testWidgets('tapping restore again joins the restore already running', (
+    tester,
+  ) async {
+    final store = FakeStore()..holdRestore = Completer<void>();
+    await launchSelling(tester, store);
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await settle(tester);
+    await scrollToMiddle(tester, find.text('Restore purchases'));
+
+    await tester.tap(find.text('Restore purchases'));
+    await tester.pump();
+    await tester.tap(find.text('Restore purchases'));
+    await tester.pump();
+    store.holdRestore!.complete();
+    await settle(tester);
+
+    expect(store.restores, 1);
+    expect(
+      find.text('No subscription found for this Apple ID'),
+      findsOneWidget,
+    );
   });
 
   test('settings words each state of the subscription', () {

@@ -11,10 +11,52 @@ import 'store.dart';
 /// The one gate before anything that creates or changes a record: `true` when it may go
 /// ahead. On an iPhone without a subscription it shows [showPaywall] instead, and goes ahead
 /// only if they subscribe there. Exports, PDFs and sync never ask: the records are theirs.
+/// Waits briefly for StoreKit's first answer, so the first ask after launch (the welcome
+/// pages' offer) sees the real entitlement; a slow or failing store still lets them write.
 Future<bool> requireWrite(BuildContext context) async {
   final container = ProviderScope.containerOf(context, listen: false);
-  if (container.read(canWriteProvider)) return true;
+  if (!container.read(storeProvider).sells) return true;
+  final Entitlement entitlement;
+  try {
+    entitlement = await container
+        .read(entitlementProvider.future)
+        .timeout(const Duration(seconds: 3));
+  } catch (_) {
+    return true;
+  }
+  if (entitlement.active) return true;
+  if (!context.mounted) return false;
   return showPaywall(context);
+}
+
+/// The restore running now, which a second tap joins rather than asking for the Apple ID again
+Future<Entitlement>? _restoring;
+
+/// Fetch what this Apple ID bought (a reinstall, a new iPhone) and say what was found. `true`
+/// when it holds a subscription.
+Future<bool> restorePurchases(BuildContext context) async {
+  final container = ProviderScope.containerOf(context, listen: false);
+  final running = _restoring ??= container.read(storeProvider).restore();
+  try {
+    final restored = await running;
+    container.read(entitlementProvider.notifier).show(restored);
+    if (context.mounted) {
+      notify(
+        context,
+        restored.active
+            ? 'Subscription restored'
+            : 'No subscription found for this Apple ID',
+      );
+    }
+    return restored.active;
+  } on PlatformException catch (error) {
+    if (context.mounted) {
+      notify(context, error.message ?? error.code, error: true);
+    }
+    return false;
+  } finally {
+    if (identical(_restoring, running)) _restoring = null;
+  }
 }
 
 /// The plans, each with its price and any free month, plus restore. `true` when it closes
@@ -43,22 +85,36 @@ class _PaywallState extends ConsumerState<Paywall> {
   /// While a purchase or restore is with the App Store, which shows its own sheet
   var _busy = false;
 
-  Future<void> _run(Future<Entitlement?> Function(Store) action) async {
+  Future<void> _buy(Plan plan) async {
     setState(() => _busy = true);
     try {
-      final got = await action(ref.read(storeProvider));
+      final purchase = await ref.read(storeProvider).purchase(plan.id);
       if (!mounted) return;
-      if (got != null) ref.read(entitlementProvider.notifier).show(got);
-      if (got?.active ?? false) {
-        Navigator.pop(context, true);
-      } else if (got != null) {
-        notify(context, 'No subscription found for this Apple ID');
+      final bought = purchase.entitlement;
+      if (bought != null) {
+        ref.read(entitlementProvider.notifier).show(bought);
+        if (bought.active) Navigator.pop(context, true);
+      } else if (purchase.pending) {
+        // The approval comes through the store's changes, whenever the parent answers
+        notify(
+          context,
+          'Asked for approval. compter unlocks once it’s approved.',
+        );
+        Navigator.pop(context, false);
       }
     } on PlatformException catch (error) {
       if (mounted) notify(context, error.message ?? error.code, error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _restore() async {
+    setState(() => _busy = true);
+    final restored = await restorePurchases(context);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (restored) Navigator.pop(context, true);
   }
 
   Future<void> _open(String url) async {
@@ -107,9 +163,7 @@ class _PaywallState extends ConsumerState<Paywall> {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: FilledButton(
-                        onPressed: _busy
-                            ? null
-                            : () => _run((store) => store.purchase(plan.id)),
+                        onPressed: _busy ? null : () => _buy(plan),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           child: Text(
@@ -133,9 +187,7 @@ class _PaywallState extends ConsumerState<Paywall> {
                   alignment: WrapAlignment.center,
                   children: [
                     TextButton(
-                      onPressed: _busy
-                          ? null
-                          : () => _run((store) => store.restore()),
+                      onPressed: _busy ? null : _restore,
                       child: const Text('Restore purchases'),
                     ),
                     TextButton(

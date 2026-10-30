@@ -55,12 +55,20 @@ class FakeAccount implements CloudAccount {
 }
 
 /// The App Store in memory: [held] is what this Apple ID has, and a purchase grants a free
-/// month while [eligible]
+/// month while [eligible], or waits for a parent with [askToBuy]. A restore waits for
+/// [holdRestore] when set.
 class FakeStore implements Store {
-  FakeStore({this.held = Entitlement.none, this.eligible = true});
+  FakeStore({
+    this.held = Entitlement.none,
+    this.eligible = true,
+    this.askToBuy = false,
+  });
 
   Entitlement held;
   bool eligible;
+  bool askToBuy;
+  Completer<void>? holdRestore;
+  var restores = 0;
   final purchased = <String>[];
   final _changes = StreamController<Entitlement>.broadcast();
 
@@ -87,8 +95,9 @@ class FakeStore implements Store {
   ];
 
   @override
-  Future<Entitlement?> purchase(String planId) async {
+  Future<Purchase> purchase(String planId) async {
     purchased.add(planId);
+    if (askToBuy) return const Purchase.pending();
     held = Entitlement(
       active: true,
       productId: planId,
@@ -96,11 +105,15 @@ class FakeStore implements Store {
       inTrial: eligible,
     );
     eligible = false;
-    return held;
+    return Purchase.bought(held);
   }
 
   @override
-  Future<Entitlement> restore() async => held;
+  Future<Entitlement> restore() async {
+    restores++;
+    await holdRestore?.future;
+    return held;
+  }
 
   @override
   Future<void> manage() async {}
