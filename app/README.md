@@ -122,6 +122,41 @@ Drive UI, so nobody moves or renames them by accident. In **Testing**, sign-in l
 4. On the computer, run `compter drive sign-in` with the same Google account. It keeps the
    grant in the OS keychain and, if the Drive has no snapshot yet, publishes the computer's.
 
+## iOS subscription
+
+On the iPhone compter is a free download with a subscription: monthly or yearly, each with a
+free first month (an introductory offer). Apple starts the free month only when someone
+subscribes. The paywall offers it after the welcome pages, and closing it leaves the app
+**read-only**: everything can still be opened, shared and exported, but nothing created or
+changed. Every write path asks `requireWrite` (`lib/src/subscription/paywall.dart`) first.
+Android and the desktop app stay free.
+
+StoreKit 2 runs in `ios/Runner/Store.swift`, which checks transactions on the phone, so
+there is no server. `lib/src/subscription/store.dart` talks to it over the `compter/store`
+channel.
+
+### One-time setup
+
+1. App Store Connect → Business: sign the **Paid Apps** agreement, and add your bank and tax
+   details.
+2. The app → Subscriptions: a group `compter` with two auto-renewable subscriptions,
+   `app.compter.pro.monthly` (1 month) and `app.compter.pro.yearly` (1 year). Set their
+   prices, and on each add an **Introductory Offer**: Free, 1 month, all territories.
+3. Fill in each subscription's localized name and review screenshot (the paywall), and submit
+   both with the app's next version.
+4. Users and Access → Sandbox: add testers for TestFlight purchases.
+5. In the store listing, link the Terms (`termsUrl`) as the EULA and the Privacy policy.
+   Apple requires both for a subscription (guideline 3.1.2), and the paywall links them too.
+
+### Testing
+
+`ios/Runner/Compter.storekit` mirrors the products, with placeholder prices of ₹299 a month
+and ₹2,999 a year. The Runner scheme uses it, so a run from Xcode (not `flutter run`) buys from
+it with no sandbox account. Debug → StoreKit → Manage Transactions can expire, refund or renew
+a subscription to see the read-only state and back. If Xcode can't find the file, choose it
+again in Product → Scheme → Edit Scheme → Run → Options → StoreKit Configuration. Widget tests
+use `FakeStore` (`test/fakes.dart`).
+
 
 
 CI (`.github/workflows/mobile.yml`) checks the bindings are current, runs `flutter analyze` and

@@ -18,6 +18,7 @@ Future<ExportRow?> exportGstr1(
     context,
     title: 'Export GSTR-1',
     submitLabel: 'Export',
+    writes: false,
     fields: [
       FieldSpec(
         'quarter',
@@ -56,6 +57,7 @@ Future<ExportRow?> exportIff(
     context,
     title: 'Export IFF (B2B)',
     submitLabel: 'Export',
+    writes: false,
     fields: [
       FieldSpec(
         'month',

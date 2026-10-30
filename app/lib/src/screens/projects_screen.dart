@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../compter.dart';
 import '../forms/project_forms.dart';
 import '../rust/api/rows.dart';
+import '../subscription/subscription_section.dart';
 import '../ui/collapsing_fab.dart';
 import '../ui/empty_state.dart';
 import '../ui/glass.dart';
@@ -73,6 +74,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
                           ? 'The demo business: nothing here is saved'
                           : 'Clients, milestones and the time you bill',
                     ),
+                  const ReadOnlyBanner(),
                   if (checklist)
                     SetupChecklist(projects: rows, onNewProject: _newProject),
                   // The card already says to add a project, but not that every one is archived

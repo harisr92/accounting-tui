@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../onboarding.dart';
+import '../subscription/paywall.dart';
 import '../ui/theme.dart';
 
 typedef _Page = ({IconData icon, String title, String body});
@@ -55,6 +56,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     try {
       await welcomeSeen();
     } catch (_) {}
+    // The free period starts only when they take it, so it is offered here, once; closed, the
+    // app opens read-only, with the offer in Settings and on the project list
+    if (!mounted) return;
+    await requireWrite(context);
     if (mounted) context.go('/projects');
   }
 

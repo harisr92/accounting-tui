@@ -6,6 +6,7 @@ import '../rust/api/error.dart';
 import '../rust/api/invoicing.dart';
 import '../rust/api/rows.dart';
 import '../ui/check_list.dart';
+import '../subscription/paywall.dart';
 import 'form_dialog.dart';
 
 const _amount = TextInputType.numberWithOptions(decimal: true);
@@ -27,6 +28,7 @@ Future<IssuedRow?> issueInvoice(
   ProjectDetail project,
   MilestoneRow milestone,
 ) async {
+  if (!await requireWrite(context) || !context.mounted) return null;
   final pending = [
     for (final i in project.byDue)
       if (project.milestones[i].status == 'PENDING') project.milestones[i],
@@ -54,6 +56,8 @@ Future<IssuedRow?> issueInvoice(
     context,
     title: 'Invoice',
     submitLabel: 'Preview',
+    // Asked once at the start, before the milestones are picked
+    writes: false,
     fields: [
       const FieldSpec(
         'discount',
@@ -167,6 +171,7 @@ Future<CreditedRow?> issueCreditNote(
   CompterApp app,
   InvoiceDetail invoice,
 ) async {
+  if (!await requireWrite(context)) return null;
   final names = {for (final line in invoice.lines) line.milestoneId: line.name};
   // What was picked and typed, kept when the next form is cancelled to come back to the lines
   Map<String, String>? kept;
@@ -276,6 +281,8 @@ Future<(CreditInput, CreditPreviewRow)?> _creditTerms(
     context,
     title: 'Credit note',
     submitLabel: 'Preview',
+    // Asked once at the start of [issueCreditNote], not on each return to the lines
+    writes: false,
     fields: [
       _date,
       const FieldSpec(

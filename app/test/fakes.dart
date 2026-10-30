@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:compter/src/subscription/store.dart';
 import 'package:compter/src/sync/cloud.dart';
 
 /// Drive's app folder in memory; [offline] makes every call fail as with no network
@@ -50,4 +52,90 @@ class FakeAccount implements CloudAccount {
 
   @override
   CloudFolder folder() => drive;
+}
+
+/// The App Store in memory: [held] is what this Apple ID has, and a purchase grants a free
+/// month while [eligible], or waits for a parent with [askToBuy]. A restore waits for
+/// [holdRestore] when set.
+class FakeStore implements Store {
+  FakeStore({
+    this.held = Entitlement.none,
+    this.eligible = true,
+    this.askToBuy = false,
+  });
+
+  Entitlement held;
+  bool eligible;
+  bool askToBuy;
+
+  /// The introductory offer's length, as StoreKit's bridge words it
+  String freePeriod = 'month';
+  Completer<void>? holdRestore;
+  var restores = 0;
+  final purchased = <String>[];
+  final _changes = StreamController<Entitlement>.broadcast();
+
+  @override
+  bool get sells => true;
+
+  @override
+  Future<Entitlement> entitlement() async => held;
+
+  /// Plans fail as with no network, or StoreKit knowing none of the products
+  bool offline = false;
+
+  @override
+  Future<List<Plan>> plans() async {
+    if (offline) throw Exception('The App Store has none of the plans');
+    return _plans();
+  }
+
+  List<Plan> _plans() => [
+    Plan(
+      id: 'app.compter.pro.monthly',
+      price: '₹299.00',
+      period: 'month',
+      freePeriod: eligible ? freePeriod : null,
+    ),
+    Plan(
+      id: 'app.compter.pro.yearly',
+      price: '₹2,999.00',
+      period: 'year',
+      freePeriod: eligible ? freePeriod : null,
+    ),
+  ];
+
+  @override
+  Future<Purchase> purchase(String planId) async {
+    purchased.add(planId);
+    if (askToBuy) return const Purchase.pending();
+    held = Entitlement(
+      active: true,
+      productId: planId,
+      expiresAt: DateTime(2026, 11, 30),
+      inTrial: eligible,
+      freePeriod: eligible ? freePeriod : null,
+    );
+    eligible = false;
+    return Purchase.bought(held);
+  }
+
+  @override
+  Future<Entitlement> restore() async {
+    restores++;
+    await holdRestore?.future;
+    return held;
+  }
+
+  @override
+  Future<void> manage() async {}
+
+  @override
+  Stream<Entitlement> get changes => _changes.stream;
+
+  /// A renewal, refund or expiry arriving from StoreKit
+  void change(Entitlement entitlement) {
+    held = entitlement;
+    _changes.add(entitlement);
+  }
 }
