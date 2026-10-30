@@ -81,8 +81,16 @@ class FakeStore implements Store {
   @override
   Future<Entitlement> entitlement() async => held;
 
+  /// Plans fail as with no network, or StoreKit knowing none of the products
+  bool offline = false;
+
   @override
-  Future<List<Plan>> plans() async => [
+  Future<List<Plan>> plans() async {
+    if (offline) throw Exception('The App Store has none of the plans');
+    return _plans();
+  }
+
+  List<Plan> _plans() => [
     Plan(
       id: 'app.compter.pro.monthly',
       price: '₹299.00',

@@ -46,7 +46,7 @@ final class CompterStore {
     case "entitlement":
       return await entitlement()
     case "plans":
-      return await plans()
+      return try await plans()
     case "purchase":
       guard let id = call.arguments as? String,
         let product = try await Product.products(for: [id]).first
@@ -133,9 +133,11 @@ final class CompterStore {
   }
 
   /// Each plan with its price in the store's currency, and its free period while this Apple
-  /// ID can still have one
-  static func plans() async -> [[String: Any]] {
-    guard let products = try? await Product.products(for: productIds) else { return [] }
+  /// ID can still have one. Throws when StoreKit fails or knows none of [productIds], so the
+  /// paywall can say why it has nothing to sell.
+  static func plans() async throws -> [[String: Any]] {
+    let products = try await Product.products(for: productIds)
+    if products.isEmpty { throw StoreError.noProducts }
     var plans: [[String: Any]] = []
     for product in products.sorted(by: { $0.price < $1.price }) {
       guard let subscription = product.subscription else { continue }
@@ -169,7 +171,17 @@ final class CompterStore {
 
   enum StoreError: LocalizedError {
     case unknownProduct
+    /// From Xcode: the scheme's StoreKit Configuration isn't Compter.storekit, or the app was
+    /// started by `flutter run`. From TestFlight or the store: the products aren't set up (or
+    /// not yet approved) in App Store Connect, or the Paid Apps agreement isn't active.
+    case noProducts
 
-    var errorDescription: String? { "That plan isn’t in the App Store" }
+    var errorDescription: String? {
+      switch self {
+      case .unknownProduct: "That plan isn’t in the App Store"
+      case .noProducts:
+        "The App Store has none of \(CompterStore.productIds.joined(separator: ", "))"
+      }
+    }
   }
 }

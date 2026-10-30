@@ -183,6 +183,23 @@ void main() {
     expect(find.text('2 free weeks, then ₹299.00 a month'), findsOneWidget);
   });
 
+  testWidgets('a paywall with no plans offers to try again', (tester) async {
+    final store = FakeStore()..offline = true;
+    await launchSelling(tester, store);
+    await tester.tap(find.byTooltip('New project'));
+    await settle(tester);
+    expect(
+      find.text('The App Store can’t be reached. Try again when online.'),
+      findsOneWidget,
+    );
+
+    store.offline = false;
+    await tester.tap(find.text('Try again'));
+    await settle(tester);
+
+    expect(find.text('Free month, then ₹299.00 a month'), findsOneWidget);
+  });
+
   test('settings words each state of the subscription', () {
     final ends = DateTime(2026, 12, 1);
     expect(

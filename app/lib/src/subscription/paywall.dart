@@ -80,7 +80,18 @@ class Paywall extends ConsumerStatefulWidget {
 }
 
 class _PaywallState extends ConsumerState<Paywall> {
-  late final Future<List<Plan>> _plans = ref.read(storeProvider).plans();
+  late Future<List<Plan>> _plans = _loadPlans();
+
+  /// The plans, logging why there are none: the paywall can only say the store can't be
+  /// reached, but a misconfigured product shows up in the log
+  Future<List<Plan>> _loadPlans() async {
+    try {
+      return await ref.read(storeProvider).plans();
+    } catch (error) {
+      debugPrint('compter: no plans from the App Store: $error');
+      rethrow;
+    }
+  }
 
   /// While a purchase or restore is with the App Store, which shows its own sheet
   var _busy = false;
@@ -154,11 +165,19 @@ class _PaywallState extends ConsumerState<Paywall> {
                 const SizedBox(height: sectionGap),
                 if (snapshot.connectionState != ConnectionState.done)
                   const Center(child: CircularProgressIndicator())
-                else if (plans.isEmpty)
+                else if (plans.isEmpty) ...[
                   const Text(
                     'The App Store can’t be reached. Try again when online.',
-                  )
-                else
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: () => setState(() {
+                      _plans = _loadPlans();
+                    }),
+                    child: const Text('Try again'),
+                  ),
+                  const SizedBox(height: 12),
+                ] else
                   for (final plan in plans)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
