@@ -6,13 +6,14 @@ import '../handoff.dart';
 import '../notice.dart';
 import '../rust/api/error.dart';
 import '../sync/sync_controller.dart';
-import '../sync/sync_settings.dart';
+import '../sync/storage.dart';
+import '../sync/storages.dart';
 import '../ui/action_sheet.dart';
 import '../ui/section.dart';
-import 'drive_rows.dart';
+import 'cloud_rows.dart';
 
 /// Syncing with compter on a computer, through its sync folder: automatically in Google
-/// Drive (see `SyncController`), or by hand, carrying its two files across with the Files app.
+/// Drive or iCloud (see `SyncController`), or by hand, carrying its two files across with the Files app.
 /// Either way Rust checks each snapshot's generation, so no invoice is ever lost.
 class SyncSection extends ConsumerWidget {
   const SyncSection({super.key});
@@ -20,9 +21,8 @@ class SyncSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(syncStatusProvider);
-    final settings = ref.watch(syncSettingsProvider).value;
+    final storage = ref.watch(syncStorageProvider);
     final available = status.value?.available ?? false;
-    final drive = settings?.method == SyncMethod.googleDrive;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -47,25 +47,14 @@ class SyncSection extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.sync_alt),
             title: const Text('Sync method'),
-            subtitle: Text(
-              drive ? 'Google Drive, automatic' : 'By hand, with the files',
-            ),
+            subtitle: Text(storage.label),
             onTap: () => _chooseMethod(context, ref),
           ),
-          if (drive) ...[
-            const DriveRows(),
-            const SectionNote(
-              'On your computer, run `compter drive sign-in` with the same '
-              'Google account. While this phone is open, compter there waits.',
-            ),
-          ] else ...[
+          if (storage case CloudStorage cloud)
+            CloudRows(cloud)
+          else
             ..._manualRows(context, ref, status.value?.summary),
-            const SectionNote(
-              'compter on your computer publishes $snapshotFile and '
-              '$manifestFile to its sync folder on Google Drive or iCloud '
-              'Drive.',
-            ),
-          ],
+          SectionNote(storage.computerNote),
         ],
       ],
     );
@@ -98,25 +87,17 @@ class SyncSection extends ConsumerWidget {
   ];
 
   Future<void> _chooseMethod(BuildContext context, WidgetRef ref) async {
-    final method = await showActionSheet<SyncMethod>(
+    final storage = await showActionSheet<SyncStorage>(
       context,
       title: 'Sync method',
-      actions: const [
-        (
-          icon: Icons.cloud_sync_outlined,
-          label: 'Google Drive, automatic',
-          value: SyncMethod.googleDrive,
-        ),
-        (
-          icon: Icons.folder_copy_outlined,
-          label: 'By hand, with the files',
-          value: SyncMethod.manual,
-        ),
+      actions: [
+        for (final storage in ref.read(syncStoragesProvider))
+          (icon: storage.icon, label: storage.label, value: storage),
       ],
     );
-    if (method == null) return;
+    if (storage == null) return;
     try {
-      await ref.read(syncControllerProvider.notifier).useMethod(method);
+      await ref.read(syncControllerProvider.notifier).use(storage);
     } on Exception catch (error) {
       if (context.mounted) notify(context, '$error', error: true);
     }

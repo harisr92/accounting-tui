@@ -2,19 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../notice.dart';
+import '../sync/storage.dart';
 import '../sync/sync_controller.dart';
 
-/// Automatic sync through Google Drive: where it stands, the account, and what the user may
+/// Automatic sync through a cloud storage: where it stands, the account, and what the user may
 /// need to do (sign in, settle a conflict)
-class DriveRows extends ConsumerWidget {
-  const DriveRows({super.key});
+class CloudRows extends ConsumerWidget {
+  const CloudRows(this.cloud, {super.key});
+
+  final CloudStorage cloud;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final report = ref.watch(syncControllerProvider);
     final controller = ref.read(syncControllerProvider.notifier);
     final phase = report.phase;
-    final signedIn = report.account != null;
+    final signIn = cloud.signInAction;
+    final signOut = cloud.signOutTitle;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -32,11 +36,11 @@ class DriveRows extends ConsumerWidget {
               if (keep != null) await controller.settle(keepThisPhone: keep);
             },
           ),
-        if (!signedIn)
+        if (report.account == null)
           ListTile(
-            leading: const Icon(Icons.login),
-            title: const Text('Sign in to Google'),
-            subtitle: const Text('compter keeps its files in a hidden folder'),
+            leading: Icon(signIn.icon),
+            title: Text(signIn.title),
+            subtitle: Text(signIn.subtitle),
             onTap: () => _signIn(context, ref),
           )
         else ...[
@@ -46,11 +50,12 @@ class DriveRows extends ConsumerWidget {
             title: const Text('Sync now'),
             onTap: controller.syncNow,
           ),
-          ListTile(
-            leading: const Icon(Icons.logout),
-            title: const Text('Sign out of Google'),
-            onTap: controller.signOut,
-          ),
+          if (signOut != null)
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: Text(signOut),
+              onTap: controller.signOut,
+            ),
         ],
       ],
     );
@@ -78,7 +83,7 @@ class DriveRows extends ConsumerWidget {
       await ref.read(syncControllerProvider.notifier).signIn();
     } on Exception catch (error) {
       if (context.mounted) {
-        notify(context, 'Sign-in failed: $error', error: true);
+        notify(context, '${cloud.name}: $error', error: true);
       }
     }
   }

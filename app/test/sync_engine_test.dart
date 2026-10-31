@@ -5,6 +5,7 @@ import 'package:compter/src/compter.dart';
 import 'package:compter/src/handoff.dart';
 import 'package:compter/src/rust/api/app.dart';
 import 'package:compter/src/rust/api/rows.dart';
+import 'package:compter/src/sync/storages.dart';
 import 'package:compter/src/sync/sync_controller.dart';
 import 'package:compter/src/sync/sync_settings.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -68,7 +69,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         compterProvider.overrideWithValue(phone),
-        cloudAccountProvider.overrideWithValue(FakeAccount(folder)),
+        syncStoragesProvider.overrideWithValue(fakeStorages(folder)),
         handoffDirProvider.overrideWith((ref) async => staging.path),
       ],
     );
