@@ -108,6 +108,11 @@ pub trait SyncFolder: Send + Sync {
     /// Where it is, for messages: a path, or the cloud drive's name
     fn place(&self) -> String;
 
+    /// What the user does after [`SyncError::SignedOut`] to sync again
+    fn reconnect(&self) -> &'static str {
+        "sign in again"
+    }
+
     /// Files a sync client made when two devices wrote the same file, worth telling the user
     /// about; a cloud API never makes them
     fn conflict_copies(&self) -> Vec<String> {
@@ -130,6 +135,10 @@ impl<F: SyncFolder + ?Sized> SyncFolder for Box<F> {
 
     fn place(&self) -> String {
         (**self).place()
+    }
+
+    fn reconnect(&self) -> &'static str {
+        (**self).reconnect()
     }
 
     fn conflict_copies(&self) -> Vec<String> {
@@ -162,7 +171,7 @@ impl SyncDir {
     }
 
     /// Sync this device through `dir` from the next start, or stop syncing when `None`; either
-    /// way it stops syncing through Google Drive. The folder must exist and be apart from the
+    /// way it stops syncing through Google Drive or iCloud. The folder must exist and be apart from the
     /// data folder, whose database it would clash with.
     pub fn save(data: &DataDir, dir: Option<&Path>) -> Result<(), SyncError> {
         if let Some(dir) = dir {
@@ -171,12 +180,15 @@ impl SyncDir {
         let path = data.device_settings_path();
         let mut settings = read_json::<DeviceSettings>(&path)?.unwrap_or_default();
         if dir.is_some_and(|dir| {
-            settings.google_drive.is_some() || settings.sync_dir.as_deref() != Some(dir)
+            settings.google_drive.is_some()
+                || settings.icloud
+                || settings.sync_dir.as_deref() != Some(dir)
         }) {
             forget_base(data)?;
         }
         settings.sync_dir = dir.map(Path::to_path_buf);
         settings.google_drive = None;
+        settings.icloud = false;
         write_json(&path, &settings)
     }
 
@@ -248,6 +260,9 @@ pub enum SyncBackend {
     /// Google Drive's hidden app folder, reached through the API as `account`. Only a front end
     /// that can sign in builds the folder; the core just remembers the choice.
     GoogleDrive { account: String },
+    /// The app's hidden iCloud container. The core can't know where it is on disk; a front end
+    /// that can reach it builds the folder.
+    ICloud,
 }
 
 impl SyncBackend {
@@ -257,13 +272,32 @@ impl SyncBackend {
             return Ok(Some(Self::Folder(dir, SyncSource::Env)));
         }
         let settings = read_json::<DeviceSettings>(&data.device_settings_path())?;
-        Ok(settings.and_then(
-            |settings| match (settings.google_drive, settings.sync_dir) {
-                (Some(account), _) => Some(Self::GoogleDrive { account }),
-                (None, Some(dir)) => Some(Self::Folder(SyncDir::new(dir), SyncSource::Settings)),
-                (None, None) => None,
-            },
-        ))
+        Ok(settings.and_then(|settings| {
+            match (settings.icloud, settings.google_drive, settings.sync_dir) {
+                (true, ..) => Some(Self::ICloud),
+                (false, Some(account), _) => Some(Self::GoogleDrive { account }),
+                (false, None, Some(dir)) => {
+                    Some(Self::Folder(SyncDir::new(dir), SyncSource::Settings))
+                }
+                (false, None, None) => None,
+            }
+        }))
+    }
+
+    /// Sync through iCloud from the next start, in place of any folder or Google Drive; or stop
+    /// syncing through it when `on` is false
+    pub fn save_icloud(data: &DataDir, on: bool) -> Result<(), SyncError> {
+        let path = data.device_settings_path();
+        let mut settings = read_json::<DeviceSettings>(&path)?.unwrap_or_default();
+        if on && !settings.icloud {
+            forget_base(data)?;
+        }
+        if on {
+            settings.sync_dir = None;
+            settings.google_drive = None;
+        }
+        settings.icloud = on;
+        write_json(&path, &settings)
     }
 
     /// Sync through Google Drive as `account` from the next start, in place of any folder; or
@@ -277,6 +311,7 @@ impl SyncBackend {
         }
         if let Some(account) = account {
             settings.sync_dir = None;
+            settings.icloud = false;
             settings.google_account = Some(account.to_owned());
         }
         settings.google_drive = account.map(str::to_owned);
@@ -322,6 +357,9 @@ struct DeviceSettings {
     /// in.
     #[serde(default)]
     google_account: Option<String>,
+    /// Whether this device syncs through the app's iCloud container
+    #[serde(default)]
+    icloud: bool,
 }
 
 fn check_folder(data: &DataDir, dir: &Path) -> Result<(), SyncError> {
@@ -348,7 +386,8 @@ fn is_conflict_copy(name: &str) -> bool {
     let stem_matches = ["compter", "manifest", "lease"]
         .iter()
         .any(|stem| lower.starts_with(stem));
-    stem_matches && (lower.contains("conflict") || lower.contains(" (") || lower.contains('-'))
+    // `compter (1).redb` (Dropbox, Drive), `compter 2.redb` (iCloud), `compter-PC.redb` (OneDrive)
+    stem_matches && (lower.contains("conflict") || lower.contains(' ') || lower.contains('-'))
 }
 
 /// What the snapshot in the synced folder is: written after the snapshot, so a snapshot whose

@@ -191,6 +191,44 @@ fn google_drive_and_a_folder_replace_each_other_unless_the_variable_overrides_bo
 }
 
 #[test]
+fn icloud_replaces_a_folder_and_google_drive_and_each_of_them_replaces_icloud() {
+    let device = Device::new();
+    let folder = tempfile::tempdir().unwrap();
+
+    SyncDir::save(&device.data, Some(folder.path())).unwrap();
+    SyncBackend::save_icloud(&device.data, true).unwrap();
+    assert_eq!(
+        SyncBackend::configured(&device.data, None).unwrap(),
+        Some(SyncBackend::ICloud)
+    );
+    assert!(SyncDir::saved(&device.data).unwrap().is_none());
+
+    SyncBackend::save_google_drive(&device.data, Some("me@example.com")).unwrap();
+    assert!(matches!(
+        SyncBackend::configured(&device.data, None).unwrap(),
+        Some(SyncBackend::GoogleDrive { .. })
+    ));
+
+    SyncBackend::save_icloud(&device.data, true).unwrap();
+    assert_eq!(
+        SyncBackend::configured(&device.data, None).unwrap(),
+        Some(SyncBackend::ICloud)
+    );
+    // Switching to iCloud doesn't sign out of Google
+    assert!(SyncBackend::google_account(&device.data).unwrap().is_some());
+
+    SyncDir::save(&device.data, Some(folder.path())).unwrap();
+    assert!(matches!(
+        SyncBackend::configured(&device.data, None).unwrap(),
+        Some(SyncBackend::Folder(_, SyncSource::Settings))
+    ));
+
+    SyncBackend::save_icloud(&device.data, true).unwrap();
+    SyncBackend::save_icloud(&device.data, false).unwrap();
+    assert_eq!(SyncBackend::configured(&device.data, None).unwrap(), None);
+}
+
+#[test]
 fn a_generation_counted_in_a_folder_never_hides_a_snapshot_in_google_drive() {
     let folder = tempfile::tempdir().unwrap();
     let laptop = Device::new();
