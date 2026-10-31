@@ -22,6 +22,7 @@ use compter_tui::app::App;
 use compter_tui::cli;
 use compter_tui::drive::{self, DriveFolder};
 use compter_tui::event::{Event, Events};
+use compter_tui::icloud::{self, ICloudFolder};
 use compter_tui::ui::views::{
     DashboardView, ExpensesView, InvoicesView, ProjectsView, ReportsView, SettingsView,
 };
@@ -37,6 +38,7 @@ const USAGE: &str = "usage: compter [--demo] [-V | --version] [-h | --help]
        compter import-merges <repo> <project> [--dry-run]
        compter sync (--keep-local | --keep-remote)
        compter drive (sign-in | sign-out)
+       compter icloud (on | off)
 
   --demo           try compter on sample projects kept in memory; nothing is saved
   -V, --version    display version information
@@ -47,13 +49,14 @@ const USAGE: &str = "usage: compter [--demo] [-V | --version] [-h | --help]
   sync             settle a conflict between devices: publish this device's data, or replace it
                    with the synced snapshot (the old file is kept as compter.conflict-*.redb)
   drive            sync through Google Drive: sign in to Google in the browser, or sign out
+  icloud           sync through iCloud Drive with the iPhone app, on a Mac: turn it on or off
 
 Data is stored in $COMPTER_HOME, $XDG_DATA_HOME/compter, or else %APPDATA%\\compter on Windows
 and ~/.local/share/compter elsewhere.
 
-To use several devices, run `compter drive sign-in` (the phone app syncs the same way), or set a
-sync folder in Settings (s) to a folder OneDrive, Dropbox or iCloud syncs; $COMPTER_SYNC_DIR
-overrides both. compter publishes a snapshot there on exit and picks up a newer one on start;
+To use several devices, run `compter drive sign-in` (the phone app syncs the same way), on a Mac
+`compter icloud on` (with the iPhone app set to iCloud), or set a sync folder in Settings (s) to a folder OneDrive, Dropbox or iCloud syncs; $COMPTER_SYNC_DIR
+overrides them all. compter publishes a snapshot there on exit and picks up a newer one on start;
 quit compter on one device before opening it on another.";
 
 fn main() -> Result<ExitCode> {
@@ -67,6 +70,9 @@ fn main() -> Result<ExitCode> {
     }
     if args.first().map(String::as_str) == Some("drive") {
         return google_drive(&args[1..]);
+    }
+    if args.first().map(String::as_str) == Some("icloud") {
+        return use_icloud(&args[1..]);
     }
     let mut demo_mode = false;
     for arg in &args {
@@ -191,7 +197,7 @@ fn resolve_sync(args: &[String]) -> Result<ExitCode> {
     let dir = DataDir::from_env()?;
     let Some(folder) = sync_folder(&dir)? else {
         eprintln!(
-            "no sync folder is set (Settings, `compter drive sign-in`, or $COMPTER_SYNC_DIR), so there is nothing to sync"
+            "no sync folder is set (Settings, `compter drive sign-in`, `compter icloud on`, or $COMPTER_SYNC_DIR), so there is nothing to sync"
         );
         return Ok(ExitCode::from(2));
     };
@@ -216,6 +222,20 @@ fn google_drive(args: &[String]) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
+/// `compter icloud (on | off)`
+fn use_icloud(args: &[String]) -> Result<ExitCode> {
+    let dir = DataDir::from_env()?;
+    match args {
+        [command] if command == "on" => cli::icloud_on(&dir, &sync::device_name_from_env())?,
+        [command] if command == "off" => cli::icloud_off(&dir)?,
+        _ => {
+            eprintln!("icloud needs on or off\n\n{USAGE}");
+            return Ok(ExitCode::from(2));
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
 /// Where this device syncs through, when it syncs
 fn sync_folder(dir: &DataDir) -> Result<Option<Box<dyn SyncFolder>>> {
     Ok(match SyncBackend::configured(dir, SyncDir::from_env())? {
@@ -225,6 +245,7 @@ fn sync_folder(dir: &DataDir) -> Result<Option<Box<dyn SyncFolder>>> {
             drive::Client::from_build()?,
             account,
         ))),
+        Some(SyncBackend::ICloud) => Some(Box::new(ICloudFolder::new(icloud::container()))),
     })
 }
 
@@ -253,24 +274,27 @@ fn open_store(demo_mode: bool) -> Result<Opened> {
         });
     }
     let dir = DataDir::from_env()?;
-    let (sync, notice) = match sync_folder(&dir)?
-        .map(|folder| SyncSession::begin(&dir, folder, sync::device_name_from_env()))
-    {
+    let (sync, notice) = match sync_folder(&dir)? {
         None => (None, None),
-        Some(Ok(session)) => (Some(session), None),
-        Some(Err(error @ SyncError::Remote { .. })) => (
-            None,
-            Some(Notice::error(format!(
-                "{error}: working on this device only; it syncs at the next start online"
-            ))),
-        ),
-        Some(Err(error @ SyncError::SignedOut(_))) => (
-            None,
-            Some(Notice::error(format!(
-                "{error} (`compter drive sign-in`); working on this device only"
-            ))),
-        ),
-        Some(Err(error)) => return Err(error.into()),
+        Some(folder) => {
+            let reconnect = folder.reconnect();
+            match SyncSession::begin(&dir, folder, sync::device_name_from_env()) {
+                Ok(session) => (Some(session), None),
+                Err(error @ SyncError::Remote { .. }) => (
+                    None,
+                    Some(Notice::error(format!(
+                        "{error}: working on this device only; it syncs at the next start online"
+                    ))),
+                ),
+                Err(error @ SyncError::SignedOut(_)) => (
+                    None,
+                    Some(Notice::error(format!(
+                        "{error} ({reconnect}); working on this device only"
+                    ))),
+                ),
+                Err(error) => return Err(error.into()),
+            }
+        }
     };
     let store = Store::open(&dir)
         .wrap_err_with(|| format!("could not open {}", dir.database_path().display()))?;

@@ -13,6 +13,7 @@ use compter_core::storage::sync::{self, SyncBackend};
 use compter_core::storage::{DataDir, Store};
 
 use crate::drive::{self, DriveFolder};
+use crate::icloud::{self, ICloudFolder};
 use crate::viewer;
 
 /// Add a milestone per merge into the main branch of `repo` to the hourly project `project`
@@ -137,6 +138,48 @@ pub fn drive_sign_out(data: &DataDir) -> Result<()> {
         println!("signed out of {account}; sync is off until you set it up again");
     } else {
         println!("signed out of {account}");
+    }
+    Ok(())
+}
+
+/// Sync this Mac through the app's iCloud container from now on. The iPhone app creates the
+/// container, so it must sync through iCloud once first. A container with no snapshot yet gets
+/// this Mac's.
+pub fn icloud_on(data: &DataDir, device_name: &str) -> Result<()> {
+    let Some(container) = icloud::container() else {
+        return Err(eyre!(
+            "iCloud sync needs a Mac; sync through Google Drive or a folder instead"
+        ));
+    };
+    if !container.is_dir() {
+        return Err(eyre!(
+            "compter's iCloud folder isn't on this Mac yet: turn on iCloud Drive (System Settings, Apple Account, iCloud), choose iCloud as the sync method in compter on your iPhone, then try again"
+        ));
+    }
+    // Seeding reads the database file, so compter must not have it open: opening fails if it does
+    if data.database_path().exists() {
+        Store::open(data)
+            .and_then(Store::close)
+            .wrap_err("quit compter before turning on iCloud, so its data can be published")?;
+    }
+    SyncBackend::save_icloud(data, true)?;
+    println!("compter syncs through iCloud Drive from the next start");
+    let folder = ICloudFolder::new(Some(container));
+    if let Some(generation) = sync::seed(data, &folder, device_name)
+        .wrap_err("could not publish to iCloud Drive; your data is safe on this computer")?
+    {
+        println!("published snapshot {generation} to iCloud Drive");
+    }
+    Ok(())
+}
+
+/// Stop syncing through iCloud; the files stay in iCloud for the phone
+pub fn icloud_off(data: &DataDir) -> Result<()> {
+    if SyncBackend::configured(data, None)? == Some(SyncBackend::ICloud) {
+        SyncBackend::save_icloud(data, false)?;
+        println!("sync is off until you set it up again");
+    } else {
+        println!("this computer doesn't sync through iCloud");
     }
     Ok(())
 }
