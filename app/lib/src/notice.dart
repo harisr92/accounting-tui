@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:open_filex/open_filex.dart';
+import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 /// A message at the bottom of the screen, like `Notice` in the terminal's footer
@@ -55,11 +55,17 @@ Future<bool> confirm(
   return answer ?? false;
 }
 
+/// Quick Look on iOS (ios/Runner/Viewer.swift), the PDF app on Android (MainActivity.kt)
+const _viewer = MethodChannel('compter/viewer');
+
 /// Open a PDF Rust just wrote in the phone's viewer
 Future<void> openPdf(BuildContext context, String path) async {
-  final result = await OpenFilex.open(path, type: 'application/pdf');
-  if (result.type != ResultType.done && context.mounted) {
-    notify(context, result.message, error: true);
+  try {
+    await _viewer.invokeMethod<void>('open', path);
+  } on PlatformException catch (error) {
+    if (context.mounted) {
+      notify(context, error.message ?? 'Could not open the PDF', error: true);
+    }
   }
 }
 

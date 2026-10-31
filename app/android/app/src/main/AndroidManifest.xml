@@ -26,6 +26,16 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- PDFs compter wrote, shown in the phone's viewer (MainActivity, compter/viewer) -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.viewer"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/viewer_paths" />
+        </provider>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -43,7 +53,8 @@
             <data android:mimeType="text/plain"/>
         </intent>
     </queries>
-    <!-- open_filex asks for media access, but compter opens only PDFs it wrote itself -->
+    <!-- No plugin gets media access: compter opens only PDFs it wrote itself, and files the
+         user picks come through the system picker -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
