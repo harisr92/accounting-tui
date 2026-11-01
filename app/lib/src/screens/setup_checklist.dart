@@ -5,7 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../compter.dart';
 import '../onboarding.dart';
 import '../rust/api/rows.dart';
-import '../sync/sync_settings.dart';
+import '../sync/storage.dart';
+import '../sync/storages.dart';
 import '../ui/theme.dart';
 import 'settings_screen.dart';
 
@@ -47,8 +48,9 @@ class SetupChecklist extends ConsumerWidget {
     final hasProject = projects.isNotEmpty;
     final hasInvoice =
         ref.watch(invoicesProvider).value?.invoices.isNotEmpty ?? false;
-    final drive =
-        ref.watch(syncSettingsProvider).value?.method == SyncMethod.googleDrive;
+    final storages = ref.watch(syncStoragesProvider);
+    final syncing = ref.watch(syncStorageProvider) is CloudStorage;
+    final clouds = storages.whereType<CloudStorage>().map((c) => c.name);
     final done = [hasProfile, hasProject, hasInvoice].where((d) => d).length;
 
     void openProject() {
@@ -110,9 +112,9 @@ class SetupChecklist extends ConsumerWidget {
             onTap: hasProfile && hasProject ? openProject : null,
           ),
           _Step(
-            done: drive,
+            done: syncing,
             title: 'Sync with your computer',
-            subtitle: 'Optional: through your own Google Drive',
+            subtitle: 'Optional: through your own ${clouds.join(' or ')}',
             onTap: () => context.go('/settings'),
           ),
           const SizedBox(height: 8),

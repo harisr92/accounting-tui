@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:compter/src/handoff.dart';
 import 'package:compter/src/rust/api/app.dart';
-import 'package:compter/src/sync/sync_controller.dart';
+import 'package:compter/src/sync/storages.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -28,7 +28,7 @@ void main() {
       tester,
       phone!,
       overrides: [
-        cloudAccountProvider.overrideWithValue(FakeAccount(folder)),
+        syncStoragesProvider.overrideWithValue(fakeStorages(folder)),
         handoffDirProvider.overrideWith((ref) async => staging!.path),
       ],
     );

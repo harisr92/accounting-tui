@@ -5,6 +5,8 @@ import UIKit
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   /// Kept for the life of the app: it listens for StoreKit's transaction updates
   private var store: CompterStore?
+  private var icloud: CompterICloud?
+  private var viewer: CompterViewer?
 
   override func application(
     _ application: UIApplication,
@@ -23,6 +25,12 @@ import UIKit
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "CompterStore") {
       store = CompterStore(messenger: registrar.messenger())
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "CompterICloud") {
+      icloud = CompterICloud(messenger: registrar.messenger())
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "CompterViewer") {
+      viewer = CompterViewer(messenger: registrar.messenger())
     }
   }
 

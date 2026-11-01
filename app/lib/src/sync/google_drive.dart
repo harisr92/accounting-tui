@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
@@ -10,6 +11,8 @@ import 'package:googleapis_auth/googleapis_auth.dart'
     show AccessDeniedException;
 
 import 'cloud.dart';
+import 'storage.dart';
+import 'sync_settings.dart';
 
 /// The web client ID of the Google Cloud project, which Android's sign-in needs:
 /// `flutter run --dart-define=COMPTER_GOOGLE_SERVER_CLIENT_ID=...`. iOS reads its own client ID
@@ -30,7 +33,37 @@ const _iosConfig = MethodChannel('compter/google_sign_in');
 const _appData = 'appDataFolder';
 
 /// Google Drive through google_sign_in: one account, authorized for [_scopes]
-class GoogleDriveAccount implements CloudAccount {
+class GoogleDriveStorage implements CloudStorage {
+  @override
+  SyncMethod get method => SyncMethod.googleDrive;
+
+  @override
+  String get name => 'Google Drive';
+
+  @override
+  String get label => 'Google Drive, automatic';
+
+  @override
+  IconData get icon => Icons.cloud_sync_outlined;
+
+  @override
+  String get computerNote =>
+      'On your computer, run `compter drive sign-in` with the same Google '
+      'account. While this phone is open, compter there waits.';
+
+  @override
+  String get signedOut => 'Sign in to Google to sync';
+
+  @override
+  CloudAction get signInAction => (
+    icon: Icons.login,
+    title: 'Sign in to Google',
+    subtitle: 'compter keeps its files in a hidden folder',
+  );
+
+  @override
+  String? get signOutTitle => 'Sign out of Google';
+
   GoogleSignInAccount? _user;
   drive.DriveApi? _api;
   String? _token;
@@ -147,7 +180,7 @@ class GoogleDriveAccount implements CloudAccount {
 class _DriveFolder implements CloudFolder {
   _DriveFolder(this._account);
 
-  final GoogleDriveAccount _account;
+  final GoogleDriveStorage _account;
   final _ids = <String, String>{};
 
   Future<String?> _fileId(drive.DriveApi api, String name) async {

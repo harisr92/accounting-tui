@@ -6,7 +6,7 @@
     <title>compter Privacy Policy</title>
     <meta
       name="description"
-      content="How compter handles your data: it stays on your devices and in your own Google Drive."
+      content="How compter handles your data: it stays on your devices and in your own Google Drive or iCloud."
     />
     <style>
       :root {
@@ -193,6 +193,33 @@
         You can turn sync off at any time, and delete what compter keeps in your
         Drive: see <a href="#delete-data">Deleting your data</a>.
       </p>
+
+      <h2>iCloud sync (optional, iPhone and Mac)</h2>
+      <p>
+        On an iPhone, compter can instead sync through iCloud. Sync is off until
+        you choose it (in the app's Settings, or with
+        <code>compter icloud on</code> on a Mac). It uses the Apple Account your
+        devices are already signed in to: compter never sees your Apple Account
+        or its password.
+      </p>
+      <ul>
+        <li>
+          <strong>What it accesses:</strong> only compter's own iCloud container,
+          a hidden folder that doesn't appear in the Files app or Finder. compter
+          cannot see any other file in your iCloud Drive.
+        </li>
+        <li>
+          <strong>What it does with it:</strong> it keeps the same three files
+          there as in Google Drive (<code>compter.redb</code>,
+          <code>manifest.json</code>, <code>lease.json</code>), and they count
+          towards your iCloud storage.
+        </li>
+        <li>
+          <strong>Where the data goes:</strong> between your devices and Apple's
+          iCloud, by Apple's own sync. It never passes through any server of
+          ours.
+        </li>
+      </ul>
 
       <h2 id="data-protection">How your data is protected</h2>
       <p>

@@ -8,6 +8,9 @@ enum SyncMethod {
 
   /// Automatically, through compter's hidden app folder in Google Drive
   googleDrive,
+
+  /// Automatically, through compter's hidden iCloud container (iPhone and Mac only)
+  iCloud,
 }
 
 /// What this device remembers about syncing. It belongs to the phone, like `device.json` on a

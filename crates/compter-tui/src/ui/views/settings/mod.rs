@@ -367,6 +367,10 @@ fn sync_line<'a>(sync: Option<&'a SyncBackend>, theme: &Theme) -> Line<'a> {
             format!("Google Drive ({account})"),
             "   s picks a folder instead, x stops syncing",
         ),
+        Some(SyncBackend::ICloud) => (
+            "iCloud Drive".to_owned(),
+            "   s picks a folder instead, x stops syncing",
+        ),
     };
     Line::from(vec![
         label,

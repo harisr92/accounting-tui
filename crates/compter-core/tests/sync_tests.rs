@@ -241,10 +241,14 @@ fn conflict_copies_left_by_the_sync_client_are_reported() {
     let laptop = Device::new("laptop");
     laptop.add_project(&sync, "Site");
     fs::write(sync.root().join("compter (1).redb"), b"").unwrap();
+    fs::write(sync.root().join("manifest 2.json"), b"").unwrap();
     fs::write(sync.root().join("notes.txt"), b"").unwrap();
 
     let (session, _store) = laptop.begin(&sync).unwrap();
-    assert_eq!(session.conflict_copies(), ["compter (1).redb"]);
+    assert_eq!(
+        session.conflict_copies(),
+        ["compter (1).redb", "manifest 2.json"]
+    );
 }
 
 #[test]

@@ -122,6 +122,27 @@ Drive UI, so nobody moves or renames them by accident. In **Testing**, sign-in l
 4. On the computer, run `compter drive sign-in` with the same Google account. It keeps the
    grant in the OS keychain and, if the Drive has no snapshot yet, publishes the computer's.
 
+## iCloud sync (iOS)
+
+On an iPhone, **Settings → Sync method → iCloud** syncs with `compter icloud on` on a Mac
+through the app's hidden iCloud container, `iCloud.app.compter` (iCloud Documents, not
+CloudKit). It needs no sign-in and costs nothing beyond the Apple Developer Program; the
+files count towards the user's own iCloud storage. `ios/Runner/ICloud.swift` reads and
+writes the container's `Documents` folder with coordinated file access, downloading files
+iCloud evicted; `lib/src/sync/icloud.dart` is its `CloudStorage`.
+
+### One-time setup
+
+1. In the Apple Developer portal, **Identifiers → iCloud Containers**: register
+   `iCloud.app.compter`. Container IDs can never be deleted or renamed.
+2. **Identifiers → app.compter**: turn on **iCloud** (iCloud Documents) and assign the
+   container.
+3. In Xcode, **Runner → Signing & Capabilities** shows iCloud with the container ticked
+   (`Runner/Runner.entitlements`); automatic signing renews the provisioning profile.
+   `Info.plist`'s `NSUbiquitousContainers` keeps the container out of the Files app.
+4. Test on a device signed in to iCloud with iCloud Drive on; the simulator's iCloud is
+   unreliable.
+
 ## iOS subscription
 
 On the iPhone compter is a free download with a subscription: monthly or yearly, each with a

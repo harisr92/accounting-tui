@@ -4,6 +4,7 @@ pub mod app;
 pub mod cli;
 pub mod drive;
 pub mod event;
+pub mod icloud;
 pub mod ui;
 pub mod viewer;
 

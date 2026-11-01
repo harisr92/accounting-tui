@@ -223,6 +223,10 @@ impl SyncFolder for DriveFolder {
     fn place(&self) -> String {
         PLACE.to_owned()
     }
+
+    fn reconnect(&self) -> &'static str {
+        "`compter drive sign-in`"
+    }
 }
 
 #[derive(Deserialize)]

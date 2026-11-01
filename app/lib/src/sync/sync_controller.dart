@@ -10,7 +10,8 @@ import '../handoff.dart';
 import '../rust/api/error.dart';
 import 'background_time.dart';
 import 'cloud.dart';
-import 'google_drive.dart';
+import 'storage.dart';
+import 'storages.dart';
 import 'sync_settings.dart';
 
 const leaseFile = 'lease.json';
@@ -45,7 +46,7 @@ class SyncReport {
   /// What to show: `compter is open on laptop (last seen 14:05)`, `Offline`, ...
   final String message;
 
-  /// The Google account signed in
+  /// The Google account signed in, or iCloud Drive
   final String? account;
 
   /// When the last sync finished, for "Synced at"
@@ -59,12 +60,8 @@ class SyncReport {
   }.contains(phase);
 }
 
-/// The cloud account; a provider, so tests use a fake
-final cloudAccountProvider = Provider<CloudAccount>(
-  (ref) => GoogleDriveAccount(),
-);
-
-/// Automatic sync with the computer through compter's hidden app folder in Google Drive. The same steps
+/// Automatic sync with the computer through compter's hidden app folder in Google Drive or
+/// iCloud. The same steps
 /// as compter on a computer, with the phone moving the files itself:
 /// - on start and on every return to the app: take the computer's newer snapshot, and hold
 ///   the lease, so compter on the computer waits;
@@ -81,6 +78,9 @@ class SyncController extends Notifier<SyncReport> {
   AppLifecycleListener? _lifecycle;
   CloudFolder? _folder;
   String? _account;
+
+  /// The cloud synced through, or `null` when the files are carried by hand
+  CloudStorage? _cloud;
 
   /// Where the conflicting snapshot waits for [settle]
   String? _conflictInbox;
@@ -101,27 +101,26 @@ class SyncController extends Notifier<SyncReport> {
     return const SyncReport(SyncPhase.manual, 'Sync by hand');
   }
 
-  /// Pick up the saved method and, for Google Drive, sign in silently and sync. Called once
-  /// the app is up, and after each change in Settings.
+  /// Pick up the saved method and, for Google Drive or iCloud, sign in silently and sync.
+  /// Called once the app is up, and after each change in Settings.
   Future<void> start() async {
-    final settings = await ref.read(syncSettingsProvider.future);
+    await ref.read(syncSettingsProvider.future);
     _stop();
-    if (settings.method == SyncMethod.manual) {
+    final storage = ref.read(syncStorageProvider);
+    final cloud = _cloud = storage is CloudStorage ? storage : null;
+    if (cloud == null) {
       state = const SyncReport(SyncPhase.manual, 'Sync by hand');
       return;
     }
     try {
-      _account = await ref.read(cloudAccountProvider).restore();
+      _account = await cloud.restore();
     } on Exception {
       _account = null;
     }
     if (_account == null) {
-      state = const SyncReport(
-        SyncPhase.signedOut,
-        'Sign in to Google to sync',
-      );
+      state = SyncReport(SyncPhase.signedOut, cloud.signedOut);
     } else {
-      _folder = ref.read(cloudAccountProvider).folder();
+      _folder = cloud.folder();
       _lifecycle = AppLifecycleListener(
         onResume: () {
           _resumes++;
@@ -330,7 +329,7 @@ class SyncController extends Notifier<SyncReport> {
 
   /// Sign in from a tap, then carry on where the settings say
   Future<void> signIn() async {
-    _account = await ref.read(cloudAccountProvider).signIn();
+    _account = await _cloud?.signIn();
     await start();
   }
 
@@ -343,22 +342,27 @@ class SyncController extends Notifier<SyncReport> {
         // Offline: the lease goes stale on its own
       }
     }
+    final cloud = _cloud;
+    if (cloud == null) return;
     _stop();
-    await ref.read(cloudAccountProvider).signOut();
+    await cloud.signOut();
     _account = null;
-    state = const SyncReport(SyncPhase.signedOut, 'Sign in to Google to sync');
+    state = SyncReport(SyncPhase.signedOut, cloud.signedOut);
   }
 
-  /// Sync through Google Drive, or by hand
-  Future<void> useMethod(SyncMethod method) async {
-    if (method == SyncMethod.manual && _folder != null) {
+  /// Sync through [storage] from now on
+  Future<void> use(SyncStorage storage) async {
+    // The lease would keep the computer waiting until it goes stale
+    if (storage != _cloud && _folder != null) {
       try {
         await _releaseLease(_folder!);
       } on Object {
         // Offline: the lease goes stale on its own
       }
     }
-    await ref.read(syncSettingsProvider.notifier).save((method: method));
+    await ref.read(syncSettingsProvider.notifier).save((
+      method: storage.method,
+    ));
     await start();
   }
 

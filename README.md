@@ -398,11 +398,13 @@ Each device keeps its own database in its data folder. compter hands it over thr
 
 Conflict copies made by the sync client (`compter (1).redb` and the like) are never read; compter shows a warning in the footer when it finds them. Invoice PDFs and returns stay in each device's data folder.
 
+On a Mac, iCloud works the same way with the iPhone app: set the phone's sync method to iCloud, then run `compter icloud on` (`compter icloud off` stops it). compter reads the app's hidden iCloud container under `~/Library/Mobile Documents/iCloud~app~compter`, which iCloud Drive keeps on every Mac signed in to the same Apple Account, and downloads a file iCloud evicted to save space before reading it. With iCloud Drive off, compter opens this Mac's own copy with a warning.
+
 ### Phones
 
 The phone app is in `app/` ([screenshots](app/SCREENSHOTS.md)).
 
-With the computer signed in to Google Drive (`compter drive sign-in`), the phone app syncs with it automatically: **Settings → Sync method → Google Drive**, signed in to the same account. It takes the computer's newer snapshot whenever you open the app, sends its changes every minute and when you put it away, and holds a lease while open, so compter on the computer waits for it (and the other way round). Setting up the Google sign-in it needs is described in `app/README.md`.
+With the computer signed in to Google Drive (`compter drive sign-in`), the phone app syncs with it automatically: **Settings → Sync method → Google Drive**, signed in to the same account. It takes the computer's newer snapshot whenever you open the app, sends its changes every minute and when you put it away, and holds a lease while open, so compter on the computer waits for it (and the other way round). Setting up the Google sign-in it needs is described in `app/README.md`. On an iPhone, **Settings → Sync method → iCloud** syncs the same way through iCloud with a Mac (`compter icloud on`), with no sign-in: the phone's Apple Account is used once iCloud Drive is on.
 
 Otherwise you carry the two files across by hand, in **Settings → Sync with your computer**. Quit compter on the computer first, and let the sync client finish.
 

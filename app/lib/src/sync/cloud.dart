@@ -14,21 +14,6 @@ abstract interface class CloudFolder {
   Future<void> delete(String name);
 }
 
-/// The account behind the cloud drive: signing in, and its app folder. Google Drive is the
-/// one there is; tests use a fake.
-abstract interface class CloudAccount {
-  /// Who is signed in, or `null`. Tries the last session without showing anything.
-  Future<String?> restore();
-
-  /// Sign in, showing the platform's account picker; who signed in
-  Future<String> signIn();
-
-  Future<void> signOut();
-
-  /// The app's hidden folder, which compter on the computer signs in to as well
-  CloudFolder folder();
-}
-
 /// The cloud can't be reached: offline, or Google is down. Nothing is lost; sync retries.
 class CloudOffline implements Exception {
   const CloudOffline(this.message);
@@ -40,12 +25,16 @@ class CloudOffline implements Exception {
 }
 
 /// The cloud refused the request because sign-in lapsed (Google's testing mode ends it after
-/// 7 days); signing in again fixes it
+/// 7 days), or iCloud Drive is off; signing in again, or turning it on, fixes it
 class CloudSignedOut implements Exception {
-  const CloudSignedOut();
+  const CloudSignedOut([
+    this.message = 'Signed out of Google; sign in again to sync',
+  ]);
+
+  final String message;
 
   @override
-  String toString() => 'Signed out of Google; sign in again to sync';
+  String toString() => message;
 }
 
 /// This build has no OAuth client for Google sign-in (iOS: ios/Flutter/Google.xcconfig).

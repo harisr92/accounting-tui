@@ -4,6 +4,10 @@ import 'dart:typed_data';
 
 import 'package:compter/src/subscription/store.dart';
 import 'package:compter/src/sync/cloud.dart';
+import 'package:compter/src/sync/manual.dart';
+import 'package:compter/src/sync/storage.dart';
+import 'package:compter/src/sync/sync_settings.dart';
+import 'package:flutter/material.dart';
 
 /// Drive's app folder in memory; [offline] makes every call fail as with no network
 class FakeFolder implements CloudFolder {
@@ -36,10 +40,41 @@ class FakeFolder implements CloudFolder {
       jsonDecode(utf8.decode(files[name]!)) as Map<String, Object?>;
 }
 
-class FakeAccount implements CloudAccount {
+/// Google Drive and by hand, with Drive in memory
+List<SyncStorage> fakeStorages(FakeFolder drive) => [
+  FakeAccount(drive),
+  const ManualStorage(),
+];
+
+class FakeAccount implements CloudStorage {
   FakeAccount(this.drive);
 
   final FakeFolder drive;
+
+  @override
+  SyncMethod get method => SyncMethod.googleDrive;
+
+  @override
+  String get name => 'Google Drive';
+
+  @override
+  String get label => 'Google Drive, automatic';
+
+  @override
+  IconData get icon => Icons.cloud_sync_outlined;
+
+  @override
+  String get computerNote => 'Run `compter drive sign-in`';
+
+  @override
+  String get signedOut => 'Sign in to Google to sync';
+
+  @override
+  CloudAction get signInAction =>
+      (icon: Icons.login, title: 'Sign in to Google', subtitle: '');
+
+  @override
+  String? get signOutTitle => 'Sign out of Google';
 
   @override
   Future<String?> restore() async => 'nila@example.com';
