@@ -4,8 +4,9 @@ use redb::TableDefinition;
 use uuid::Uuid;
 
 /// 1: first release · 2: invoices record a list of payments instead of a single paid status ·
-/// 3: credit notes, and the CREDITED milestone status
-pub(super) const SCHEMA_VERSION: u32 = 6;
+/// 3: credit notes, and the CREDITED milestone status · 4: money credit notes give back ·
+/// 5: invoices with several lines · 6: invoice discounts · 7: the clients table
+pub(super) const SCHEMA_VERSION: u32 = 7;
 pub(super) const SCHEMA_KEY: &str = "schema_version";
 
 pub(super) const META: TableDefinition<&str, u32> = TableDefinition::new("meta");
@@ -16,6 +17,10 @@ pub(super) const PROJECTS: TableDefinition<Uuid, &[u8]> = TableDefinition::new("
 /// `ProjectSummary` rows, always written in the same transaction as `PROJECTS`
 pub(super) const PROJECT_SUMMARIES: TableDefinition<Uuid, &[u8]> =
     TableDefinition::new("project_summaries");
+
+/// Every client billed, with their latest details, keyed by `ClientId`. Written with the project
+/// whose client they are; the address book a new project's client is picked from.
+pub(super) const CLIENTS: TableDefinition<Uuid, &[u8]> = TableDefinition::new("clients");
 
 /// accounting-core ledger records, keyed by their string ids
 pub(super) type LedgerTable = TableDefinition<'static, &'static str, &'static [u8]>;

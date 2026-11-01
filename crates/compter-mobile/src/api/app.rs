@@ -22,8 +22,8 @@ use super::expenses::{category, fiscal_year};
 use super::profile::{currency, this_year};
 use super::reports::month_label;
 use super::{
-    ApiError, CreditInput, CreditLineInput, CreditPreviewRow, CreditedRow, DashboardRow,
-    ExpenseInput, ExpenseList, ExpenseRow, ExportRow, InvoiceDetail, InvoiceList,
+    ApiError, ClientChoiceRow, CreditInput, CreditLineInput, CreditPreviewRow, CreditedRow,
+    DashboardRow, ExpenseInput, ExpenseList, ExpenseRow, ExportRow, InvoiceDetail, InvoiceList,
     InvoicePreviewRow, InvoiceRow, IssuedRow, MilestoneInput, PaymentInput, ProfileInput,
     ProfileRow, ProjectDetail, ProjectInput, ProjectRow, ReceivedRow, ReportRow, SentRow,
     SyncStatusRow, TimeInput,
@@ -122,6 +122,16 @@ impl CompterApp {
 
     pub fn project(&self, id: String) -> Result<ProjectDetail, ApiError> {
         Ok(ProjectDetail::from(&self.projects.load(project_id(&id)?)?))
+    }
+
+    /// Every client billed before, by name, to fill a new project's client from
+    pub fn clients(&self) -> Result<Vec<ClientChoiceRow>, ApiError> {
+        Ok(self
+            .projects
+            .clients()?
+            .iter()
+            .map(ClientChoiceRow::from)
+            .collect())
     }
 
     pub fn create_project(&mut self, input: ProjectInput) -> Result<ProjectDetail, ApiError> {

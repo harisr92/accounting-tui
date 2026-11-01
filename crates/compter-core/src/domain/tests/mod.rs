@@ -1,5 +1,6 @@
 mod appearance_tests;
 mod billing_tests;
+mod client_tests;
 mod currency_tests;
 mod discount_tests;
 mod expense_tests;

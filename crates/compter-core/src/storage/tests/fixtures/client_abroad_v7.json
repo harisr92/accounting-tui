@@ -1,0 +1,14 @@
+{
+  "id": "019a4c3e-7b20-7c11-9a3e-2f6d8b1c0a56",
+  "name": "Initrode GmbH",
+  "gstin": null,
+  "address": [
+    "Hauptstrasse 1",
+    "10115 Berlin"
+  ],
+  "region": {
+    "type": "abroad",
+    "country": "Germany"
+  },
+  "currency": "EUR"
+}

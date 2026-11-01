@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'clients.dart';
 import 'dashboard.dart';
 import 'error.dart';
 import 'expenses.dart';
@@ -33,6 +34,9 @@ abstract class CompterApp implements RustOpaqueInterface {
     required String number,
     required List<CreditLineInput> lines,
   });
+
+  /// Every client billed before, by name, to fill a new project's client from
+  Future<List<ClientChoiceRow>> clients();
 
   Future<ProjectDetail> createProject({required ProjectInput input});
 

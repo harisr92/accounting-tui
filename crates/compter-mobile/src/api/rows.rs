@@ -1,8 +1,10 @@
 use bigdecimal::Zero;
 use compter_core::domain::{
-    Billing, ClientRegion, Milestone, MilestoneSort, MilestoneStatus, Project, ProjectSummary,
-    TimeEntry, format_duration, state_name,
+    Billing, Milestone, MilestoneSort, MilestoneStatus, Project, ProjectSummary, TimeEntry,
+    format_duration,
 };
+
+use super::clients::{location, region_fields};
 
 /// One line of the project list, from the stored summary (never the full record)
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,16 +84,7 @@ impl From<&Project> for ProjectDetail {
             name: project.name().to_owned(),
             client_name: project.client_name().to_owned(),
             client_gstin: project.client_gstin().map(ToString::to_string),
-            client_location: match project.client_region() {
-                ClientRegion::India { state: Some(code) } => {
-                    Some(match state_name(code.as_str()) {
-                        Some(name) => format!("{name} ({code})"),
-                        None => code.as_str().to_owned(),
-                    })
-                }
-                ClientRegion::India { state: None } => None,
-                ClientRegion::Abroad { country } => Some(country.clone()),
-            },
+            client_location: location(project.client_region()),
             currency: currency.code().to_owned(),
             billing,
             hourly,
@@ -238,10 +231,7 @@ pub struct MilestoneInput {
 impl From<&Project> for ProjectInput {
     fn from(project: &Project) -> Self {
         let client = project.client_details();
-        let (client_state, client_country) = match client.region {
-            ClientRegion::India { state } => (state.map(|s| s.as_str().to_owned()), None),
-            ClientRegion::Abroad { country } => (None, Some(country)),
-        };
+        let (client_state, client_country) = region_fields(&client.region);
         Self {
             name: project.name().to_owned(),
             client_name: client.name,

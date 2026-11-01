@@ -2,7 +2,9 @@ use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 
 use crate::domain::{Discount, FiscalYear};
-use crate::input::{date_or, discount, duration_minutes, fiscal_year_or, money, optional};
+use crate::input::{
+    date_or, discount, duration_minutes, fiscal_year_or, gstin_state, money, optional,
+};
 
 #[test]
 fn money_accepts_indian_grouping_and_rupee_sign() {
@@ -95,4 +97,11 @@ fn a_financial_year_is_typed_by_its_label_or_start_year() {
     assert!(fiscal_year_or("2025-27", today).is_err());
     assert!(fiscal_year_or("26-27", today).is_err());
     assert!(fiscal_year_or("next year", today).is_err());
+}
+
+#[test]
+fn a_whole_gstin_in_any_case_names_its_state_and_a_partial_one_none() {
+    assert_eq!(gstin_state(" 27aapfu0939f2zu ").as_deref(), Some("27"));
+    assert_eq!(gstin_state("27AAPFU"), None);
+    assert_eq!(gstin_state(""), None);
 }

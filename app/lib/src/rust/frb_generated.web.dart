@@ -7,6 +7,7 @@
 // ignore_for_file: argument_type_not_assignable
 
 import 'api/app.dart';
+import 'api/clients.dart';
 import 'api/dashboard.dart';
 import 'api/error.dart';
 import 'api/expenses.dart';
@@ -90,6 +91,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TimeInput dco_decode_box_autoadd_time_input(dynamic raw);
 
   @protected
+  ClientChoiceRow dco_decode_client_choice_row(dynamic raw);
+
+  @protected
   ClientRow dco_decode_client_row(dynamic raw);
 
   @protected
@@ -150,6 +154,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<ClientChoiceRow> dco_decode_list_client_choice_row(dynamic raw);
+
+  @protected
   List<ClientRow> dco_decode_list_client_row(dynamic raw);
 
   @protected
@@ -187,6 +194,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ReadyRow> dco_decode_list_ready_row(dynamic raw);
+
+  @protected
+  List<StateRow> dco_decode_list_state_row(dynamic raw);
 
   @protected
   List<TimeEntryRow> dco_decode_list_time_entry_row(dynamic raw);
@@ -238,6 +248,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SentRow dco_decode_sent_row(dynamic raw);
+
+  @protected
+  StateRow dco_decode_state_row(dynamic raw);
 
   @protected
   SyncStatusRow dco_decode_sync_status_row(dynamic raw);
@@ -334,6 +347,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TimeInput sse_decode_box_autoadd_time_input(SseDeserializer deserializer);
 
   @protected
+  ClientChoiceRow sse_decode_client_choice_row(SseDeserializer deserializer);
+
+  @protected
   ClientRow sse_decode_client_row(SseDeserializer deserializer);
 
   @protected
@@ -396,6 +412,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<ClientChoiceRow> sse_decode_list_client_choice_row(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<ClientRow> sse_decode_list_client_row(SseDeserializer deserializer);
 
   @protected
@@ -441,6 +462,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ReadyRow> sse_decode_list_ready_row(SseDeserializer deserializer);
+
+  @protected
+  List<StateRow> sse_decode_list_state_row(SseDeserializer deserializer);
 
   @protected
   List<TimeEntryRow> sse_decode_list_time_entry_row(
@@ -496,6 +520,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SentRow sse_decode_sent_row(SseDeserializer deserializer);
+
+  @protected
+  StateRow sse_decode_state_row(SseDeserializer deserializer);
 
   @protected
   SyncStatusRow sse_decode_sync_status_row(SseDeserializer deserializer);
@@ -610,6 +637,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_client_choice_row(
+    ClientChoiceRow self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_client_row(ClientRow self, SseSerializer serializer);
 
   @protected
@@ -680,6 +713,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_client_choice_row(
+    List<ClientChoiceRow> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_client_row(
@@ -757,6 +796,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_ready_row(List<ReadyRow> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_state_row(List<StateRow> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_time_entry_row(
     List<TimeEntryRow> self,
     SseSerializer serializer,
@@ -818,6 +860,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_sent_row(SentRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_state_row(StateRow self, SseSerializer serializer);
 
   @protected
   void sse_encode_sync_status_row(SyncStatusRow self, SseSerializer serializer);

@@ -373,6 +373,84 @@ void main() {
     expect(find.text('Launch'), findsOneWidget);
     expect(find.byTooltip('Sort milestones'), findsOneWidget);
   });
+
+  testWidgets('an earlier client fills in the new project form', (
+    tester,
+  ) async {
+    await launchDemo(tester);
+    await tester.tap(find.byTooltip('New project'));
+    await settle(tester);
+
+    await tester.tap(find.byTooltip('Earlier clients'));
+    await settle(tester);
+    expect(find.text('New client'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Name, GSTIN or place'),
+      'germany',
+    );
+    await tester.pumpAndSettle();
+    final sheet = find.byType(BottomSheet).last;
+    expect(
+      find.descendant(of: sheet, matching: find.text('Acme Pvt Ltd')),
+      findsNothing,
+    );
+    await tester.tap(
+      find.descendant(of: sheet, matching: find.text('Initrode GmbH')),
+    );
+    await tester.pumpAndSettle();
+
+    String field(String label) => tester
+        .widget<TextField>(find.widgetWithText(TextField, label))
+        .controller!
+        .text;
+    expect(field('Client'), 'Initrode GmbH');
+    expect(field('Country'), 'Germany');
+    expect(field('Address'), 'Hauptstrasse 1\n10115 Berlin');
+    expect(find.text('EUR'), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Follow-up');
+    await tester.tap(find.text('Save'));
+    await settle(tester);
+    expect(find.textContaining('Germany · EUR'), findsOneWidget);
+  });
+
+  testWidgets("a client's state is picked by name, or comes from the GSTIN", (
+    tester,
+  ) async {
+    await launchDemo(tester);
+    await tester.tap(find.byTooltip('New project'));
+    await settle(tester);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Client GSTIN'),
+      '27AAPFU0939F2ZU',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Maharashtra (27)'), findsOneWidget);
+    expect(find.text("From the client's GSTIN"), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextField, 'Client GSTIN'), '');
+    await tester.pumpAndSettle();
+    expect(find.text("From the client's GSTIN"), findsNothing);
+
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Site');
+    await tester.enterText(find.widgetWithText(TextField, 'Client'), 'Wayne');
+    await tester.ensureVisible(find.text('Not known'));
+    await tester.tap(find.text('Not known'));
+    await tester.pumpAndSettle();
+    // The menu builds only the items near the one shown
+    await tester.scrollUntilVisible(
+      find.text('Karnataka (29)'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(find.text('Karnataka (29)').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await settle(tester);
+
+    expect(find.textContaining('Karnataka (29)'), findsOneWidget);
+  });
 }
 
 /// Launch the demo and create a project called [name], landing on it

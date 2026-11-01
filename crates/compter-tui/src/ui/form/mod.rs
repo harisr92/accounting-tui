@@ -1,16 +1,18 @@
 //! Modal input: a vertical list of fields, a yes/no confirmation, a checklist to pick rows from,
-//! and a folder picker
+//! a list to pick one row from, and a folder picker
 
 mod checklist;
 mod confirm;
 mod field;
 mod folder_picker;
+mod list_picker;
 pub mod parse;
 
 pub use checklist::{Checklist, ChecklistItem};
 pub use confirm::Confirm;
 pub use field::{Field, Preview};
 pub use folder_picker::{FolderPicker, PickerEvent};
+pub use list_picker::{ListEvent, ListItem, ListPicker};
 
 use crate::ui::key::Key;
 use ratatui::Frame;
@@ -78,6 +80,22 @@ impl Form {
 
     pub fn error(&self) -> Option<&str> {
         self.error.as_deref()
+    }
+
+    /// Fill text field `index` in, as a picker does; out of range does nothing
+    pub fn set_value(&mut self, index: usize, text: impl Into<String>) {
+        if let Some(field) = self.fields.get_mut(index) {
+            field.set_value(text);
+            self.error = None;
+        }
+    }
+
+    /// Select option `choice` of choice field `index`; out of range does nothing
+    pub fn set_choice(&mut self, index: usize, choice: usize) {
+        if let Some(field) = self.fields.get_mut(index) {
+            field.set_choice(choice);
+            self.error = None;
+        }
     }
 
     /// Show why the submit was rejected; the form keeps its input

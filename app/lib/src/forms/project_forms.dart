@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../rust/api/app.dart';
+import '../rust/api/clients.dart';
 import '../rust/api/rows.dart';
+import 'client_picker.dart';
 import 'form_dialog.dart';
 
 const _amount = TextInputType.numberWithOptions(decimal: true);
@@ -9,15 +11,17 @@ const _amount = TextInputType.numberWithOptions(decimal: true);
 /// What projects and the profile can be billed in, as Rust names them
 const currencies = ['INR', 'USD', 'GBP', 'EUR'];
 
-/// New project, or [existing] edited with the form filled from it. A client with a country is
-/// abroad: an export, billed in any currency. One in India without a GSTIN needs a state code,
-/// the place of supply. A blank rate is fixed price.
+/// New project, or [existing] edited with the form filled from it. The client can be picked
+/// from those billed before, which fills in their details. A client with a country is abroad:
+/// an export, billed in any currency. One in India without a GSTIN needs a state, the place of
+/// supply; with a GSTIN the state is the GSTIN's. A blank rate is fixed price.
 Future<ProjectDetail?> projectForm(
   BuildContext context,
   CompterApp app, {
   ProjectDetail? existing,
 }) {
   final values = existing?.edit;
+  final states = gstStates();
   return FormDialog.show(
     context,
     title: existing == null ? 'New project' : 'Edit project',
@@ -33,6 +37,8 @@ Future<ProjectDetail?> projectForm(
         'Client',
         hint: 'e.g. Acme Pvt Ltd',
         initial: values?.clientName ?? '',
+        pick: (context) => _pickClient(context, app),
+        pickTooltip: 'Earlier clients',
       ),
       FieldSpec(
         'client_gstin',
@@ -42,10 +48,18 @@ Future<ProjectDetail?> projectForm(
       ),
       FieldSpec(
         'client_state',
-        'State code',
-        hint: 'India, no GSTIN: e.g. 29',
-        keyboardType: TextInputType.number,
+        'State',
+        hint: 'India, no GSTIN: the place of supply',
         initial: values?.clientState ?? '',
+        options: ['', for (final state in states) state.code],
+        optionLabels: {
+          '': 'Not known',
+          for (final state in states)
+            state.code: '${state.name} (${state.code})',
+        },
+        derive: (values) => gstinState(gstin: values['client_gstin'] ?? ''),
+        deriveFrom: const ['client_gstin'],
+        derivedHint: "From the client's GSTIN",
       ),
       FieldSpec(
         'client_country',
@@ -142,4 +156,22 @@ Future<ProjectDetail?> milestoneForm(
             );
     },
   );
+}
+
+/// The client fields of [projectForm] filled from an earlier client, or cleared for a new one
+Future<Map<String, String>?> _pickClient(
+  BuildContext context,
+  CompterApp app,
+) async {
+  final pick = await pickClient(context, app.clients());
+  if (pick == null) return null;
+  final client = pick.client;
+  return {
+    'client_name': client?.name ?? '',
+    'client_gstin': client?.gstin ?? '',
+    'client_state': client?.state ?? '',
+    'client_country': client?.country ?? '',
+    'address': client?.address.join('\n') ?? '',
+    'currency': client?.currency ?? 'INR',
+  };
 }

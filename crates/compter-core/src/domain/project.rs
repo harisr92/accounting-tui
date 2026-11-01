@@ -1,15 +1,19 @@
 use std::fmt;
 use std::str::FromStr;
 
-use accounting_core::{Gstin, StateCode};
+use accounting_core::Gstin;
 use bigdecimal::{BigDecimal, RoundingMode, Zero};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::billing::amount_for;
+use super::client::validate_client;
 use super::error::require;
-use super::{Billing, Currency, DomainError, Milestone, MilestoneId, MilestoneStatus, TimeEntry};
+use super::{
+    Billing, ClientDetails, ClientRegion, Currency, DomainError, Milestone, MilestoneId,
+    MilestoneStatus, TimeEntry,
+};
 
 /// Lifecycle state of a project, derived from its milestones
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -48,56 +52,6 @@ impl ProjectStatus {
 impl fmt::Display for ProjectStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
-    }
-}
-
-/// Where a client is, which decides how they are taxed
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum ClientRegion {
-    /// In India. `state` is the place of supply for a client without a GSTIN; a registered
-    /// client's state comes from their GSTIN.
-    India {
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        state: Option<StateCode>,
-    },
-    /// Outside India: services to them are exports
-    Abroad { country: String },
-}
-
-impl Default for ClientRegion {
-    fn default() -> Self {
-        Self::India { state: None }
-    }
-}
-
-impl ClientRegion {
-    pub fn is_abroad(&self) -> bool {
-        matches!(self, Self::Abroad { .. })
-    }
-}
-
-/// Everything about a project's client, as entered; validated by [`Project`]
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct ClientDetails {
-    pub name: String,
-    /// `None` for an unregistered or foreign client
-    pub gstin: Option<String>,
-    /// Address lines, top to bottom; blank lines are dropped
-    pub address: Vec<String>,
-    pub region: ClientRegion,
-    /// What the client is billed in; anything but INR needs a client abroad
-    pub currency: Currency,
-}
-
-impl ClientDetails {
-    /// An Indian client known only by name and (optionally) GSTIN
-    pub fn named(name: impl Into<String>, gstin: Option<&str>) -> Self {
-        Self {
-            name: name.into(),
-            gstin: gstin.map(str::to_owned),
-            ..Self::default()
-        }
     }
 }
 
@@ -468,23 +422,14 @@ impl Project {
     ) -> Result<(), DomainError> {
         let name = name.into();
         require(&name, "project name")?;
-        require(&client.name, "client name")?;
-        let gstin = client.gstin.as_deref().map(Gstin::parse).transpose()?;
-        validate_region(&client.region, gstin.as_ref())?;
-        validate_currency(client.currency, &client.region)?;
+        let client = client.checked()?;
         if client.currency != self.currency && self.has_billed_milestones() {
             return Err(DomainError::CurrencyLocked);
         }
-        let address = client
-            .address
-            .into_iter()
-            .map(|line| line.trim().to_owned())
-            .filter(|line| !line.is_empty())
-            .collect();
         self.name = name;
         self.client_name = client.name;
-        self.client_gstin = gstin;
-        self.client_address = address;
+        self.client_gstin = client.gstin;
+        self.client_address = client.address;
         self.client_region = client.region;
         self.currency = client.currency;
         Ok(())
@@ -689,9 +634,12 @@ impl Project {
 
     fn validate(&self) -> Result<(), DomainError> {
         require(&self.name, "project name")?;
-        require(&self.client_name, "client name")?;
-        validate_region(&self.client_region, self.client_gstin.as_ref())?;
-        validate_currency(self.currency, &self.client_region)?;
+        validate_client(
+            &self.client_name,
+            self.client_gstin.as_ref(),
+            &self.client_region,
+            self.currency,
+        )?;
         self.billing.validate()?;
         for milestone in &self.milestones {
             milestone.validate()?;
@@ -709,28 +657,5 @@ impl Project {
             }
         }
         Ok(())
-    }
-}
-
-/// A foreign client has a country and no GSTIN
-fn validate_region(region: &ClientRegion, gstin: Option<&Gstin>) -> Result<(), DomainError> {
-    match region {
-        ClientRegion::Abroad { country } => {
-            require(country, "client country")?;
-            if gstin.is_some() {
-                return Err(DomainError::ForeignClientWithGstin);
-            }
-            Ok(())
-        }
-        ClientRegion::India { .. } => Ok(()),
-    }
-}
-
-/// Clients in India are billed in rupees: their invoices are GST tax invoices
-fn validate_currency(currency: Currency, region: &ClientRegion) -> Result<(), DomainError> {
-    if currency.is_inr() || region.is_abroad() {
-        Ok(())
-    } else {
-        Err(DomainError::ForeignCurrencyInIndia)
     }
 }
