@@ -13,7 +13,9 @@ use ratatui::crossterm::terminal::{
 use ratatui::crossterm::{cursor, execute};
 
 use compter_core::demo;
-use compter_core::services::{ExpenseService, InvoiceService, PreferencesService, ReportService};
+use compter_core::services::{
+    DashboardService, ExpenseService, InvoiceService, PreferencesService, ReportService,
+};
 use compter_core::storage::sync::{
     self, Resolution, SyncBackend, SyncDir, SyncError, SyncFolder, SyncSession,
 };
@@ -115,8 +117,8 @@ fn run_tui(store: &Store, data_dir: Option<DataDir>, notice: Option<Notice>) -> 
     let projects =
         ProjectsView::new(repo.clone(), data_dir.clone()).wrap_err("could not load projects")?;
     let reports = || ReportService::new(repo.clone(), data_dir.clone());
-    let dashboard =
-        DashboardView::new(reports(), invoices()).wrap_err("could not load the dashboard")?;
+    let dashboard = DashboardView::new(reports(), DashboardService::new(repo.clone()))
+        .wrap_err("could not load the dashboard")?;
     let invoice_list = InvoicesView::new(invoices()).wrap_err("could not load invoices")?;
     let expenses =
         ExpensesView::new(ExpenseService::new(repo.clone())).wrap_err("could not load expenses")?;
