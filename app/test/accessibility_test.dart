@@ -35,6 +35,7 @@ void main() {
       tester,
       app!,
       overrides: [...overrides, showWelcomeProvider.overrideWithValue(true)],
+      tab: null,
     );
   }
 
@@ -65,10 +66,13 @@ void main() {
         Icons.receipt_long_outlined,
         Icons.account_balance_wallet_outlined,
         Icons.insights_outlined,
-        Icons.settings_outlined,
+        Icons.home_outlined,
       ]) {
         await openTab(tester, icon);
       }
+      await openSettings(tester);
+      await tester.pageBack();
+      await settle(tester);
       await openTab(tester, Icons.receipt_long_outlined);
       await tester.tap(find.textContaining('Frontend'));
       await settle(tester);
@@ -115,17 +119,19 @@ void main() {
         semantics.dispose();
       });
 
-      testWidgets('expenses, reports and settings', (tester) async {
+      testWidgets('home, expenses, reports and settings', (tester) async {
         final semantics = tester.ensureSemantics();
-        await launchDemo(tester, overrides: [themed]);
+        await launchDemo(tester, overrides: [themed], tab: null);
+        await meetsAll(tester);
         for (final icon in [
           Icons.account_balance_wallet_outlined,
           Icons.insights_outlined,
-          Icons.settings_outlined,
         ]) {
           await openTab(tester, icon);
           await meetsAll(tester);
         }
+        await openSettings(tester);
+        await meetsAll(tester);
         semantics.dispose();
       });
 

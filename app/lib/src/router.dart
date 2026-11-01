@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'screens/expenses_screen.dart';
+import 'screens/home_screen.dart';
 import 'screens/invoice_screen.dart';
 import 'screens/invoices_screen.dart';
 import 'screens/project_screen.dart';
@@ -16,6 +17,9 @@ import 'ui/glass.dart';
 
 /// Where invoice [number] opens. Numbers hold slashes (`INV/26-27/004`), so they are encoded.
 String invoicePath(String number) => '/invoices/${Uri.encodeComponent(number)}';
+
+/// Settings, opened from the gear on Home over the tabs
+const settingsPath = '/settings';
 
 /// A screen pushed over the tabs. Built as a [MaterialPage] here rather than left to
 /// go_router, which can take the app for a plain WidgetsApp and show it with no transition,
@@ -32,9 +36,14 @@ GoRouter buildRouter({bool welcome = false}) {
   final root = GlobalKey<NavigatorState>();
   return GoRouter(
     navigatorKey: root,
-    initialLocation: welcome ? '/welcome' : '/projects',
+    initialLocation: welcome ? '/welcome' : '/home',
     routes: [
-      GoRoute(path: '/', redirect: (_, _) => '/projects'),
+      GoRoute(path: '/', redirect: (_, _) => '/home'),
+      GoRoute(
+        path: settingsPath,
+        parentNavigatorKey: root,
+        pageBuilder: (context, state) => _detail(state, const SettingsScreen()),
+      ),
       GoRoute(
         path: '/welcome',
         builder: (context, state) => const WelcomeScreen(),
@@ -42,6 +51,14 @@ GoRouter buildRouter({bool welcome = false}) {
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => _Tabs(shell),
         branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/home',
+                builder: (context, state) => const HomeScreen(),
+              ),
+            ],
+          ),
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -94,14 +111,6 @@ GoRouter buildRouter({bool welcome = false}) {
               ),
             ],
           ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/settings',
-                builder: (context, state) => const SettingsScreen(),
-              ),
-            ],
-          ),
         ],
       ),
     ],
@@ -133,9 +142,6 @@ class _TabsState extends ConsumerState<_Tabs> {
   @override
   Widget build(BuildContext context) {
     final shell = widget.shell;
-    final attention = ref.watch(
-      syncControllerProvider.select((report) => report.needsAttention),
-    );
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       extendBody: true,
@@ -175,37 +181,31 @@ class _TabsState extends ConsumerState<_Tabs> {
           border: Border(
             top: BorderSide(color: scheme.outlineVariant, width: 0.5),
           ),
-          items: [
-            const BottomNavigationBarItem(
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
               icon: Icon(Icons.work_outline),
               activeIcon: Icon(Icons.work),
               label: 'Projects',
             ),
-            const BottomNavigationBarItem(
+            BottomNavigationBarItem(
               icon: Icon(Icons.receipt_long_outlined),
               activeIcon: Icon(Icons.receipt_long),
               label: 'Invoices',
             ),
-            const BottomNavigationBarItem(
+            BottomNavigationBarItem(
               icon: Icon(Icons.account_balance_wallet_outlined),
               activeIcon: Icon(Icons.account_balance_wallet),
               label: 'Expenses',
             ),
-            const BottomNavigationBarItem(
+            BottomNavigationBarItem(
               icon: Icon(Icons.insights_outlined),
               activeIcon: Icon(Icons.insights),
               label: 'Reports',
-            ),
-            BottomNavigationBarItem(
-              icon: Badge(
-                isLabelVisible: attention,
-                child: const Icon(Icons.settings_outlined),
-              ),
-              activeIcon: Badge(
-                isLabelVisible: attention,
-                child: const Icon(Icons.settings),
-              ),
-              label: 'Settings',
             ),
           ],
         ),

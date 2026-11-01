@@ -63,8 +63,7 @@ void main() {
 
   /// Settings, scrolled down to the sync section
   Future<void> openSync(WidgetTester tester) async {
-    await tester.tap(find.byIcon(Icons.settings_outlined));
-    await settle(tester);
+    await openSettings(tester);
     await scrollToMiddle(tester, find.text('Send to computer'));
     // The section's status loads once it scrolls into view
     await settle(tester);
@@ -121,6 +120,9 @@ void main() {
     );
 
     // The list reloads without a spinner, showing the old rows meanwhile
+    // Settings covers the tabs: back to them first
+    await tester.pageBack();
+    await settle(tester);
     await tester.tap(find.byIcon(Icons.work_outline));
     await pumpUntil(tester, find.text('Site'));
   });
@@ -174,6 +176,12 @@ void main() {
     await tester.tap(find.text("Take computer's"));
     await pumpUntil(tester, find.textContaining("Took the computer's data"));
 
+    // Settings covers the tabs: back to them first
+
+    await tester.pageBack();
+
+    await settle(tester);
+
     await tester.tap(find.byIcon(Icons.work_outline));
     await pumpUntil(tester, find.text('Audit'));
     expect(find.text('App'), findsNothing);
@@ -181,8 +189,7 @@ void main() {
 
   testWidgets('the demo has nothing to sync', (tester) async {
     await launchDemo(tester);
-    await tester.tap(find.byIcon(Icons.settings_outlined));
-    await settle(tester);
+    await openSettings(tester);
     // The sync section is built, and asks Rust for its state, only once scrolled near
     await tester.drag(find.byType(ListView).last, const Offset(0, -600));
     await settle(tester);

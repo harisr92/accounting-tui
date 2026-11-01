@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'dashboard.dart';
 import 'error.dart';
 import 'expenses.dart';
 import 'handoff.dart';
@@ -37,6 +38,9 @@ abstract class CompterApp implements RustOpaqueInterface {
 
   /// Where credit note `number`'s PDF is, writing it first if it is missing
   Future<String> creditNotePdf({required String number});
+
+  /// What needs the user today: money owed, overdue invoices, milestones ready to bill
+  Future<DashboardRow> dashboard();
 
   /// Remove an expense and its ledger posting
   Future<void> deleteExpense({required String id});

@@ -301,8 +301,7 @@ void main() {
     tester,
   ) async {
     await launchDemo(tester);
-    await tester.tap(find.byIcon(Icons.settings_outlined));
-    await settle(tester);
+    await openSettings(tester);
     expect(find.text('Nila Design & Code'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Edit business details'));

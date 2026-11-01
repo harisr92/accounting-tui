@@ -96,7 +96,7 @@ void main() {
     await tester.drag(find.byType(ListView).last, const Offset(0, -1500));
     await settle(tester);
 
-    await openTab(tester, Icons.settings_outlined);
+    await openSettings(tester);
     await tester.drag(find.byType(ListView).last, const Offset(0, -1500));
     await settle(tester);
   });

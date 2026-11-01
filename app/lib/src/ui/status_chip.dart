@@ -21,6 +21,7 @@ class StatusChip extends StatelessWidget {
       'ISSUED' ||
       'COMPLETED' => (scheme.tertiaryContainer, scheme.onTertiaryContainer),
       'CREDITED' => (credited.background, credited.foreground),
+      'OVERDUE' => (scheme.errorContainer, scheme.onErrorContainer),
       _ => (scheme.secondaryContainer, scheme.onSecondaryContainer),
     };
     return Container(

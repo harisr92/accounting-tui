@@ -25,6 +25,7 @@ void main() {
       tester,
       app,
       overrides: [showWelcomeProvider.overrideWithValue(welcome)],
+      tab: welcome ? null : startTab,
     );
     return app;
   }
