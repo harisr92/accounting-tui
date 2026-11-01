@@ -244,4 +244,80 @@ void main() {
       'Ends 1 Dec 2026',
     );
   });
+
+  testWidgets(
+    'a code redeemed in the paywall opens the form that was asked for',
+    (tester) async {
+      final store = await launchSelling(
+        tester,
+        FakeStore()..redeems = const Entitlement(active: true),
+      );
+
+      await tester.tap(find.byTooltip('New project'));
+      await settle(tester);
+      await tester.ensureVisible(find.text('Redeem code'));
+      await tester.pump();
+      await tester.tap(find.text('Redeem code'));
+      await settle(tester);
+
+      expect(store.redeemed, 1);
+      expect(find.text('Code redeemed: compter is unlocked'), findsOneWidget);
+      expect(field('Name'), findsWidgets);
+    },
+  );
+
+  testWidgets('closing the code sheet without a code keeps the paywall', (
+    tester,
+  ) async {
+    final store = await launchSelling(tester, FakeStore());
+
+    await tester.tap(find.byTooltip('New project'));
+    await settle(tester);
+    await tester.ensureVisible(find.text('Redeem code'));
+    await tester.pump();
+    await tester.tap(find.text('Redeem code'));
+    await settle(tester);
+
+    expect(store.redeemed, 1);
+    expect(find.text('Start your free month'), findsOneWidget);
+    expect(field('Name'), findsNothing);
+  });
+
+  testWidgets(
+    'a subscription arriving while the paywall is open opens the form',
+    (tester) async {
+      final store = await launchSelling(tester, FakeStore());
+
+      await tester.tap(find.byTooltip('New project'));
+      await settle(tester);
+      expect(find.text('Start your free month'), findsOneWidget);
+
+      store.change(const Entitlement(active: true));
+      await settle(tester);
+
+      expect(find.text('Start your free month'), findsNothing);
+      expect(field('Name'), findsWidgets);
+    },
+  );
+
+  testWidgets('a code redeemed in settings lifts read-only', (tester) async {
+    final store = await launchSelling(
+      tester,
+      FakeStore()..redeems = const Entitlement(active: true),
+    );
+    expect(find.text('Read-only'), findsOneWidget);
+    await openSettings(tester);
+    await scrollToMiddle(tester, find.text('Redeem code'));
+
+    await tester.tap(find.text('Redeem code'));
+    await settle(tester);
+    expect(store.redeemed, 1);
+    expect(find.text('Manage subscription'), findsOneWidget);
+
+    await tester.pageBack();
+    await settle(tester);
+    await tester.tap(find.byIcon(Icons.work_outline));
+    await settle(tester);
+    expect(find.text('Read-only'), findsNothing);
+  });
 }

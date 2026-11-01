@@ -113,6 +113,10 @@ abstract interface class Store {
   /// The system's subscription settings, to change plan or cancel
   Future<void> manage();
 
+  /// The App Store's sheet for an offer code: how compter is given free or at a discount. A
+  /// redeemed code's subscription arrives through [changes].
+  Future<void> redeemCode();
+
   /// Renewals, refunds and purchases made outside the app
   Stream<Entitlement> get changes;
 }
@@ -138,6 +142,9 @@ class FreeStore implements Store {
 
   @override
   Future<void> manage() async {}
+
+  @override
+  Future<void> redeemCode() async {}
 
   @override
   Stream<Entitlement> get changes => const Stream.empty();
@@ -190,6 +197,9 @@ class AppStore implements Store {
 
   @override
   Future<void> manage() => _channel.invokeMethod<void>('manage');
+
+  @override
+  Future<void> redeemCode() => _channel.invokeMethod<void>('redeem');
 
   @override
   Stream<Entitlement> get changes => _changes.stream;

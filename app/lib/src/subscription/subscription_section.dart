@@ -8,8 +8,8 @@ import 'entitlement.dart';
 import 'paywall.dart';
 import 'store.dart';
 
-/// Where the subscription stands, in Settings, with subscribe, restore and manage. Only where
-/// compter is sold.
+/// Where the subscription stands, in Settings, with subscribe, restore, redeem a code and
+/// manage. Only where compter is sold.
 class SubscriptionSection extends ConsumerWidget {
   const SubscriptionSection({super.key});
 
@@ -69,6 +69,12 @@ class SubscriptionSection extends ConsumerWidget {
           title: const Text('Restore purchases'),
           subtitle: const Text('After a reinstall or on a new iPhone'),
           onTap: () => restorePurchases(context),
+        ),
+        ListTile(
+          leading: const Icon(Icons.redeem),
+          title: const Text('Redeem code'),
+          subtitle: const Text('A code for a free or discounted subscription'),
+          onTap: () => redeemCode(context),
         ),
       ],
     );

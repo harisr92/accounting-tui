@@ -56,14 +56,28 @@ final class CompterStore {
       try await AppStore.sync()
       return await entitlement()
     case "manage":
-      let scene = UIApplication.shared.connectedScenes
-        .compactMap { $0 as? UIWindowScene }
-        .first { $0.activationState == .foregroundActive }
-      if let scene { try await AppStore.showManageSubscriptions(in: scene) }
+      if let scene = activeScene() { try await AppStore.showManageSubscriptions(in: scene) }
+      return nil
+    case "redeem":
+      // The subscription a code gives arrives through Transaction.updates, as entitlementChanged
+      if #available(iOS 16.0, *) {
+        guard let scene = activeScene() else { throw StoreError.noWindow }
+        try await AppStore.presentOfferCodeRedeemSheet(in: scene)
+      } else {
+        SKPaymentQueue.default().presentCodeRedemptionSheet()
+      }
       return nil
     default:
       return FlutterMethodNotImplemented
     }
+  }
+
+  /// The window the App Store's sheets open over
+  @MainActor
+  private static func activeScene() -> UIWindowScene? {
+    UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .first { $0.activationState == .foregroundActive }
   }
 
   /// The new entitlement; `nil` when cancelled; `pending` while a parent approves it (Ask to
@@ -175,12 +189,15 @@ final class CompterStore {
     /// started by `flutter run`. From TestFlight or the store: the products aren't set up (or
     /// not yet approved) in App Store Connect, or the Paid Apps agreement isn't active.
     case noProducts
+    /// No window in the foreground for the App Store's sheet to open over
+    case noWindow
 
     var errorDescription: String? {
       switch self {
       case .unknownProduct: "That plan isn’t in the App Store"
       case .noProducts:
         "The App Store has none of \(CompterStore.productIds.joined(separator: ", "))"
+      case .noWindow: "The App Store’s sheet couldn’t open. Try again."
       }
     }
   }

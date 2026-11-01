@@ -165,6 +165,16 @@ class FakeStore implements Store {
   @override
   Future<void> manage() async {}
 
+  /// What redeeming a code gives; `null` when the sheet is closed without one
+  Entitlement? redeems;
+  var redeemed = 0;
+
+  @override
+  Future<void> redeemCode() async {
+    redeemed++;
+    if (redeems case final given?) held = given;
+  }
+
   @override
   Stream<Entitlement> get changes => _changes.stream;
 
