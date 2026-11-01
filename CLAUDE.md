@@ -181,4 +181,13 @@ Changes to `crates/compter-mobile` or `app/` also need, in `app/`: `flutter anal
 
 UI changes also need a manual `cargo run` check: tabs, focus, help popup, resizing, and a clean exit with `q`. Add or extend the `TestBackend` render test in `crates/compter-tui/src/ui/tests/draw_tests.rs` for new chrome.
 
+### Review after every code change
+
+Once a task that changed code is complete, and before reporting it done, run both reviews, in this order:
+
+1. `/code-review medium --fix`: finds correctness bugs in the diff and applies the fixes.
+2. `/project-review` (`.claude/skills/project-review/SKILL.md`): checks the change against this file's design, SOLID and OOP rules, fixes what it finds, and reruns the checks above.
+
+Report what each review found and changed. Skip both only when no code changed (docs-only or a question).
+
 Shell commands are proxied through RTK (`rtk ...`) automatically. See `~/.claude/RTK.md`.

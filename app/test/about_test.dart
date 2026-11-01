@@ -1,5 +1,4 @@
 import 'package:compter/src/about.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support.dart';
@@ -36,8 +35,7 @@ void main() {
         appVersionProvider.overrideWith((ref) async => '0.3.0 (7)'),
       ],
     );
-    await tester.tap(find.byIcon(Icons.settings_outlined));
-    await settle(tester);
+    await openSettings(tester);
   }
 
   Future<void> tapRow(WidgetTester tester, String text) async {

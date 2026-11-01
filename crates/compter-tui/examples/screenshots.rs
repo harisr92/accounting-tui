@@ -9,7 +9,9 @@ use std::path::Path;
 use color_eyre::Result;
 use compter_core::demo;
 use compter_core::domain::Appearance;
-use compter_core::services::{ExpenseService, InvoiceService, PreferencesService, ReportService};
+use compter_core::services::{
+    DashboardService, ExpenseService, InvoiceService, PreferencesService, ReportService,
+};
 use compter_core::storage::Store;
 use compter_tui::app::App;
 use compter_tui::ui::draw;
@@ -70,7 +72,10 @@ fn app(store: &Store, appearance: Appearance) -> Result<App> {
     let invoices = || InvoiceService::new(repo.clone(), None);
     let reports = || ReportService::new(repo.clone(), None);
     let views: Vec<Box<dyn View>> = vec![
-        Box::new(DashboardView::new(reports(), invoices())?),
+        Box::new(DashboardView::new(
+            reports(),
+            DashboardService::new(repo.clone()),
+        )?),
         Box::new(ProjectsView::new(repo.clone(), None)?),
         Box::new(InvoicesView::new(invoices())?),
         Box::new(ExpensesView::new(ExpenseService::new(repo.clone()))?),

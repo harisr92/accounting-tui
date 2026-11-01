@@ -323,10 +323,7 @@ impl YearReportBuilder {
             }
             if returned.kind == ReturnKind::Refunded {
                 let booked = invoice.to_inr(&returned.cash());
-                let refunded = returned
-                    .refunded_inr
-                    .clone()
-                    .unwrap_or_else(|| booked.clone());
+                let refunded = invoice.refunded_inr(returned);
                 self.take_back(on_cash, amounts, &refunded);
                 if !on_cash {
                     self.report.accrual_exchange += &booked - &refunded;

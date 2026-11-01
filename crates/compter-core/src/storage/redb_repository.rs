@@ -110,6 +110,16 @@ impl ProjectRepository for RedbRepository {
         decode(PROJECTS.name(), id, row.value())
     }
 
+    fn scan_projects(&self, visit: &mut dyn FnMut(Project)) -> Result<(), StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(PROJECTS)?;
+        for row in table.iter()? {
+            let (key, value) = row?;
+            visit(decode(PROJECTS.name(), key.value(), value.value())?);
+        }
+        Ok(())
+    }
+
     fn save(&mut self, project: &Project) -> Result<(), StorageError> {
         let txn = self.db.begin_write()?;
         put_project(&txn, project)?;

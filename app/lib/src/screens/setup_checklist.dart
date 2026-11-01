@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../compter.dart';
 import '../onboarding.dart';
+import '../router.dart';
 import '../rust/api/rows.dart';
 import '../sync/storage.dart';
 import '../sync/storages.dart';
@@ -115,7 +116,7 @@ class SetupChecklist extends ConsumerWidget {
             done: syncing,
             title: 'Sync with your computer',
             subtitle: 'Optional: through your own ${clouds.join(' or ')}',
-            onTap: () => context.go('/settings'),
+            onTap: () => context.push(settingsPath),
           ),
           const SizedBox(height: 8),
         ],

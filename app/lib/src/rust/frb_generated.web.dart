@@ -7,6 +7,7 @@
 // ignore_for_file: argument_type_not_assignable
 
 import 'api/app.dart';
+import 'api/dashboard.dart';
 import 'api/error.dart';
 import 'api/expenses.dart';
 import 'api/handoff.dart';
@@ -104,6 +105,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CreditedRow dco_decode_credited_row(dynamic raw);
 
   @protected
+  DashboardRow dco_decode_dashboard_row(dynamic raw);
+
+  @protected
   ExpenseInput dco_decode_expense_input(dynamic raw);
 
   @protected
@@ -182,7 +186,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<QuarterGstRow> dco_decode_list_quarter_gst_row(dynamic raw);
 
   @protected
+  List<ReadyRow> dco_decode_list_ready_row(dynamic raw);
+
+  @protected
   List<TimeEntryRow> dco_decode_list_time_entry_row(dynamic raw);
+
+  @protected
+  List<UnpaidRow> dco_decode_list_unpaid_row(dynamic raw);
 
   @protected
   MilestoneInput dco_decode_milestone_input(dynamic raw);
@@ -218,6 +228,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   QuarterGstRow dco_decode_quarter_gst_row(dynamic raw);
 
   @protected
+  ReadyRow dco_decode_ready_row(dynamic raw);
+
+  @protected
   ReceivedRow dco_decode_received_row(dynamic raw);
 
   @protected
@@ -246,6 +259,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void dco_decode_unit(dynamic raw);
+
+  @protected
+  UnpaidRow dco_decode_unpaid_row(dynamic raw);
 
   @protected
   BigInt dco_decode_usize(dynamic raw);
@@ -331,6 +347,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CreditedRow sse_decode_credited_row(SseDeserializer deserializer);
+
+  @protected
+  DashboardRow sse_decode_dashboard_row(SseDeserializer deserializer);
 
   @protected
   ExpenseInput sse_decode_expense_input(SseDeserializer deserializer);
@@ -421,9 +440,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<ReadyRow> sse_decode_list_ready_row(SseDeserializer deserializer);
+
+  @protected
   List<TimeEntryRow> sse_decode_list_time_entry_row(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<UnpaidRow> sse_decode_list_unpaid_row(SseDeserializer deserializer);
 
   @protected
   MilestoneInput sse_decode_milestone_input(SseDeserializer deserializer);
@@ -461,6 +486,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   QuarterGstRow sse_decode_quarter_gst_row(SseDeserializer deserializer);
 
   @protected
+  ReadyRow sse_decode_ready_row(SseDeserializer deserializer);
+
+  @protected
   ReceivedRow sse_decode_received_row(SseDeserializer deserializer);
 
   @protected
@@ -489,6 +517,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_decode_unit(SseDeserializer deserializer);
+
+  @protected
+  UnpaidRow sse_decode_unpaid_row(SseDeserializer deserializer);
 
   @protected
   BigInt sse_decode_usize(SseDeserializer deserializer);
@@ -598,6 +629,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_credited_row(CreditedRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_dashboard_row(DashboardRow self, SseSerializer serializer);
 
   @protected
   void sse_encode_expense_input(ExpenseInput self, SseSerializer serializer);
@@ -720,8 +754,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_ready_row(List<ReadyRow> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_time_entry_row(
     List<TimeEntryRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_unpaid_row(
+    List<UnpaidRow> self,
     SseSerializer serializer,
   );
 
@@ -765,6 +808,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_quarter_gst_row(QuarterGstRow self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ready_row(ReadyRow self, SseSerializer serializer);
+
+  @protected
   void sse_encode_received_row(ReceivedRow self, SseSerializer serializer);
 
   @protected
@@ -793,6 +839,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_unpaid_row(UnpaidRow self, SseSerializer serializer);
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);

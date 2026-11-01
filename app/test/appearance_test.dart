@@ -13,8 +13,7 @@ void main() {
 
   testWidgets('gruvbox dark is chosen in settings and saved', (tester) async {
     await launchDemo(tester);
-    await tester.tap(find.byIcon(Icons.settings_outlined));
-    await settle(tester);
+    await openSettings(tester);
     await scrollToMiddle(tester, find.text(AppTheme.system.label));
 
     await tester.tap(find.text('Theme'));

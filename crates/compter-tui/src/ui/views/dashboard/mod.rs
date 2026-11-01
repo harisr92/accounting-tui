@@ -12,18 +12,15 @@ use crate::ui::views::year::YearPicker;
 use crate::ui::widgets::{header, money, money_in, panel, stat_tiles};
 use compter_core::domain::InvoiceSummary;
 use compter_core::services::reports::YearReport;
-use compter_core::services::{InvoiceService, ReportService, ServiceError};
+use compter_core::services::{DashboardService, ReportService, ServiceError};
 use compter_core::storage::Repository;
 
 /// Room for a label like "Invoiced (net)" or an amount like ₹12,34,567.00, with a gap
 const TILE_WIDTH: u16 = 15;
 
-/// After this many days an unpaid invoice is shown as overdue
-const OVERDUE_DAYS: i64 = 30;
-
 pub struct DashboardView<R> {
     reports: ReportService<R>,
-    invoices: InvoiceService<R>,
+    dashboard: DashboardService<R>,
     report: Option<YearReport>,
     /// Unpaid invoices, oldest first
     unpaid: Vec<InvoiceSummary>,
@@ -32,11 +29,11 @@ pub struct DashboardView<R> {
 impl<R: Repository> DashboardView<R> {
     pub fn new(
         reports: ReportService<R>,
-        invoices: InvoiceService<R>,
+        dashboard: DashboardService<R>,
     ) -> Result<Self, ServiceError> {
         let mut view = Self {
             reports,
-            invoices,
+            dashboard,
             report: None,
             unpaid: Vec::new(),
         };
@@ -46,14 +43,7 @@ impl<R: Repository> DashboardView<R> {
 
     fn reload(&mut self) -> Result<(), ServiceError> {
         self.report = Some(self.reports.year(YearPicker::current().year())?);
-        let mut unpaid: Vec<_> = self
-            .invoices
-            .list()?
-            .into_iter()
-            .filter(|s| !s.is_settled())
-            .collect();
-        unpaid.reverse();
-        self.unpaid = unpaid;
+        self.unpaid = self.dashboard.unpaid()?;
         Ok(())
     }
 }
@@ -110,8 +100,8 @@ impl<R: Repository> View for DashboardView<R> {
         }
         let today = Local::now().date_naive();
         let rows = self.unpaid.iter().map(|s| {
-            let days = (today - s.date()).num_days();
-            let tone = if days > OVERDUE_DAYS {
+            let days = s.days_waiting(today);
+            let tone = if s.is_overdue(today) {
                 Tone::Error
             } else {
                 Tone::Neutral

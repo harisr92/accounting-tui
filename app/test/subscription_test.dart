@@ -106,8 +106,7 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.byIcon(Icons.settings_outlined));
-    await settle(tester);
+    await openSettings(tester);
     await scrollToMiddle(tester, find.text('Manage subscription'));
 
     expect(find.text('Free month, then billed on 30 Nov 2026'), findsOneWidget);
@@ -153,8 +152,7 @@ void main() {
   ) async {
     final store = FakeStore()..holdRestore = Completer<void>();
     await launchSelling(tester, store);
-    await tester.tap(find.byIcon(Icons.settings_outlined));
-    await settle(tester);
+    await openSettings(tester);
     await scrollToMiddle(tester, find.text('Restore purchases'));
 
     await tester.tap(find.text('Restore purchases'));

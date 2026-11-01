@@ -1,8 +1,10 @@
+import 'package:flutter/widgets.dart' show AppLifecycleListener;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderOrFamily;
 import 'package:path_provider/path_provider.dart';
 
 import 'rust/api/app.dart';
+import 'rust/api/dashboard.dart';
 import 'rust/api/expenses.dart';
 import 'rust/api/error.dart';
 import 'rust/api/invoicing.dart';
@@ -151,6 +153,20 @@ final reportProvider = FutureProvider.family<ReportRow, int>(
   (ref, year) => ref.watch(compterProvider).report(year: year),
 );
 
+/// What needs the user today, for Home. It summarises the invoice and project lists, so it is
+/// worked out again whenever either is reloaded after a change. It is also worked out again
+/// each time the app comes back to the foreground: "today" may have moved on since, changing
+/// the month received, the days waited and which invoices are overdue. Home keeps showing the
+/// last figures meanwhile.
+final dashboardProvider = FutureProvider<DashboardRow>((ref) {
+  // Only to depend on them: their own screens show their errors
+  ref.watch(invoicesProvider.future).ignore();
+  ref.watch(projectsProvider.future).ignore();
+  final resumed = AppLifecycleListener(onResume: ref.invalidateSelf);
+  ref.onDispose(resumed.dispose);
+  return ref.watch(compterProvider).dashboard();
+});
+
 /// Where this phone's data stands against the computer's sync folder, and whether it can sync
 /// at all (the demo can't). A refusal is a status, not an error: Riverpod would keep retrying
 /// an error.
@@ -174,6 +190,7 @@ void reloadEverythingWith(void Function(ProviderOrFamily provider) invalidate) {
     projectsProvider,
     projectProvider,
     invoicesProvider,
+    dashboardProvider,
     invoiceProvider,
     expensesProvider,
     reportProvider,

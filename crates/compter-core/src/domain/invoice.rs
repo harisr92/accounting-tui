@@ -536,6 +536,15 @@ impl Invoice {
         }
     }
 
+    /// Rupees a credit note's refund takes out of the bank: what was entered for a foreign
+    /// invoice, otherwise its cash at the invoice's rate
+    pub fn refunded_inr(&self, returned: &Returned) -> BigDecimal {
+        returned
+            .refunded_inr
+            .clone()
+            .unwrap_or_else(|| self.to_inr(&returned.cash()))
+    }
+
     pub fn print(&self) -> &InvoicePrint {
         &self.print
     }
@@ -901,6 +910,9 @@ fn check_payment(
     Ok(())
 }
 
+/// After this many days an invoice with something still due counts as overdue
+pub const OVERDUE_DAYS: u32 = 30;
+
 /// What the invoice list shows, without the printed document
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InvoiceSummary {
@@ -974,6 +986,16 @@ impl InvoiceSummary {
     /// Nothing is left to pay: paid, credited, or both
     pub fn is_settled(&self) -> bool {
         self.status.is_settled()
+    }
+
+    /// Days since the invoice was issued, as of `today`; never negative
+    pub fn days_waiting(&self, today: NaiveDate) -> u32 {
+        u32::try_from((today - self.date).num_days()).unwrap_or_default()
+    }
+
+    /// Something is still due and it has waited more than [OVERDUE_DAYS]
+    pub fn is_overdue(&self, today: NaiveDate) -> bool {
+        !self.is_settled() && self.days_waiting(today) > OVERDUE_DAYS
     }
 }
 

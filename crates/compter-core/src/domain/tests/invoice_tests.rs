@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use crate::domain::{
     Currency, DomainError, ExchangeRate, FiscalYear, Invoice, InvoiceAmounts, InvoiceKind,
     InvoiceLine, InvoiceNumber, InvoiceParts, InvoiceStatus, InvoiceSummary, LogoId, MilestoneId,
-    ProjectId,
+    OVERDUE_DAYS, ProjectId,
 };
 
 fn date(day: u32) -> NaiveDate {
@@ -420,4 +420,20 @@ fn a_record_from_before_lines_bills_its_one_milestone() {
     let read = serde_json::from_value::<Invoice>(json).unwrap();
     assert_eq!(read.lines(), inv.lines());
     assert_eq!(InvoiceSummary::from(&read).milestones(), "Design");
+}
+
+#[test]
+fn an_invoice_is_overdue_only_while_something_is_due_past_the_limit() {
+    let mut inv = invoice();
+    let issued = inv.date();
+    let after = |days: u32| issued + chrono::Days::new(u64::from(days));
+    let summary = InvoiceSummary::from(&inv);
+    assert_eq!(summary.days_waiting(issued - chrono::Days::new(3)), 0);
+    assert_eq!(summary.days_waiting(after(OVERDUE_DAYS)), OVERDUE_DAYS);
+    assert!(!summary.is_overdue(after(OVERDUE_DAYS)));
+    assert!(summary.is_overdue(after(OVERDUE_DAYS + 1)));
+
+    inv.record_payment(after(1), BigDecimal::from(1000), BigDecimal::from(0))
+        .unwrap();
+    assert!(!InvoiceSummary::from(&inv).is_overdue(after(OVERDUE_DAYS + 1)));
 }

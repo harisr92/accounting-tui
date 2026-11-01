@@ -11,7 +11,9 @@ use crate::ui::view::View;
 use crate::ui::views::{
     DashboardView, ExpensesView, InvoicesView, ProjectsView, ReportsView, SettingsView,
 };
-use compter_core::services::{ExpenseService, InvoiceService, PreferencesService, ReportService};
+use compter_core::services::{
+    DashboardService, ExpenseService, InvoiceService, PreferencesService, ReportService,
+};
 use compter_core::storage::{DataDir, Store};
 
 /// An app whose only tab is Projects on `store`
@@ -57,7 +59,7 @@ pub fn reporting_app(store: &Store) -> App {
         Box::new(
             DashboardView::new(
                 ReportService::new(repo.clone(), None),
-                InvoiceService::new(repo.clone(), None),
+                DashboardService::new(repo.clone()),
             )
             .unwrap(),
         ),

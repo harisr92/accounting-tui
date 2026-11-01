@@ -32,24 +32,29 @@ void useMemoryPreferences() {
       InMemorySharedPreferencesAsync.empty();
 }
 
+/// The tab most tests start from. The app itself opens on Home; pass `tab: null` to stay there.
+const startTab = Icons.work_outline;
+
 /// The app on the demo business, in memory, writing its PDFs to a scratch folder.
 /// [overrides] replace providers, e.g. to pin a tab's year.
 Future<void> launchDemo(
   WidgetTester tester, {
   List<Override> overrides = const [],
+  IconData? tab = startTab,
 }) async {
   final compter = await tester.runAsync(() async {
     final scratch = await Directory.systemTemp.createTemp('compter_test');
     return CompterApp.demo(scratchDir: scratch.path);
   });
-  await launchWith(tester, compter!, overrides: overrides);
+  await launchWith(tester, compter!, overrides: overrides, tab: tab);
 }
 
-/// The app on [compter], an opened database
+/// The app on [compter], an opened database, then on [tab]
 Future<void> launchWith(
   WidgetTester tester,
   CompterApp compter, {
   List<Override> overrides = const [],
+  IconData? tab = startTab,
 }) async {
   useMemoryPreferences();
   await tester.pumpWidget(
@@ -58,6 +63,21 @@ Future<void> launchWith(
       child: const CompterMobile(),
     ),
   );
+  await settle(tester);
+  if (tab != null) {
+    await tester.tap(find.byIcon(tab));
+    await settle(tester);
+  }
+}
+
+/// Settings, from the gear on Home: Home's tab first, unless Home is already showing
+Future<void> openSettings(WidgetTester tester) async {
+  final home = find.byIcon(Icons.home_outlined);
+  if (home.evaluate().isNotEmpty) {
+    await tester.tap(home);
+    await settle(tester);
+  }
+  await tester.tap(find.byTooltip('Settings').hitTestable());
   await settle(tester);
 }
 

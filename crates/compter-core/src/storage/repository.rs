@@ -13,6 +13,9 @@ pub trait ProjectRepository {
 
     fn load(&self, id: ProjectId) -> Result<Project, StorageError>;
 
+    /// Hand every project to `visit`, one at a time, so a scan never holds them all
+    fn scan_projects(&self, visit: &mut dyn FnMut(Project)) -> Result<(), StorageError>;
+
     /// Insert or replace a project and its summary
     fn save(&mut self, project: &Project) -> Result<(), StorageError>;
 

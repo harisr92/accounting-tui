@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:compter/src/handoff.dart';
 import 'package:compter/src/rust/api/app.dart';
 import 'package:compter/src/sync/storages.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'fakes.dart';
@@ -32,8 +31,7 @@ void main() {
         handoffDirProvider.overrideWith((ref) async => staging!.path),
       ],
     );
-    await tester.tap(find.byIcon(Icons.settings_outlined));
-    await settle(tester);
+    await openSettings(tester);
     await scrollToMiddle(tester, find.text('Sync method'));
     await settle(tester);
 
