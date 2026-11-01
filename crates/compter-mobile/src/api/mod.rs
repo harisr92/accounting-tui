@@ -3,6 +3,7 @@
 
 // Public so flutter_rust_bridge writes one Dart file per module (`api/app.dart`, ...)
 pub mod app;
+pub mod clients;
 pub mod dashboard;
 pub mod error;
 pub mod expenses;
@@ -13,6 +14,7 @@ pub mod reports;
 pub mod rows;
 
 pub use app::CompterApp;
+pub use clients::{ClientChoiceRow, StateRow};
 pub use dashboard::{DashboardRow, ReadyRow, UnpaidRow};
 pub use error::ApiError;
 pub use expenses::{ExpenseInput, ExpenseList, ExpenseRow};

@@ -1,3 +1,4 @@
+use compter_core::domain::DomainError;
 use compter_core::services::ServiceError;
 
 /// Why a call failed, as Dart shows it. `field` names the input that was refused, so a form can
@@ -19,10 +20,12 @@ impl ApiError {
 }
 
 impl From<ServiceError> for ApiError {
-    /// A refused credit note line names its field, `line:<milestone_id>`, as typed input does
+    /// A refused credit note line names its field, `line:<milestone_id>`, as typed input does,
+    /// and a state other than the GSTIN's names the project form's state
     fn from(error: ServiceError) -> Self {
         let field = match &error {
             ServiceError::CreditLine { milestone, .. } => Some(format!("line:{milestone}")),
+            ServiceError::Domain(DomainError::StateNotGstins(_)) => Some("client_state".to_owned()),
             _ => None,
         };
         Self {
