@@ -206,3 +206,96 @@ fn archiving_is_saved_with_the_summary() {
     service.set_archived(id, false).unwrap();
     assert!(!service.list().unwrap()[0].is_archived());
 }
+
+#[test]
+fn entering_a_client_records_them_once_by_name() {
+    let mut service = service();
+    let first = service.create(draft("Site", Billing::Fixed)).unwrap();
+    let mut again = draft("App", Billing::Fixed);
+    again.client = ClientDetails {
+        address: vec!["Pune".to_owned()],
+        ..ClientDetails::named(" acme ", Some("29AAPFU0939F1ZR"))
+    };
+    service.create(again).unwrap();
+
+    let clients = service.clients().unwrap();
+    assert_eq!(clients.len(), 1, "{clients:?}");
+    assert_eq!(clients[0].address(), ["Pune"]);
+
+    let mut renamed = draft("Site", Billing::Fixed);
+    renamed.client = ClientDetails::named("Globex", None);
+    service.update_details(first.id(), renamed).unwrap();
+
+    let names: Vec<String> = service
+        .clients()
+        .unwrap()
+        .iter()
+        .map(|c| c.name().to_owned())
+        .collect();
+    assert_eq!(names, ["acme", "Globex"]);
+}
+
+#[test]
+fn a_rejected_edit_records_no_client() {
+    let mut service = service();
+    let id = service.create(draft("Site", Billing::Fixed)).unwrap().id();
+    service.add_milestone(id, milestone(Some(500))).unwrap();
+
+    let mut bad = draft("Site", Billing::hourly(BigDecimal::from(100)).unwrap());
+    bad.client = ClientDetails::named("Globex", None);
+    assert!(service.update_details(id, bad).is_err());
+
+    let clients = service.clients().unwrap();
+    assert_eq!(clients.len(), 1);
+    assert_eq!(clients[0].name(), "Acme");
+}
+
+#[test]
+fn editing_an_older_project_without_touching_its_client_keeps_the_newer_details() {
+    let mut service = service();
+    let old = service.create(draft("Site", Billing::Fixed)).unwrap().id();
+    let mut moved = draft("App", Billing::Fixed);
+    moved.client.address = vec!["New street".to_owned()];
+    service.create(moved).unwrap();
+
+    // A new rate on last year's project, its client as it was
+    let mut rate_only = draft("Site", Billing::hourly(BigDecimal::from(100)).unwrap());
+    rate_only.client = service.load(old).unwrap().client_details();
+    service.update_details(old, rate_only).unwrap();
+
+    assert_eq!(service.clients().unwrap()[0].address(), ["New street"]);
+}
+
+#[test]
+fn an_edit_that_only_tidies_the_client_keeps_the_newer_details() {
+    let mut service = service();
+    let old = service.create(draft("Site", Billing::Fixed)).unwrap().id();
+    let mut moved = draft("App", Billing::Fixed);
+    moved.client.address = vec!["New street".to_owned()];
+    service.create(moved).unwrap();
+
+    // The same client, typed in another case with a lower-case GSTIN
+    let mut tidied = draft("Site", Billing::Fixed);
+    tidied.client = ClientDetails::named("ACME ", Some("29aapfu0939f1zr"));
+    service.update_details(old, tidied).unwrap();
+
+    assert_eq!(service.clients().unwrap()[0].address(), ["New street"]);
+}
+
+#[test]
+fn a_form_with_fewer_address_lines_never_rewrites_a_clients_address() {
+    let mut service = service();
+    let mut three = draft("Site", Billing::Fixed);
+    three.client.address = vec!["Plot 7".to_owned(), "MIDC".to_owned(), "Pune".to_owned()];
+    service.create(three).unwrap();
+
+    // The terminal's two address lines, the rest joined as it fills them from the client
+    let mut two = draft("App", Billing::Fixed);
+    two.client.address = vec!["Plot 7".to_owned(), "MIDC, Pune".to_owned()];
+    service.create(two).unwrap();
+
+    assert_eq!(
+        service.clients().unwrap()[0].address(),
+        ["Plot 7", "MIDC", "Pune"]
+    );
+}

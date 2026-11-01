@@ -2,6 +2,7 @@
 
 mod appearance;
 mod billing;
+mod client;
 mod credit_note;
 mod currency;
 mod discount;
@@ -17,6 +18,7 @@ mod states;
 
 pub use appearance::Appearance;
 pub use billing::{Billing, MAX_ENTRY_MINUTES, TimeEntry, format_duration};
+pub use client::{Client, ClientDetails, ClientId, ClientRegion, same_client};
 pub use credit_note::{CREDIT_NOTE_PREFIX, CreditLine, CreditNote, CreditNoteParts};
 pub use currency::{Currency, ExchangeRate};
 pub use discount::Discount;
@@ -33,8 +35,8 @@ pub use profile::{
     BasisChange, BasisSchedule, BusinessProfile, DEFAULT_INVOICE_PREFIX, DEFAULT_SAC, IncomeBasis,
     ProfileDraft,
 };
-pub use project::{ClientDetails, ClientRegion, Project, ProjectId, ProjectStatus, ProjectSummary};
-pub use states::state_name;
+pub use project::{Project, ProjectId, ProjectStatus, ProjectSummary};
+pub use states::{state_label, state_name, states};
 
 #[cfg(test)]
 mod tests;

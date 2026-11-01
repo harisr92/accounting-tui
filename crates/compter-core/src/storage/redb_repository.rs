@@ -7,16 +7,16 @@ use redb::{
 
 use super::codec::{decode, encode};
 use super::tables::{
-    ACCOUNTS, APPEARANCE_KEY, CREDIT_NOTE_COUNTERS, CREDIT_NOTES, EXPENSES, INVOICE_COUNTERS,
-    INVOICE_SUMMARIES, INVOICES, LOGOS, PROFILE_KEY, PROJECT_SUMMARIES, PROJECTS, SETTINGS,
-    TRANSACTIONS,
+    ACCOUNTS, APPEARANCE_KEY, CLIENTS, CREDIT_NOTE_COUNTERS, CREDIT_NOTES, EXPENSES,
+    INVOICE_COUNTERS, INVOICE_SUMMARIES, INVOICES, LOGOS, PROFILE_KEY, PROJECT_SUMMARIES, PROJECTS,
+    SETTINGS, TRANSACTIONS,
 };
 use super::{
-    CreditRecord, ExpenseRecord, ExpenseRepository, InvoiceRepository, IssueRecord, PaymentRecord,
-    ProjectRepository, SettingsRepository, StorageError,
+    ClientRepository, CreditRecord, ExpenseRecord, ExpenseRepository, InvoiceRepository,
+    IssueRecord, PaymentRecord, ProjectRepository, SettingsRepository, StorageError,
 };
 use crate::domain::{
-    Appearance, BusinessProfile, CreditNote, Expense, ExpenseId, FiscalYear, Invoice,
+    Appearance, BusinessProfile, Client, CreditNote, Expense, ExpenseId, FiscalYear, Invoice,
     InvoiceNumber, InvoiceSummary, Logo, LogoId, Project, ProjectId, ProjectSummary,
 };
 
@@ -42,6 +42,15 @@ fn put_project(txn: &WriteTransaction, project: &Project) -> Result<(), StorageE
         .insert(id.as_uuid(), record.as_slice())?;
     txn.open_table(PROJECT_SUMMARIES)?
         .insert(id.as_uuid(), summary.as_slice())?;
+    Ok(())
+}
+
+/// Insert or replace a client
+pub(super) fn put_client(txn: &WriteTransaction, client: &Client) -> Result<(), StorageError> {
+    let id = client.id();
+    let record = encode(CLIENTS.name(), id, client)?;
+    txn.open_table(CLIENTS)?
+        .insert(id.as_uuid(), record.as_slice())?;
     Ok(())
 }
 
@@ -127,6 +136,14 @@ impl ProjectRepository for RedbRepository {
         Ok(())
     }
 
+    fn save_with_client(&mut self, project: &Project, client: &Client) -> Result<(), StorageError> {
+        let txn = self.db.begin_write()?;
+        put_project(&txn, project)?;
+        put_client(&txn, client)?;
+        txn.commit()?;
+        Ok(())
+    }
+
     fn delete(&mut self, id: ProjectId) -> Result<(), StorageError> {
         let txn = self.db.begin_write()?;
         {
@@ -139,6 +156,20 @@ impl ProjectRepository for RedbRepository {
         }
         txn.commit()?;
         Ok(())
+    }
+}
+
+impl ClientRepository for RedbRepository {
+    fn clients(&self) -> Result<Vec<Client>, StorageError> {
+        let txn = self.db.begin_read()?;
+        let table = txn.open_table(CLIENTS)?;
+        let mut clients = Vec::with_capacity(usize::try_from(table.len()?).unwrap_or_default());
+        for row in table.iter()? {
+            let (key, value) = row?;
+            clients.push(decode(CLIENTS.name(), key.value(), value.value())?);
+        }
+        clients.sort_by_cached_key(|c: &Client| (c.name().to_lowercase(), c.id()));
+        Ok(clients)
     }
 }
 

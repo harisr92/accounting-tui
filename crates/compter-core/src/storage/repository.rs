@@ -2,7 +2,7 @@ use accounting_core::{Account, Transaction};
 
 use super::StorageError;
 use crate::domain::{
-    Appearance, BusinessProfile, CreditNote, Expense, ExpenseId, FiscalYear, Invoice,
+    Appearance, BusinessProfile, Client, CreditNote, Expense, ExpenseId, FiscalYear, Invoice,
     InvoiceNumber, InvoiceSummary, Logo, LogoId, Project, ProjectId, ProjectSummary,
 };
 
@@ -19,7 +19,18 @@ pub trait ProjectRepository {
     /// Insert or replace a project and its summary
     fn save(&mut self, project: &Project) -> Result<(), StorageError>;
 
+    /// Save a project whose client was entered or changed, with that client's record, in one
+    /// write
+    fn save_with_client(&mut self, project: &Project, client: &Client) -> Result<(), StorageError>;
+
     fn delete(&mut self, id: ProjectId) -> Result<(), StorageError>;
+}
+
+/// The clients billed so far: the address book a new project's client is picked from. Clients
+/// are written only with a project, through [`ProjectRepository::save_with_client`].
+pub trait ClientRepository {
+    /// Every client, sorted by name
+    fn clients(&self) -> Result<Vec<Client>, StorageError>;
 }
 
 /// Everything that changes when an invoice is issued, saved together or not at all
@@ -137,11 +148,21 @@ pub trait SettingsRepository {
 
 /// All of the repositories at once, as the app's views use them
 pub trait Repository:
-    ProjectRepository + InvoiceRepository + SettingsRepository + ExpenseRepository + Clone
+    ProjectRepository
+    + ClientRepository
+    + InvoiceRepository
+    + SettingsRepository
+    + ExpenseRepository
+    + Clone
 {
 }
 
 impl<T> Repository for T where
-    T: ProjectRepository + InvoiceRepository + SettingsRepository + ExpenseRepository + Clone
+    T: ProjectRepository
+        + ClientRepository
+        + InvoiceRepository
+        + SettingsRepository
+        + ExpenseRepository
+        + Clone
 {
 }

@@ -42,6 +42,8 @@ pub enum DomainError {
     ProjectArchived,
     #[error("a client abroad can't have a GSTIN")]
     ForeignClientWithGstin,
+    #[error("the client's GSTIN is registered in {0}; leave the state blank or choose that one")]
+    StateNotGstins(String),
     #[error("SAC code {0} is not in the GST rate list")]
     UnknownSacCode(String),
     #[error("invoice prefix must be 1 to 5 letters, digits or '-'")]

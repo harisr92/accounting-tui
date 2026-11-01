@@ -58,6 +58,12 @@ pub enum StorageError {
         #[source]
         source: crate::domain::DomainError,
     },
+    #[error("the client of project {project} can't be recorded")]
+    InvalidClient {
+        project: ProjectId,
+        #[source]
+        source: crate::domain::DomainError,
+    },
     #[error(transparent)]
     Db(#[from] redb::Error),
 }

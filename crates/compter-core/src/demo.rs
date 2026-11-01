@@ -6,8 +6,8 @@ use chrono::NaiveDate;
 use accounting_core::StateCode;
 
 use crate::domain::{
-    BasisSchedule, Billing, ClientDetails, ClientRegion, Currency, DEFAULT_SAC, DomainError,
-    ExchangeRate, ExpenseCategory, MilestoneId, ProfileDraft, Project, TimeEntry,
+    BasisSchedule, Billing, Client, ClientDetails, ClientRegion, Currency, DEFAULT_SAC,
+    DomainError, ExchangeRate, ExpenseCategory, MilestoneId, ProfileDraft, Project, TimeEntry,
 };
 use crate::services::{ExpenseDraft, ExpenseService, InvoiceService, ServiceError};
 use crate::storage::{ProjectRepository, Store};
@@ -126,7 +126,7 @@ fn fixed(
     for (milestone, amount, due) in milestones {
         project.add_milestone(*milestone, *due, rupees(*amount))?;
     }
-    repo.save(&project)?;
+    repo.save_with_client(&project, &Client::new(project.client_details())?)?;
     let ids = project.milestones().iter().map(|m| m.id()).collect();
     Ok((project, ids))
 }
@@ -205,7 +205,7 @@ pub fn store() -> Result<Store, ServiceError> {
         TimeEntry::new(date(2026, 10, 8), 270, "Navigation shell")?,
     )?;
     app.log_time(1, TimeEntry::new(date(2026, 10, 13), 120, "Auth spike")?)?;
-    repo.save(&app)?;
+    repo.save_with_client(&app, &Client::new(app.client_details())?)?;
     let app_ms: Vec<MilestoneId> = app.milestones().iter().map(|m| m.id()).collect();
 
     // Unregistered: a plain invoice, paid with 10% TDS

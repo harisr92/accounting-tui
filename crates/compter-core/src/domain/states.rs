@@ -1,4 +1,4 @@
-//! GST state codes, for showing which state a typed code means
+//! GST state codes, for showing which state a code means and listing them to pick from
 
 const STATES: &[(&str, &str)] = &[
     ("01", "Jammu and Kashmir"),
@@ -46,4 +46,18 @@ pub fn state_name(code: &str) -> Option<&'static str> {
         .iter()
         .find(|(c, _)| *c == code)
         .map(|(_, name)| *name)
+}
+
+/// `Karnataka (29)`, or the bare code when it isn't a GST state code
+pub fn state_label(code: &str) -> String {
+    match state_name(code) {
+        Some(name) => format!("{name} ({code})"),
+        None => code.to_owned(),
+    }
+}
+
+/// Every GST state and union territory as `(code, name)`, in code order: the choices for a
+/// client's place of supply
+pub fn states() -> impl Iterator<Item = (&'static str, &'static str)> {
+    STATES.iter().copied()
 }

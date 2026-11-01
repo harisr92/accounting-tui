@@ -102,6 +102,14 @@ pub fn optional(input: &str) -> Option<String> {
     (!input.is_empty()).then(|| input.to_owned())
 }
 
+/// The GST state code (`29`) a typed GSTIN is registered in, once it is a whole, valid GSTIN in
+/// any case and with surrounding spaces; `None` while it isn't
+pub fn gstin_state(input: &str) -> Option<String> {
+    accounting_core::Gstin::parse(&input.trim().to_uppercase())
+        .ok()
+        .map(|g| g.state_code().to_owned())
+}
+
 /// `10%` off, or an amount like `5,000`; blank means no discount
 pub fn discount(input: &str) -> ParseResult<Option<Discount>> {
     let input = input.trim();

@@ -2,9 +2,9 @@ use bigdecimal::BigDecimal;
 use redb::ReadableDatabase;
 
 use crate::demo;
-use crate::domain::{Billing, Project, ProjectId, ProjectStatus};
+use crate::domain::{Billing, Client, ClientDetails, Project, ProjectId, ProjectStatus};
 use crate::storage::tables::{PROJECT_SUMMARIES, PROJECTS};
-use crate::storage::{ProjectRepository, StorageError, Store};
+use crate::storage::{ClientRepository, ProjectRepository, StorageError, Store};
 
 fn store_with_samples() -> (Store, Vec<Project>) {
     let store = Store::in_memory().unwrap();
@@ -145,4 +145,43 @@ fn invalid_stored_project_is_rejected_with_its_key() {
         }
         other => panic!("unexpected {other:?}"),
     }
+}
+
+#[test]
+fn a_project_saved_with_its_client_writes_both_and_clients_list_by_name() {
+    let store = Store::in_memory().unwrap();
+    let mut repo = store.repository();
+    for name in ["globex", "Acme", "Beta"] {
+        let project = Project::new("Site", name, None, Billing::Fixed).unwrap();
+        let client = Client::new(project.client_details()).unwrap();
+        repo.save_with_client(&project, &client).unwrap();
+        assert_eq!(repo.load(project.id()).unwrap(), project);
+    }
+
+    let names: Vec<String> = repo
+        .clients()
+        .unwrap()
+        .iter()
+        .map(|c| c.name().to_owned())
+        .collect();
+    assert_eq!(names, ["Acme", "Beta", "globex"]);
+}
+
+#[test]
+fn saving_a_client_again_replaces_its_record() {
+    let store = Store::in_memory().unwrap();
+    let mut repo = store.repository();
+    let project = Project::new("Site", "Acme", None, Billing::Fixed).unwrap();
+    let mut client = Client::new(project.client_details()).unwrap();
+    repo.save_with_client(&project, &client).unwrap();
+
+    client
+        .update(ClientDetails {
+            address: vec!["Pune".to_owned()],
+            ..ClientDetails::named("Acme", None)
+        })
+        .unwrap();
+    repo.save_with_client(&project, &client).unwrap();
+
+    assert_eq!(repo.clients().unwrap(), [client]);
 }

@@ -10,9 +10,9 @@ use sha2::{Digest, Sha256};
 
 use super::migrations;
 use super::tables::{
-    ACCOUNTS, CREDIT_NOTE_COUNTERS, CREDIT_NOTES, EXPENSES, INVOICE_COUNTERS, INVOICE_SUMMARIES,
-    INVOICES, LOGOS, META, PROJECT_SUMMARIES, PROJECTS, SCHEMA_KEY, SCHEMA_VERSION, SETTINGS,
-    TRANSACTIONS,
+    ACCOUNTS, CLIENTS, CREDIT_NOTE_COUNTERS, CREDIT_NOTES, EXPENSES, INVOICE_COUNTERS,
+    INVOICE_SUMMARIES, INVOICES, LOGOS, META, PROJECT_SUMMARIES, PROJECTS, SCHEMA_KEY,
+    SCHEMA_VERSION, SETTINGS, TRANSACTIONS,
 };
 use super::{DataDir, RedbLedgerStorage, RedbRepository, StorageError};
 
@@ -51,11 +51,12 @@ impl Store {
         RedbLedgerStorage::new(Arc::clone(&self.db))
     }
 
-    /// No records yet: no projects, invoices, credit notes, expenses, postings or settings. A
+    /// No records yet: no projects, clients, invoices, credit notes, expenses, postings or settings. A
     /// new install's database, which replacing loses nothing.
     pub fn is_blank(&self) -> Result<bool, StorageError> {
         let txn = self.db.begin_read()?;
         Ok(txn.open_table(PROJECTS)?.is_empty()?
+            && txn.open_table(CLIENTS)?.is_empty()?
             && txn.open_table(INVOICES)?.is_empty()?
             && txn.open_table(CREDIT_NOTES)?.is_empty()?
             && txn.open_table(EXPENSES)?.is_empty()?
@@ -71,6 +72,7 @@ impl Store {
         hash_table(&txn, META, &mut hasher)?;
         hash_table(&txn, PROJECTS, &mut hasher)?;
         hash_table(&txn, PROJECT_SUMMARIES, &mut hasher)?;
+        hash_table(&txn, CLIENTS, &mut hasher)?;
         hash_table(&txn, ACCOUNTS, &mut hasher)?;
         hash_table(&txn, TRANSACTIONS, &mut hasher)?;
         hash_table(&txn, INVOICES, &mut hasher)?;
@@ -123,6 +125,7 @@ impl Store {
             }
             txn.open_table(PROJECTS)?;
             txn.open_table(PROJECT_SUMMARIES)?;
+            txn.open_table(CLIENTS)?;
             txn.open_table(ACCOUNTS)?;
             txn.open_table(TRANSACTIONS)?;
             txn.open_table(INVOICES)?;
@@ -156,6 +159,7 @@ impl Store {
         let expected = [
             PROJECTS.name(),
             PROJECT_SUMMARIES.name(),
+            CLIENTS.name(),
             ACCOUNTS.name(),
             TRANSACTIONS.name(),
             INVOICES.name(),

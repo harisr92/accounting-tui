@@ -3,8 +3,10 @@ use chrono::NaiveDate;
 
 use super::ServiceError;
 use super::merge_import::WorkSession;
-use crate::domain::{Billing, ClientDetails, Project, ProjectId, ProjectSummary, TimeEntry};
-use crate::storage::ProjectRepository;
+use crate::domain::{
+    Billing, Client, ClientDetails, Project, ProjectId, ProjectSummary, TimeEntry,
+};
+use crate::storage::{ClientRepository, ProjectRepository};
 
 /// Input for creating or editing a project
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,11 +25,12 @@ pub struct MilestoneDraft {
 }
 
 /// Project use-cases over any [`ProjectRepository`]. Each change is saved before it returns.
+/// Entering a project's client also records them in the clients' address book.
 pub struct ProjectService<R> {
     repo: R,
 }
 
-impl<R: ProjectRepository> ProjectService<R> {
+impl<R: ProjectRepository + ClientRepository> ProjectService<R> {
     pub fn new(repo: R) -> Self {
         Self { repo }
     }
@@ -40,22 +43,36 @@ impl<R: ProjectRepository> ProjectService<R> {
         Ok(self.repo.load(id)?)
     }
 
+    /// Every client billed so far, by name: the choices for a new project's client
+    pub fn clients(&self) -> Result<Vec<Client>, ServiceError> {
+        Ok(self.repo.clients()?)
+    }
+
     pub fn create(&mut self, draft: ProjectDraft) -> Result<Project, ServiceError> {
         let project = Project::for_client(draft.name, draft.client, draft.billing)?;
-        self.repo.save(&project)?;
+        self.save_recording_client(&project)?;
         Ok(project)
     }
 
-    /// Apply the details and the billing of `draft`; nothing is saved if either is rejected
+    /// Apply the details and the billing of `draft`; nothing is saved if either is rejected.
+    /// The client's record is updated only when the client's details changed.
     pub fn update_details(
         &mut self,
         id: ProjectId,
         draft: ProjectDraft,
     ) -> Result<Project, ServiceError> {
-        self.update(id, |p| {
-            p.update_details(draft.name, draft.client)?;
-            p.set_billing(draft.billing)
-        })
+        let mut project = self.repo.load(id)?;
+        let before = project.client_details();
+        project.update_details(draft.name, draft.client)?;
+        project.set_billing(draft.billing)?;
+        // Only a change to the client is news: saving an older project as it was (a new rate,
+        // a new name) must not put its older client details back over newer ones
+        if project.client_details().same_as(&before) {
+            self.repo.save(&project)?;
+        } else {
+            self.save_recording_client(&project)?;
+        }
+        Ok(project)
     }
 
     /// Delete a project that has nothing invoiced (see [`Project::ensure_deletable`])
@@ -162,6 +179,29 @@ impl<R: ProjectRepository> ProjectService<R> {
             Ok(())
         })?;
         Ok((project, added))
+    }
+
+    /// Save `project` with its client recorded: the stored client of that name updated, or a
+    /// new one. A stored client its details only tidy (see [`ClientDetails::same_as`]) is
+    /// left as it is, so a form with fewer address lines never rewrites theirs.
+    fn save_recording_client(&mut self, project: &Project) -> Result<(), ServiceError> {
+        let details = project.client_details();
+        let known = self
+            .repo
+            .clients()?
+            .into_iter()
+            .find(|c| c.matches(&details.name));
+        let client = match known {
+            Some(client) if client.details().same_as(&details) => {
+                return Ok(self.repo.save(project)?);
+            }
+            Some(mut client) => {
+                client.update(details)?;
+                client
+            }
+            None => Client::new(details)?,
+        };
+        Ok(self.repo.save_with_client(project, &client)?)
     }
 
     /// Load, change, save. A failed change is never saved, since the edit is on a fresh copy.

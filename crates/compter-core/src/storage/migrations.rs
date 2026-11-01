@@ -12,9 +12,9 @@ use serde_json::{Value, json};
 
 use super::StorageError;
 use super::codec::decode;
-use super::redb_repository::put_invoice;
-use super::tables::INVOICES;
-use crate::domain::Invoice;
+use super::redb_repository::{put_client, put_invoice};
+use super::tables::{INVOICES, PROJECTS};
+use crate::domain::{Client, ClientId, ClientRegion, Invoice, Project, same_client};
 
 pub(super) type Migration = fn(&WriteTransaction) -> Result<(), StorageError>;
 
@@ -25,6 +25,7 @@ pub(super) const MIGRATIONS: &[Migration] = &[
     credit_returns,
     invoice_lines,
     invoice_discounts,
+    clients,
 ];
 
 /// Run every step from `from` up to the current version, inside the caller's transaction
@@ -82,6 +83,49 @@ fn invoice_lines(txn: &WriteTransaction) -> Result<(), StorageError> {
 /// version moves so an older compter refuses the file instead of reading a discounted milestone
 /// as billed, and owed, in full.
 fn invoice_discounts(_txn: &WriteTransaction) -> Result<(), StorageError> {
+    Ok(())
+}
+
+/// v6 → v7: a clients table, filled with one client per client name on the projects (names
+/// that differ only in case are one client), with the details of the newest project for them.
+/// The version moves so an older compter can't add projects whose clients the table misses.
+fn clients(txn: &WriteTransaction) -> Result<(), StorageError> {
+    // Newest last: project ids are UUIDv7 and sort by when the project was created. Projects
+    // from before that have UUIDv4 ids, which carry no time and would sort after every v7 one,
+    // so they count as the oldest.
+    let mut projects = Vec::new();
+    for row in txn.open_table(PROJECTS)?.iter()? {
+        let (key, value) = row?;
+        let project: Project = decode(PROJECTS.name(), key.value(), value.value())?;
+        projects.push(project);
+    }
+    projects.sort_by_key(|p| (p.id().as_uuid().get_version_num() == 7, p.id()));
+    let mut clients: Vec<Client> = Vec::new();
+    for project in projects.iter().rev() {
+        if clients
+            .iter()
+            .any(|c| same_client(c.name(), project.client_name()))
+        {
+            continue;
+        }
+        // Deterministic, so devices upgrading the same file make the same table
+        let id = ClientId::of_project(project.id());
+        // A registered client's state is their GSTIN's; one stored against it mustn't stop
+        // the upgrade
+        let mut details = project.client_details();
+        if details.gstin.is_some() && !details.region.is_abroad() {
+            details.region = ClientRegion::India { state: None };
+        }
+        let client =
+            Client::with_id(id, details).map_err(|source| StorageError::InvalidClient {
+                project: project.id(),
+                source,
+            })?;
+        clients.push(client);
+    }
+    for client in &clients {
+        put_client(txn, client)?;
+    }
     Ok(())
 }
 

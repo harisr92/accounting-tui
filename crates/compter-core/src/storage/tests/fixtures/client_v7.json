@@ -1,0 +1,13 @@
+{
+  "id": "019a4c3e-7b20-7c11-9a3e-2f6d8b1c0a55",
+  "name": "Acme Pvt Ltd",
+  "gstin": "27AAPFU0939F2ZU",
+  "address": [
+    "Plot 7, MIDC",
+    "Pune 411019"
+  ],
+  "region": {
+    "type": "india"
+  },
+  "currency": "INR"
+}

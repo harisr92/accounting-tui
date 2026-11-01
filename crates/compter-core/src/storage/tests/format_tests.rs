@@ -4,7 +4,7 @@
 use bigdecimal::BigDecimal;
 
 use crate::domain::{
-    Billing, BusinessProfile, ClientRegion, CreditNote, Currency, Expense, ExpenseCategory,
+    Billing, BusinessProfile, Client, ClientRegion, CreditNote, Currency, Expense, ExpenseCategory,
     IncomeBasis, Invoice, InvoiceKind, InvoiceStatus, MilestoneStatus, Project, ProjectStatus,
     ReturnKind,
 };
@@ -32,6 +32,8 @@ const LINES_INVOICE_V5: &str = include_str!("fixtures/invoice_lines_v5.json");
 const LINES_CREDIT_NOTE_V5: &str = include_str!("fixtures/credit_note_lines_v5.json");
 const DISCOUNT_INVOICE_V6: &str = include_str!("fixtures/invoice_discount_v6.json");
 const DISCOUNT_PROJECT_V6: &str = include_str!("fixtures/project_discount_v6.json");
+const CLIENT_V7: &str = include_str!("fixtures/client_v7.json");
+const CLIENT_ABROAD_V7: &str = include_str!("fixtures/client_abroad_v7.json");
 
 #[test]
 fn hourly_project_v1_still_loads() {
@@ -291,4 +293,21 @@ fn records_from_before_discounts_have_none() {
             .iter()
             .all(|m| m.discount() == &BigDecimal::from(0))
     );
+}
+
+#[test]
+fn clients_v7_still_load() {
+    let client: Client = decode("clients", "fixture", CLIENT_V7.as_bytes()).unwrap();
+    assert_eq!(client.name(), "Acme Pvt Ltd");
+    assert_eq!(client.gstin().map(|g| g.as_str()), Some("27AAPFU0939F2ZU"));
+    assert_eq!(client.region(), &ClientRegion::India { state: None });
+    assert_eq!(client.address(), ["Plot 7, MIDC", "Pune 411019"]);
+    assert_eq!(client.currency(), Currency::Inr);
+
+    let abroad: Client = decode("clients", "fixture", CLIENT_ABROAD_V7.as_bytes()).unwrap();
+    assert!(matches!(
+        abroad.region(),
+        ClientRegion::Abroad { country } if country == "Germany"
+    ));
+    assert_eq!(abroad.currency(), Currency::Eur);
 }
