@@ -11,8 +11,9 @@ use compter_core::domain::{
 };
 use compter_core::input;
 use compter_core::services::{
-    CreditDraft, CreditLineDraft, ExpenseDraft, ExpenseService, InvoiceService, InvoicingError,
-    MilestoneDraft, ProjectDraft, ProjectService, ReportService, ServiceError, creditable_lines_of,
+    CreditDraft, CreditLineDraft, DashboardService, ExpenseDraft, ExpenseService, InvoiceService,
+    InvoicingError, MilestoneDraft, ProjectDraft, ProjectService, ReportService, ServiceError,
+    creditable_lines_of,
 };
 use compter_core::storage::sync::{self, Lease, Resolution, SyncDir, SyncError};
 use compter_core::storage::{DataDir, RedbRepository, Store};
@@ -21,10 +22,11 @@ use super::expenses::{category, fiscal_year};
 use super::profile::{currency, this_year};
 use super::reports::month_label;
 use super::{
-    ApiError, CreditInput, CreditLineInput, CreditPreviewRow, CreditedRow, ExpenseInput,
-    ExpenseList, ExpenseRow, ExportRow, InvoiceDetail, InvoiceList, InvoicePreviewRow, InvoiceRow,
-    IssuedRow, MilestoneInput, PaymentInput, ProfileInput, ProfileRow, ProjectDetail, ProjectInput,
-    ProjectRow, ReceivedRow, ReportRow, SentRow, SyncStatusRow, TimeInput,
+    ApiError, CreditInput, CreditLineInput, CreditPreviewRow, CreditedRow, DashboardRow,
+    ExpenseInput, ExpenseList, ExpenseRow, ExportRow, InvoiceDetail, InvoiceList,
+    InvoicePreviewRow, InvoiceRow, IssuedRow, MilestoneInput, PaymentInput, ProfileInput,
+    ProfileRow, ProjectDetail, ProjectInput, ProjectRow, ReceivedRow, ReportRow, SentRow,
+    SyncStatusRow, TimeInput,
 };
 
 /// The open database and the services over it. Dart opens one at start-up and keeps it for the
@@ -36,6 +38,7 @@ pub struct CompterApp {
     invoices: InvoiceService<RedbRepository>,
     expenses: ExpenseService<RedbRepository>,
     reports: ReportService<RedbRepository>,
+    dashboard: DashboardService<RedbRepository>,
     store: Store,
     dir: DataDir,
     /// In memory: nothing to hand off
@@ -63,6 +66,7 @@ impl CompterApp {
             invoices: InvoiceService::new(store.repository(), Some(dir.clone())),
             expenses: ExpenseService::new(store.repository()),
             reports: ReportService::new(store.repository(), Some(dir.clone())),
+            dashboard: DashboardService::new(store.repository()),
             store,
             dir,
             demo,
@@ -479,6 +483,12 @@ impl CompterApp {
     /// Remove an expense and its ledger posting
     pub fn delete_expense(&mut self, id: String) -> Result<(), ApiError> {
         Ok(self.expenses.delete(expense_id(&id)?)?)
+    }
+
+    /// What needs the user today: money owed, overdue invoices, milestones ready to bill
+    pub fn dashboard(&self) -> Result<DashboardRow, ApiError> {
+        let today = today();
+        Ok(DashboardRow::new(&self.dashboard.now(today)?, today))
     }
 
     /// The financial year starting in April of `year`, in numbers

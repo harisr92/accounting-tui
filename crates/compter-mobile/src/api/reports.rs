@@ -168,6 +168,6 @@ pub(crate) fn month_label((year, month): (i32, u32)) -> String {
         .unwrap_or_default()
 }
 
-fn rupees(amount: &BigDecimal) -> String {
+pub(crate) fn rupees(amount: &BigDecimal) -> String {
     Currency::Inr.display(amount)
 }
