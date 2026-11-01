@@ -59,10 +59,15 @@ impl Field {
     /// Prefill a text field
     #[must_use]
     pub fn with_value(mut self, text: impl Into<String>) -> Self {
+        self.set_value(text);
+        self
+    }
+
+    /// Replace a text field's input; a choice is left as it is
+    pub(super) fn set_value(&mut self, text: impl Into<String>) {
         if let Kind::Text { value, .. } = &mut self.kind {
             *value = text.into();
         }
-        self
     }
 
     /// Show how the input will be interpreted while it is being typed
@@ -77,10 +82,15 @@ impl Field {
     /// Preselect an option of a choice field
     #[must_use]
     pub fn with_choice(mut self, index: usize) -> Self {
+        self.set_choice(index);
+        self
+    }
+
+    /// Select an option of a choice field; a text field is left as it is
+    pub(super) fn set_choice(&mut self, index: usize) {
         if let Kind::Choice { options, selected } = &mut self.kind {
             *selected = index.min(options.len().saturating_sub(1));
         }
-        self
     }
 
     pub fn label(&self) -> &'static str {

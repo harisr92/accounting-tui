@@ -5,13 +5,13 @@ use chrono::{Local, NaiveDate};
 use super::{FormKind, ProjectsView};
 use accounting_core::StateCode;
 
-use crate::ui::form::{Field, Form, parse};
+use crate::ui::form::{Field, Form, ListItem, parse};
 use crate::ui::view::Notice;
 use crate::ui::views::payment::submit_payment;
 use crate::ui::widgets::duration;
 use compter_core::domain::{
-    Billing, ClientDetails, ClientRegion, Currency, ExchangeRate, MAX_ENTRY_MINUTES, Milestone,
-    Project, TimeEntry, state_name,
+    Billing, Client, ClientDetails, ClientRegion, Currency, ExchangeRate, MAX_ENTRY_MINUTES,
+    Milestone, Project, TimeEntry, state_name,
 };
 use compter_core::services::{MilestoneDraft, ProjectDraft};
 use compter_core::storage::Repository;
@@ -196,7 +196,8 @@ fn project_form(title: &'static str, existing: Option<&Project>, currency: Curre
         vec![
             Field::text("Name", "e.g. Website revamp")
                 .with_value(existing.map_or("", Project::name)),
-            Field::text("Client", "client or company name").with_value(client.name.clone()),
+            Field::text("Client", "client or company name · Ctrl-p earlier clients")
+                .with_value(client.name.clone()),
             Field::text("GSTIN", "blank if unregistered or abroad")
                 .with_value(client.gstin.clone().unwrap_or_default()),
             Field::choice("Client in", REGION_OPTIONS).with_choice(region),
@@ -212,6 +213,40 @@ fn project_form(title: &'static str, existing: Option<&Project>, currency: Curre
             Field::text("Rate / hour", "hourly only, in the currency above").with_value(rate),
         ],
     )
+}
+
+/// Fill the project form's client fields in from `client`, billed before
+pub(super) fn fill_client(form: &mut Form, client: &Client) {
+    use project_field::{ADDRESS_1, ADDRESS_2, CLIENT, COUNTRY, CURRENCY, GSTIN, REGION, STATE};
+
+    let (region, state, country) = match client.region() {
+        ClientRegion::India { state } => (0, state.as_ref().map(|s| s.as_str()), None),
+        ClientRegion::Abroad { country } => (ABROAD, None, Some(country.as_str())),
+    };
+    let address = |line: usize| client.address().get(line).map_or("", String::as_str);
+    form.set_value(CLIENT, client.name());
+    form.set_value(GSTIN, client.gstin().map_or("", |g| g.as_str()));
+    form.set_choice(REGION, region);
+    form.set_value(STATE, state.unwrap_or_default());
+    form.set_value(COUNTRY, country.unwrap_or_default());
+    // The form has two address lines; any further ones join the second
+    form.set_value(ADDRESS_1, address(0));
+    let rest = client.address().get(1..).unwrap_or_default().join(", ");
+    form.set_value(ADDRESS_2, rest);
+    form.set_choice(CURRENCY, client.currency().index());
+}
+
+/// A client's row in the earlier-clients picker: the name, and their GSTIN or where they are
+pub(super) fn client_item(client: &Client) -> ListItem {
+    let place = match (client.gstin(), client.region()) {
+        (Some(gstin), _) => gstin.as_str().to_owned(),
+        (None, ClientRegion::India { state: Some(code) }) => state_name(code.as_str())
+            .unwrap_or(code.as_str())
+            .to_owned(),
+        (None, ClientRegion::India { state: None }) => String::new(),
+        (None, ClientRegion::Abroad { country }) => country.clone(),
+    };
+    ListItem::new(client.name(), place)
 }
 
 /// Name the state a typed GST state code stands for

@@ -13,13 +13,13 @@ use bigdecimal::Zero;
 use chrono::Local;
 
 use crate::ui::filter::Filter;
-use crate::ui::form::{Checklist, ChecklistItem, Confirm, Form};
+use crate::ui::form::{Checklist, ChecklistItem, Confirm, Form, ListEvent, ListPicker};
 use crate::ui::selection::{Nav, Selection};
 use crate::ui::theme::Theme;
 use crate::ui::view::{Action, KeyHint, Notice, View};
 use crate::ui::views::payment::payment_form;
 use compter_core::domain::{
-    Currency, Discount, ExchangeRate, InvoiceNumber, Milestone, MilestoneId, MilestoneSort,
+    Client, Currency, Discount, ExchangeRate, InvoiceNumber, Milestone, MilestoneId, MilestoneSort,
     MilestoneStatus, Project, ProjectId, ProjectSummary,
 };
 use compter_core::services::{
@@ -57,6 +57,15 @@ const MILESTONE_HINTS: &[KeyHint] = &[
     Filter::CLEAR_HINT,
 ];
 
+/// The form's keys, plus the earlier-clients picker the project forms open
+const PROJECT_FORM_HINTS: &[KeyHint] = &[
+    KeyHint::new("Enter", "save"),
+    KeyHint::new("Esc", "cancel"),
+    KeyHint::new("Tab/↑↓", "field"),
+    KeyHint::new("Space/←→", "choose"),
+    KeyHint::new("Ctrl-p", "earlier client"),
+];
+
 /// Leaves about 18 columns for a project name next to its status
 const LIST_MIN_WIDTH: u16 = 30;
 
@@ -83,6 +92,13 @@ enum FormKind {
     MilestoneSearch,
 }
 
+impl FormKind {
+    /// The new or edit project form, whose client can be picked from earlier ones
+    fn is_project(&self) -> bool {
+        matches!(self, Self::NewProject | Self::EditProject)
+    }
+}
+
 /// A change waiting for a yes
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ConfirmAction {
@@ -107,6 +123,13 @@ enum Modal {
         project: ProjectId,
         ids: Vec<MilestoneId>,
         list: Checklist,
+    },
+    /// Earlier clients, a row each in `clients` order, over the project form they fill in
+    Client {
+        kind: FormKind,
+        form: Form,
+        clients: Vec<Client>,
+        picker: ListPicker,
     },
 }
 
@@ -416,6 +439,62 @@ impl<R: Repository> ProjectsView<R> {
         }
     }
 
+    /// Ctrl-p in a project form: the earlier clients over it, or why there are none
+    fn open_client_picker(&mut self, kind: FormKind, mut form: Form) -> Action {
+        match self.client_picker() {
+            Ok(Some((clients, picker))) => {
+                self.modal = Some(Modal::Client {
+                    kind,
+                    form,
+                    clients,
+                    picker,
+                });
+                return Action::Handled;
+            }
+            Ok(None) => form.set_error("No earlier clients yet: type this one in"),
+            Err(error) => form.set_error(error.to_string()),
+        }
+        self.modal = Some(Modal::Form(kind, form));
+        Action::Handled
+    }
+
+    /// A key in the earlier-clients picker: a pick fills the form in, Esc goes back to it
+    fn step_client_picker(
+        &mut self,
+        key: Key,
+        kind: FormKind,
+        mut form: Form,
+        clients: Vec<Client>,
+        mut picker: ListPicker,
+    ) -> Action {
+        self.modal = Some(match picker.handle_key(key) {
+            ListEvent::Picked(index) => {
+                if let Some(client) = clients.get(index) {
+                    forms::fill_client(&mut form, client);
+                }
+                Modal::Form(kind, form)
+            }
+            ListEvent::Cancel => Modal::Form(kind, form),
+            ListEvent::Edited | ListEvent::Ignored => Modal::Client {
+                kind,
+                form,
+                clients,
+                picker,
+            },
+        });
+        Action::Handled
+    }
+
+    /// The clients billed before, with a picker over them; `None` when there are none yet
+    fn client_picker(&self) -> Result<Option<(Vec<Client>, ListPicker)>, ServiceError> {
+        let clients = self.service.clients()?;
+        if clients.is_empty() {
+            return Ok(None);
+        }
+        let items = clients.iter().map(forms::client_item).collect();
+        Ok(Some((clients, ListPicker::new("Earlier clients", items))))
+    }
+
     fn ask(&mut self, action: ConfirmAction, message: String) -> Action {
         self.modal = Some(Modal::Confirm(action, Confirm::new(message)));
         Action::Handled
@@ -423,6 +502,15 @@ impl<R: Repository> ProjectsView<R> {
 
     fn handle_modal(&mut self, modal: Modal, key: Key) -> Action {
         match modal {
+            Modal::Form(kind, form) if key == Key::Ctrl('p') && kind.is_project() => {
+                self.open_client_picker(kind, form)
+            }
+            Modal::Client {
+                kind,
+                form,
+                clients,
+                picker,
+            } => self.step_client_picker(key, kind, form, clients, picker),
             Modal::Form(kind, form) => {
                 let (form, action) = form.step(key, |form| self.submit(&kind, form));
                 // A submit may open the next modal (the rate form opens its confirm)
@@ -775,6 +863,10 @@ impl<R: Repository> View for ProjectsView<R> {
             Some(Modal::Form(_, form)) => form.render(frame, theme),
             Some(Modal::Confirm(_, confirm)) => confirm.render(frame, theme),
             Some(Modal::Pick { list, .. }) => list.render(frame, theme),
+            Some(Modal::Client { form, picker, .. }) => {
+                form.render(frame, theme);
+                picker.render(frame, theme);
+            }
             None => {}
         }
     }
@@ -803,7 +895,9 @@ impl<R: Repository> View for ProjectsView<R> {
 
     fn key_hints(&self) -> &'static [KeyHint] {
         match (&self.modal, self.focus) {
+            (Some(Modal::Form(kind, _)), _) if kind.is_project() => PROJECT_FORM_HINTS,
             (Some(Modal::Form(..)), _) => Form::HINTS,
+            (Some(Modal::Client { .. }), _) => ListPicker::HINTS,
             (Some(Modal::Confirm(..)), _) => Confirm::HINTS,
             (Some(Modal::Pick { list, .. }), _) => list.hints(),
             (None, Focus::Projects) => PROJECT_HINTS,

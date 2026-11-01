@@ -675,3 +675,65 @@ fn a_renamed_milestone_the_search_hides_clears_the_search() {
         "{renamed}"
     );
 }
+
+#[test]
+fn ctrl_p_fills_the_new_project_form_from_an_earlier_client() {
+    let store = demo::store().unwrap();
+    let mut app = projects_app(&store);
+    app.handle_key(Key::Char('n'));
+    type_keys(&mut app, "Follow-up");
+    let form = screen(&app, W, H);
+    assert!(form.contains("Ctrl-p earlier client"), "{form}");
+    app.handle_key(Key::Ctrl('p'));
+    let picker = screen(&app, W, H);
+    assert!(picker.contains("Earlier clients"), "{picker}");
+
+    // Letters search, so `germ` finds the client abroad
+    type_keys(&mut app, "germ");
+    app.handle_key(Key::Enter);
+    let form = screen(&app, W, H);
+    assert!(form.contains("Initrode GmbH"), "{form}");
+    assert!(form.contains("Hauptstrasse 1"), "{form}");
+    app.handle_key(Key::Enter);
+
+    let id = store
+        .repository()
+        .list()
+        .unwrap()
+        .into_iter()
+        .find(|s| s.name() == "Follow-up")
+        .unwrap()
+        .id();
+    let project = store.repository().load(id).unwrap();
+    assert_eq!(project.client_name(), "Initrode GmbH");
+    assert!(project.client_region().is_abroad());
+    assert_eq!(project.client_address(), ["Hauptstrasse 1", "10115 Berlin"]);
+    assert!(!project.currency().is_inr());
+}
+
+#[test]
+fn ctrl_p_without_earlier_clients_says_so_and_keeps_the_form() {
+    let store = Store::in_memory().unwrap();
+    let mut app = projects_app(&store);
+    app.handle_key(Key::Char('n'));
+    app.handle_key(Key::Ctrl('p'));
+
+    let screen = screen(&app, W, H);
+    assert!(screen.contains("No earlier clients yet"), "{screen}");
+    assert!(screen.contains("New project"), "{screen}");
+}
+
+#[test]
+fn esc_leaves_the_client_picker_and_keeps_what_was_typed() {
+    let store = demo::store().unwrap();
+    let mut app = projects_app(&store);
+    app.handle_key(Key::Char('n'));
+    type_keys(&mut app, "Site");
+    app.handle_key(Key::Ctrl('p'));
+    app.handle_key(Key::Esc);
+
+    let screen = screen(&app, W, H);
+    assert!(screen.contains("New project"), "{screen}");
+    assert!(!screen.contains("Earlier clients"), "{screen}");
+    assert!(screen.contains("Site"), "{screen}");
+}

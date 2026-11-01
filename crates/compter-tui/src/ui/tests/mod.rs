@@ -6,6 +6,7 @@ mod folder_picker_tests;
 mod form_tests;
 mod invoicing_view_tests;
 mod key_tests;
+mod list_picker_tests;
 mod parse_tests;
 mod projects_view_tests;
 mod reporting_view_tests;

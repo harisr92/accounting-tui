@@ -106,3 +106,18 @@ fn long_choices_show_one_option_and_errors_wrap() {
     assert!(!screen.contains("Three"));
     assert!(screen.contains("of the form at all"));
 }
+
+#[test]
+fn a_picker_fills_fields_in_and_clears_the_error() {
+    let mut form = form();
+    form.set_error("refused");
+
+    form.set_value(0, "Acme");
+    form.set_choice(1, 1);
+    form.set_choice(1, 9);
+    form.set_value(7, "out of range");
+
+    assert_eq!(form.value(0), "Acme");
+    assert_eq!(form.choice(1), 1);
+    assert_eq!(form.error(), None);
+}
