@@ -1,3 +1,4 @@
+mod dashboard_service_tests;
 mod expense_service_tests;
 mod fixtures;
 mod gstr1_tests;

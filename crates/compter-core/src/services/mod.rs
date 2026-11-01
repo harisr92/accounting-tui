@@ -2,6 +2,7 @@
 
 pub mod chart;
 mod credit_note_builder;
+mod dashboard_service;
 mod error;
 mod expense_service;
 mod gstr1;
@@ -14,6 +15,7 @@ mod report_service;
 pub mod reports;
 
 pub use credit_note_builder::{BuiltCreditNote, CreditDraft, CreditLineDraft};
+pub use dashboard_service::{Dashboard, DashboardService, ReadyMilestone};
 pub use error::ServiceError;
 pub use expense_service::{ExpenseDraft, ExpenseService};
 pub use gstr1::{MonthlyIff, QuarterlyGstr1};
