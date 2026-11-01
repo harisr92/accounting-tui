@@ -4,9 +4,18 @@ import '../rust/api/error.dart';
 import '../subscription/paywall.dart';
 import '../ui/theme.dart';
 
+/// Fills in some of a form's fields at once, by their keys; `null` when nothing was picked
+typedef FieldPicker =
+    Future<Map<String, String>?> Function(BuildContext context);
+
 /// One field of a [FormDialog]. [key] is the name Rust uses in `ApiError.field`, so a refused
 /// value is shown under the field that holds it. With [options] the field is a dropdown of
-/// those values instead of free text.
+/// those values instead of free text, each shown as its entry in [optionLabels] if it has one.
+///
+/// [pick] adds a button to a text field that fills in other fields too, e.g. a client's
+/// details from an earlier client. [derive] works the field out from the others whenever one
+/// named in [deriveFrom] changes: while it gives a value, the field shows it, is locked with [derivedHint] under it,
+/// and is submitted blank, since Rust works it out the same way.
 class FieldSpec {
   const FieldSpec(
     this.key,
@@ -15,8 +24,14 @@ class FieldSpec {
     this.keyboardType,
     this.initial = '',
     this.options,
+    this.optionLabels,
     this.date = false,
     this.multiline = false,
+    this.pick,
+    this.pickTooltip,
+    this.derive,
+    this.deriveFrom = const [],
+    this.derivedHint,
   });
 
   final String key;
@@ -25,8 +40,14 @@ class FieldSpec {
   final TextInputType? keyboardType;
   final String initial;
   final List<String>? options;
+  final Map<String, String>? optionLabels;
   final bool date;
   final bool multiline;
+  final FieldPicker? pick;
+  final String? pickTooltip;
+  final String? Function(Map<String, String> values)? derive;
+  final List<String> deriveFrom;
+  final String? derivedHint;
 }
 
 /// Every form in the app, as a bottom sheet: its fields, then Cancel and the one filled action
@@ -88,6 +109,72 @@ class _FormDialogState<T> extends State<FormDialog<T>> {
   ApiError? _error;
   bool _saving = false;
 
+  /// Fields [FieldSpec.derive] currently works out, so they are locked, each with what it
+  /// held before, put back once it no longer is
+  final Map<String, String> _derived = {};
+
+  Map<String, String> get _values => {
+    for (final entry in _controllers.entries) entry.key: entry.value.text,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    final sources = {
+      for (final field in widget.fields)
+        if (field.derive != null) ...field.deriveFrom,
+    };
+    for (final key in sources) {
+      _controllers[key]?.addListener(_rederive);
+    }
+    if (widget.fields.any((f) => f.derive != null)) _rederive();
+  }
+
+  /// Work out every derived field again from the fields it is derived from
+  void _rederive() {
+    final values = _values;
+    var changed = false;
+    for (final field in widget.fields) {
+      final derive = field.derive;
+      if (derive == null) continue;
+      final value = derive(values);
+      final controller = _controllers[field.key]!;
+      if (value == null) {
+        final before = _derived.remove(field.key);
+        if (before != null) {
+          changed = true;
+          controller.text = before;
+        }
+      } else {
+        if (!_derived.containsKey(field.key)) {
+          _derived[field.key] = controller.text;
+          changed = true;
+        }
+        if (controller.text != value) controller.text = value;
+      }
+    }
+    if (changed && mounted) setState(() {});
+  }
+
+  /// Fill in what [pick] returns
+  Future<void> _pick(FieldPicker pick) async {
+    final picked = await pick(context);
+    if (picked == null || !mounted) return;
+    setState(() {
+      for (final entry in picked.entries) {
+        // A field derived from another keeps showing what it's derived from; the picked
+        // value is what it goes back to once the derivation stops
+        if (_derived.containsKey(entry.key)) {
+          _derived[entry.key] = entry.value;
+        } else {
+          _controllers[entry.key]?.text = entry.value;
+        }
+      }
+      _error = null;
+    });
+    _rederive();
+  }
+
   @override
   void dispose() {
     for (final controller in _controllers.values) {
@@ -102,7 +189,8 @@ class _FormDialogState<T> extends State<FormDialog<T>> {
       _error = null;
     });
     final values = {
-      for (final entry in _controllers.entries) entry.key: entry.value.text,
+      for (final entry in _values.entries)
+        entry.key: _derived.containsKey(entry.key) ? '' : entry.value,
     };
     try {
       final result = await widget.submit(values);
@@ -157,7 +245,9 @@ class _FormDialogState<T> extends State<FormDialog<T>> {
                         InputDecoration(
                           labelText: field.label.isEmpty ? null : field.label,
                           // Under the field, so it still shows once a value is in it
-                          helperText: field.hint,
+                          helperText: _derived.containsKey(field.key)
+                              ? field.derivedHint ?? field.hint
+                              : field.hint,
                           errorText: error?.field == field.key
                               ? error!.message
                               : null,
@@ -206,24 +296,45 @@ class _FormDialogState<T> extends State<FormDialog<T>> {
         onTap: () => _pickDate(controller),
       );
     }
+    final locked = _derived.containsKey(field.key);
     if (options == null) {
+      final pick = field.pick;
       return TextField(
         controller: controller,
+        readOnly: locked,
         keyboardType: field.multiline
             ? TextInputType.multiline
             : field.keyboardType,
         minLines: field.multiline ? 3 : 1,
         maxLines: field.multiline ? null : 1,
-        decoration: decoration,
+        decoration: pick == null
+            ? decoration
+            : decoration.copyWith(
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.contacts_outlined),
+                  tooltip: field.pickTooltip,
+                  onPressed: () => _pick(pick),
+                ),
+              ),
       );
     }
+    final labels = field.optionLabels ?? const {};
     return DropdownButtonFormField<String>(
+      // Built again when a pick or a derivation sets the value
+      key: ValueKey('${field.key}:${controller.text}'),
       initialValue: options.contains(controller.text) ? controller.text : null,
+      isExpanded: true,
       items: [
         for (final option in options)
-          DropdownMenuItem(value: option, child: Text(option)),
+          DropdownMenuItem(
+            value: option,
+            child: Text(
+              labels[option] ?? option,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
       ],
-      onChanged: (value) => controller.text = value ?? '',
+      onChanged: locked ? null : (value) => controller.text = value ?? '',
       decoration: decoration,
     );
   }
