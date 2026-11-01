@@ -59,6 +59,37 @@ Future<bool> restorePurchases(BuildContext context) async {
   }
 }
 
+/// The code sheet open now, which a second tap joins rather than opening another
+Future<void>? _redeeming;
+
+/// The App Store's offer code sheet, then what this Apple ID now holds. `true` once a code
+/// gave a subscription. A code redeemed later (the older sheet returns at once) still arrives
+/// through the store's changes, so "nothing yet" says nothing.
+Future<bool> redeemCode(BuildContext context) async {
+  final container = ProviderScope.containerOf(context, listen: false);
+  final store = container.read(storeProvider);
+  final before = container.read(entitlementProvider).value;
+  final running = _redeeming ??= store.redeemCode();
+  try {
+    await running;
+    final now = await store.entitlement();
+    if (!now.active) return false;
+    container.read(entitlementProvider.notifier).show(now);
+    // Someone already subscribed may close the sheet without a code: claim nothing then
+    if (before?.active != true && context.mounted) {
+      notify(context, 'Code redeemed: compter is unlocked');
+    }
+    return true;
+  } on PlatformException catch (error) {
+    if (context.mounted) {
+      notify(context, error.message ?? error.code, error: true);
+    }
+    return false;
+  } finally {
+    if (identical(_redeeming, running)) _redeeming = null;
+  }
+}
+
 /// The plans, each with its price and any free period, plus restore. `true` when it closes
 /// with a subscription.
 Future<bool> showPaywall(BuildContext context) async {
@@ -96,6 +127,16 @@ class _PaywallState extends ConsumerState<Paywall> {
   /// While a purchase or restore is with the App Store, which shows its own sheet
   var _busy = false;
 
+  /// Set once the sheet has been popped, so a subscription arriving through the store's
+  /// changes and one returned by a tap don't pop it twice
+  var _closed = false;
+
+  void _close(bool subscribed) {
+    if (_closed) return;
+    _closed = true;
+    Navigator.pop(context, subscribed);
+  }
+
   Future<void> _buy(Plan plan) async {
     setState(() => _busy = true);
     try {
@@ -104,14 +145,14 @@ class _PaywallState extends ConsumerState<Paywall> {
       final bought = purchase.entitlement;
       if (bought != null) {
         ref.read(entitlementProvider.notifier).show(bought);
-        if (bought.active) Navigator.pop(context, true);
+        if (bought.active) _close(true);
       } else if (purchase.pending) {
         // The approval comes through the store's changes, whenever the parent answers
         notify(
           context,
           'Asked for approval. compter unlocks once it’s approved.',
         );
-        Navigator.pop(context, false);
+        _close(false);
       }
     } on PlatformException catch (error) {
       if (mounted) notify(context, error.message ?? error.code, error: true);
@@ -125,7 +166,15 @@ class _PaywallState extends ConsumerState<Paywall> {
     final restored = await restorePurchases(context);
     if (!mounted) return;
     setState(() => _busy = false);
-    if (restored) Navigator.pop(context, true);
+    if (restored) _close(true);
+  }
+
+  Future<void> _redeem() async {
+    setState(() => _busy = true);
+    final redeemed = await redeemCode(context);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (redeemed) _close(true);
   }
 
   Future<void> _open(String url) async {
@@ -136,6 +185,11 @@ class _PaywallState extends ConsumerState<Paywall> {
 
   @override
   Widget build(BuildContext context) {
+    // A code redeemed after its sheet returned, or an Ask to Buy approved while this is open,
+    // arrives through the store's changes
+    ref.listen(entitlementProvider, (_, next) {
+      if (next.value?.active ?? false) _close(true);
+    });
     final theme = Theme.of(context);
     return SafeArea(
       child: SingleChildScrollView(
@@ -210,6 +264,10 @@ class _PaywallState extends ConsumerState<Paywall> {
                       child: const Text('Restore purchases'),
                     ),
                     TextButton(
+                      onPressed: _busy ? null : _redeem,
+                      child: const Text('Redeem code'),
+                    ),
+                    TextButton(
                       onPressed: () => _open(termsUrl),
                       child: const Text('Terms'),
                     ),
@@ -218,7 +276,7 @@ class _PaywallState extends ConsumerState<Paywall> {
                       child: const Text('Privacy'),
                     ),
                     TextButton(
-                      onPressed: () => Navigator.pop(context, false),
+                      onPressed: () => _close(false),
                       child: const Text('Not now'),
                     ),
                   ],

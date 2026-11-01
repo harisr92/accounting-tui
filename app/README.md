@@ -178,6 +178,30 @@ a subscription to see the read-only state and back. If Xcode can't find the file
 again in Product → Scheme → Edit Scheme → Run → Options → StoreKit Configuration. Widget tests
 use `FakeStore` (`test/fakes.dart`).
 
+### Giving compter free
+
+Apple's way to give a subscription free (or at a discount) is an **offer code**. A home-made
+unlock code would break guideline 3.1.1, which allows paid features to be unlocked only by an
+in-app purchase.
+
+1. App Store Connect → the app → Subscriptions → a plan → **Offer Codes**: create an offer
+   with payment **Free**, for up to a year. Choose who may use it: new, current or lapsed
+   subscribers.
+2. Make either **one-time codes** (a list of unique codes, one per person) or a **custom code**
+   (one word, such as `FRIEND2026`, for many people).
+3. Send the code. It's redeemed in the app (Settings → Subscription → **Redeem code**, or
+   **Redeem code** on the paywall), or from a link:
+   `https://apps.apple.com/redeem?ctx=offercodes&id=<app id>&code=<code>`.
+
+A redeemed code is an ordinary subscription to StoreKit. It unlocks compter through the usual
+entitlement check, and one redeemed outside the app arrives through `Transaction.updates`.
+When the free period ends, it **renews at the full price** unless the person cancels, so say so
+when you give a code.
+
+Codes redeem only in the App Store build or TestFlight, not with the sandbox. To try the flow
+from Xcode, add an offer code to `Compter.storekit` (its subscription's Offer Codes) and redeem
+it through the in-app sheet.
+
 
 
 CI (`.github/workflows/mobile.yml`) checks the bindings are current, runs `flutter analyze` and
