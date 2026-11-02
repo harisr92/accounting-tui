@@ -12,6 +12,8 @@ use super::{InvoiceRow, ProjectRow};
 /// as `ProjectInput`, so picking one copies them across
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientChoiceRow {
+    /// For merging one client into another
+    pub id: String,
     pub name: String,
     /// What tells clients apart in the list: `29AAPFU0939F1ZR`, `Karnataka (29)` or
     /// `Germany · EUR`
@@ -34,6 +36,7 @@ impl From<&Client> for ClientChoiceRow {
         let foreign = (!currency.is_inr()).then(|| currency.code().to_owned());
         let summary = place.into_iter().chain(foreign).collect::<Vec<_>>();
         Self {
+            id: client.id().to_string(),
             name: client.name().to_owned(),
             summary: summary.join(" · "),
             gstin: client.gstin().map(ToString::to_string),
@@ -88,6 +91,8 @@ pub struct ClientSummaryRow {
     pub name: String,
     /// The GSTIN, else `Karnataka (29)` or `Germany`; `None` for a client known by name only
     pub place: Option<String>,
+    /// Names the client went by before being renamed or merged, which the search looks through
+    pub aliases: Vec<String>,
     /// Projects for the client, archived ones included
     pub projects: u32,
     /// `₹35,400.00`, or `₹1,000.00 · €250.00` across currencies; `None` when nothing is due
@@ -101,6 +106,7 @@ impl From<&ClientSummary> for ClientSummaryRow {
             id: client.id().to_string(),
             name: client.name().to_owned(),
             place: client.place(),
+            aliases: client.aliases().to_vec(),
             projects: u32::try_from(summary.projects).unwrap_or(u32::MAX),
             owed: owed(&summary.owed),
         }
@@ -146,6 +152,8 @@ pub struct ClientDetail {
     pub edit: ClientInput,
     /// As in [`ClientSummaryRow::place`]
     pub place: Option<String>,
+    /// As in [`ClientSummaryRow::aliases`]
+    pub aliases: Vec<String>,
     /// Address lines, top to bottom
     pub address: Vec<String>,
     /// As in [`ClientSummaryRow::owed`]
@@ -164,6 +172,7 @@ impl From<&ClientAccount> for ClientDetail {
             name: client.name().to_owned(),
             edit: ClientInput::from(client),
             place: client.place(),
+            aliases: client.aliases().to_vec(),
             address: client.address().to_vec(),
             owed: owed(&account.owed),
             projects: account.projects.iter().map(ProjectRow::from).collect(),
