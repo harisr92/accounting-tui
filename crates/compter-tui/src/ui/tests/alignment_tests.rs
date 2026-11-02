@@ -2,7 +2,7 @@
 
 use crate::ui::key::Key;
 
-use crate::ui::tests::support::{go_to_year, invoicing_app, reporting_app, screen};
+use crate::ui::tests::support::{clients_app, go_to_year, invoicing_app, reporting_app, screen};
 use compter_core::demo;
 
 const W: u16 = 130;
@@ -58,4 +58,19 @@ fn report_clients_and_gst_line_up() {
     assert_aligned(&screen, "Clients", "TDS", "₹5,000.00");
     assert_aligned(&screen, "Clients", "Invoiced", "₹1,10,000.00");
     assert_aligned(&screen, "GST", "Input credit", "₹28,980.00");
+}
+
+#[test]
+fn clients_and_their_invoices_line_up() {
+    let store = demo::store().unwrap();
+    let mut app = clients_app(&store);
+    app.handle_key(Key::Char('2'));
+    let list = screen(&app, W, H);
+    assert_aligned(&list, "Clients", "Owes", "₹35,400.00");
+    assert_aligned(&list, "Clients", "Projects", "1");
+    // Acme Pvt Ltd: Frontend half paid
+    app.handle_key(Key::Enter);
+    let opened = screen(&app, W, H);
+    assert_aligned(&opened, "Invoices (", "Total", "₹70,800.00");
+    assert_aligned(&opened, "Invoices (", "Due", "₹35,400.00");
 }

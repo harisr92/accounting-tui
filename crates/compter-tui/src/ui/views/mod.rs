@@ -1,3 +1,4 @@
+mod clients;
 mod dashboard;
 mod expenses;
 mod invoices;
@@ -8,6 +9,7 @@ mod reports;
 mod settings;
 mod year;
 
+pub use clients::ClientsView;
 pub use dashboard::DashboardView;
 pub use expenses::ExpensesView;
 pub use invoices::InvoicesView;
