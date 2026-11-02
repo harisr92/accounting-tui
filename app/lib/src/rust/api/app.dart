@@ -219,6 +219,10 @@ abstract class CompterApp implements RustOpaqueInterface {
     required PaymentInput input,
   });
 
+  /// Take a client out of the address book. Refused while any project (archived included) or
+  /// invoice is still theirs; a new project under their name adds them again.
+  Future<void> removeClient({required String id});
+
   /// Remove a milestone that has not been invoiced
   Future<ProjectDetail> removeMilestone({
     required String projectId,
