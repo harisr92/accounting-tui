@@ -1,3 +1,4 @@
+mod client_form;
 mod clients;
 mod dashboard;
 mod expenses;

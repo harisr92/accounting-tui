@@ -3,10 +3,10 @@
 use chrono::{Local, NaiveDate};
 
 use super::{FormKind, ProjectsView};
-use accounting_core::StateCode;
 
 use crate::ui::form::{Field, Form, ListItem, parse};
 use crate::ui::view::Notice;
+use crate::ui::views::client_form;
 use crate::ui::views::payment::submit_payment;
 use crate::ui::widgets::duration;
 use compter_core::domain::{
@@ -18,22 +18,17 @@ use compter_core::storage::Repository;
 
 const BILLING_OPTIONS: &[&str] = &["Fixed price", "Hourly"];
 const HOURLY: usize = 1;
-const REGION_OPTIONS: &[&str] = &["India", "Abroad"];
-const ABROAD: usize = 1;
 
 /// Field positions, so building and reading a form agree
 mod project_field {
+    use crate::ui::views::client_form;
+
     pub const NAME: usize = 0;
     pub const CLIENT: usize = 1;
-    pub const GSTIN: usize = 2;
-    pub const REGION: usize = 3;
-    pub const STATE: usize = 4;
-    pub const COUNTRY: usize = 5;
-    pub const ADDRESS_1: usize = 6;
-    pub const ADDRESS_2: usize = 7;
-    pub const CURRENCY: usize = 8;
-    pub const BILLING: usize = 9;
-    pub const RATE: usize = 10;
+    /// The first of the client's other fields ([`client_form`])
+    pub const CLIENT_DETAILS: usize = 2;
+    pub const BILLING: usize = CLIENT_DETAILS + client_form::COUNT;
+    pub const RATE: usize = BILLING + 1;
 }
 
 mod milestone_field {
@@ -180,60 +175,32 @@ fn fail(error: impl ToString) -> String {
 }
 
 fn project_form(title: &'static str, existing: Option<&Project>, currency: Currency) -> Form {
-    let client = existing.map(Project::client_details).unwrap_or_default();
-    let (region, state, country) = match &client.region {
-        ClientRegion::India { state } => (0, state.as_ref().map(|s| s.as_str().to_owned()), None),
-        ClientRegion::Abroad { country } => (ABROAD, None, Some(country.clone())),
+    let client = ClientDetails {
+        currency,
+        ..existing.map(Project::client_details).unwrap_or_default()
     };
-    let address = |line: usize| client.address.get(line).cloned().unwrap_or_default();
     let billing = existing.map_or(0, |p| usize::from(p.billing().rate().is_some()));
     let rate = existing
         .and_then(|p| p.billing().rate())
         .map(ToString::to_string)
         .unwrap_or_default();
-    Form::new(
-        title,
-        vec![
-            Field::text("Name", "e.g. Website revamp")
-                .with_value(existing.map_or("", Project::name)),
-            Field::text("Client", "client or company name · Ctrl-p earlier clients")
-                .with_value(client.name.clone()),
-            Field::text("GSTIN", "blank if unregistered or abroad")
-                .with_value(client.gstin.clone().unwrap_or_default()),
-            Field::choice("Client in", REGION_OPTIONS).with_choice(region),
-            Field::text("State code", "India, no GSTIN: e.g. 29")
-                .with_value(state.unwrap_or_default())
-                .with_preview(describe_state),
-            Field::text("Country", "abroad only, e.g. Germany")
-                .with_value(country.unwrap_or_default()),
-            Field::text("Address", "street, building").with_value(address(0)),
-            Field::text("", "city, PIN / postcode").with_value(address(1)),
-            Field::choice("Currency", Currency::LABELS).with_choice(currency.index()),
-            Field::choice("Billing", BILLING_OPTIONS).with_choice(billing),
-            Field::text("Rate / hour", "hourly only, in the currency above").with_value(rate),
-        ],
-    )
+    let mut fields = vec![
+        Field::text("Name", "e.g. Website revamp").with_value(existing.map_or("", Project::name)),
+        Field::text("Client", "client or company name · Ctrl-p earlier clients")
+            .with_value(client.name.clone()),
+    ];
+    fields.extend(client_form::fields(&client));
+    fields.extend([
+        Field::choice("Billing", BILLING_OPTIONS).with_choice(billing),
+        Field::text("Rate / hour", "hourly only, in the currency above").with_value(rate),
+    ]);
+    Form::new(title, fields)
 }
 
 /// Fill the project form's client fields in from `client`, billed before
 pub(super) fn fill_client(form: &mut Form, client: &Client) {
-    use project_field::{ADDRESS_1, ADDRESS_2, CLIENT, COUNTRY, CURRENCY, GSTIN, REGION, STATE};
-
-    let (region, state, country) = match client.region() {
-        ClientRegion::India { state } => (0, state.as_ref().map(|s| s.as_str()), None),
-        ClientRegion::Abroad { country } => (ABROAD, None, Some(country.as_str())),
-    };
-    let address = |line: usize| client.address().get(line).map_or("", String::as_str);
-    form.set_value(CLIENT, client.name());
-    form.set_value(GSTIN, client.gstin().map_or("", |g| g.as_str()));
-    form.set_choice(REGION, region);
-    form.set_value(STATE, state.unwrap_or_default());
-    form.set_value(COUNTRY, country.unwrap_or_default());
-    // The form has two address lines; any further ones join the second
-    form.set_value(ADDRESS_1, address(0));
-    let rest = client.address().get(1..).unwrap_or_default().join(", ");
-    form.set_value(ADDRESS_2, rest);
-    form.set_choice(CURRENCY, client.currency().index());
+    form.set_value(project_field::CLIENT, client.name());
+    client_form::fill(form, project_field::CLIENT_DETAILS, &client.details());
 }
 
 /// A client's row in the earlier-clients picker: the name, and their GSTIN or where they are
@@ -249,46 +216,17 @@ pub(super) fn client_item(client: &Client) -> ListItem {
     ListItem::new(client.name(), place)
 }
 
-/// Name the state a typed GST state code stands for
-fn describe_state(input: &str) -> String {
-    state_name(input.trim()).map_or_else(|| "not a GST state code".to_owned(), str::to_owned)
-}
-
 fn project_draft(form: &Form) -> Result<ProjectDraft, String> {
-    use project_field::{
-        ADDRESS_1, ADDRESS_2, BILLING, CLIENT, COUNTRY, CURRENCY, GSTIN, NAME, RATE, REGION, STATE,
-    };
+    use project_field::{BILLING, CLIENT, CLIENT_DETAILS, NAME, RATE};
 
     let billing = if form.choice(BILLING) == HOURLY {
         Billing::hourly(parse::money(form.value(RATE))?).map_err(fail)?
     } else {
         Billing::Fixed
     };
-    let region = if form.choice(REGION) == ABROAD {
-        ClientRegion::Abroad {
-            country: form.value(COUNTRY).trim().to_owned(),
-        }
-    } else {
-        let state = parse::optional(form.value(STATE))
-            .map(|code| StateCode::parse(&code))
-            .transpose()
-            .map_err(fail)?;
-        ClientRegion::India { state }
-    };
-    // A GSTIN on a client abroad is refused by the domain rather than silently dropped
-    let gstin = parse::optional(form.value(GSTIN)).map(|g| g.to_uppercase());
     Ok(ProjectDraft {
         name: form.value(NAME).trim().to_owned(),
-        client: ClientDetails {
-            name: form.value(CLIENT).trim().to_owned(),
-            gstin,
-            address: vec![
-                form.value(ADDRESS_1).to_owned(),
-                form.value(ADDRESS_2).to_owned(),
-            ],
-            region,
-            currency: Currency::from_index(form.choice(CURRENCY)),
-        },
+        client: client_form::read(form, CLIENT_DETAILS, form.value(CLIENT))?,
         billing,
     })
 }
