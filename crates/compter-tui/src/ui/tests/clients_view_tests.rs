@@ -212,3 +212,114 @@ fn esc_on_the_question_goes_back_to_the_form_and_saves_nothing() {
     let opened = screen(&app, W, H);
     assert!(opened.contains("Plot 7, MIDC, Pune 411019"), "{opened}");
 }
+
+/// The demo's Acme opened and renamed `name`, the form cleared first
+fn rename_acme(app: &mut crate::app::App, name: &str) {
+    app.handle_key(Key::Char('2'));
+    app.handle_key(Key::Enter);
+    app.handle_key(Key::Char('r'));
+    app.handle_key(Key::Ctrl('u'));
+    type_keys(app, name);
+    app.handle_key(Key::Enter);
+}
+
+#[test]
+fn renaming_a_client_keeps_the_old_name_as_an_alias() {
+    let store = demo::store().unwrap();
+    let mut app = clients_app(&store);
+    rename_acme(&mut app, "Acme Private Limited");
+    let asked = screen(&app, W, H);
+    assert!(asked.contains("Website Revamp"), "{asked}");
+
+    app.handle_key(Key::Char('y'));
+    let renamed = screen(&app, W, H);
+    assert!(renamed.contains("Acme Private Limited"), "{renamed}");
+    assert!(renamed.contains("Also known as Acme Pvt Ltd"), "{renamed}");
+    assert!(renamed.contains("Invoices (2)"), "{renamed}");
+    let projects = ProjectService::new(store.repository());
+    let website = projects.find_by_name("Website Revamp").unwrap();
+    assert_eq!(
+        store.repository().load(website).unwrap().client_name(),
+        "Acme Private Limited"
+    );
+
+    // The list finds them by the old name too
+    app.handle_key(Key::Esc);
+    type_keys(&mut app, "/pvt ltd\n");
+    let found = screen(&app, W, H);
+    assert!(found.contains("Acme Private Limited"), "{found}");
+}
+
+#[test]
+fn a_name_another_client_has_keeps_the_rename_form_open() {
+    let store = demo::store().unwrap();
+    let mut app = clients_app(&store);
+    rename_acme(&mut app, "globex labs");
+
+    let form = screen(&app, W, H);
+    assert!(form.contains("Rename client"), "{form}");
+    assert!(form.contains("already goes by that name"), "{form}");
+}
+
+#[test]
+fn merging_a_duplicate_asks_and_opens_the_client_kept() {
+    let store = demo::store().unwrap();
+    let mut projects = ProjectService::new(store.repository());
+    projects
+        .create(compter_core::services::ProjectDraft {
+            name: "Brochure".to_owned(),
+            client: compter_core::domain::ClientDetails::named("Acme", None),
+            billing: compter_core::domain::Billing::Fixed,
+        })
+        .unwrap();
+    let mut app = clients_app(&store);
+    app.handle_key(Key::Char('2'));
+    // "Acme" sorts first
+    app.handle_key(Key::Enter);
+    app.handle_key(Key::Char('m'));
+    let picker = screen(&app, W, H);
+    assert!(picker.contains("Merge into"), "{picker}");
+    assert!(picker.contains("Acme Pvt Ltd"), "{picker}");
+
+    type_keys(&mut app, "pvt");
+    app.handle_key(Key::Enter);
+    let asked = screen(&app, W, H);
+    assert!(asked.contains("Brochure"), "{asked}");
+
+    app.handle_key(Key::Char('y'));
+    let merged = screen(&app, W, H);
+    assert!(merged.contains("Projects (2)"), "{merged}");
+    assert!(merged.contains("Also known as Acme"), "{merged}");
+    let brochure = projects.find_by_name("Brochure").unwrap();
+    assert_eq!(
+        store.repository().load(brochure).unwrap().client_name(),
+        "Acme Pvt Ltd"
+    );
+
+    app.handle_key(Key::Esc);
+    let list = screen(&app, W, H);
+    assert!(!list.contains("Acme  "), "{list}");
+}
+
+#[test]
+fn a_merge_across_gstins_is_refused_and_the_picker_stays() {
+    let store = demo::store().unwrap();
+    let mut app = clients_app(&store);
+    app.handle_key(Key::Char('2'));
+    app.handle_key(Key::Enter);
+    app.handle_key(Key::Char('m'));
+    type_keys(&mut app, "umbrella");
+    app.handle_key(Key::Enter);
+
+    let refused = screen(&app, W, H);
+    assert!(refused.contains("different GSTIN"), "{refused}");
+    assert!(refused.contains("Merge into"), "{refused}");
+    app.handle_key(Key::Esc);
+    assert_eq!(
+        compter_core::services::ClientService::new(store.repository())
+            .list()
+            .unwrap()
+            .len(),
+        4
+    );
+}

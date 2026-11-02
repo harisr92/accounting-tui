@@ -1,20 +1,22 @@
 //! Clients tab: every saved client with what they still owe; open one to see their projects
-//! and invoices, and to correct their details
+//! and invoices, and to correct, rename or merge them
+
+mod changes;
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Row, Table};
 
+use self::changes::{Merging, Pending};
 use crate::ui::filter::Filter;
-use crate::ui::form::{Confirm, Form};
+use crate::ui::form::{Form, ListPicker};
 use crate::ui::key::Key;
 use crate::ui::selection::{Nav, Selection};
 use crate::ui::theme::Theme;
 use crate::ui::view::{Action, KeyHint, Notice, View};
-use crate::ui::views::client_form;
 use crate::ui::widgets::{header, money_in, panel, status_span};
-use compter_core::domain::{ClientDetails, ClientId};
+use compter_core::domain::ClientId;
 use compter_core::services::{ClientAccount, ClientService, ClientSummary, Owed, ServiceError};
 use compter_core::storage::{ClientRepository, InvoiceRepository, ProjectRepository};
 
@@ -29,6 +31,8 @@ const ACCOUNT_HINTS: &[KeyHint] = &[
     KeyHint::new("j/k", "move"),
     KeyHint::new("Tab", "projects/invoices"),
     KeyHint::new("e", "edit client"),
+    KeyHint::new("r", "rename"),
+    KeyHint::new("m", "merge into…"),
     KeyHint::new("Esc", "back to clients"),
 ];
 
@@ -37,13 +41,6 @@ const NONE: &str = "—";
 
 const NOT_OPEN: &str = "No client is open";
 
-/// Asking whether the open projects take the corrected details too
-const PENDING_HINTS: &[KeyHint] = &[
-    KeyHint::new("y", "update projects too"),
-    KeyHint::new("n", "client only"),
-    KeyHint::new("Esc", "back to the form"),
-];
-
 /// A client in the list, with the text the search looks through
 struct Listed {
     summary: ClientSummary,
@@ -51,6 +48,8 @@ struct Listed {
     place: String,
     /// What they owe, `₹35,400.00 · €250.00`; empty when nothing is due
     owed: String,
+    /// Earlier names, joined, so a search finds the client by them
+    aliases: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,14 +90,6 @@ impl Opened {
     }
 }
 
-/// Corrected details waiting on whether the client's open projects take them too, with the
-/// form they came from, which `Esc` or a refused save goes back to
-struct Pending {
-    confirm: Confirm,
-    details: ClientDetails,
-    form: Form,
-}
-
 pub struct ClientsView<R> {
     service: ClientService<R>,
     clients: Vec<Listed>,
@@ -110,6 +101,8 @@ pub struct ClientsView<R> {
     search: Option<Form>,
     /// Correcting the opened client's details
     editing: Option<Form>,
+    renaming: Option<Form>,
+    merging: Option<Merging>,
     pending: Option<Pending>,
 }
 
@@ -124,6 +117,8 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientsView<R>
             opened: None,
             search: None,
             editing: None,
+            renaming: None,
+            merging: None,
             pending: None,
         };
         view.reload()?;
@@ -147,6 +142,7 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientsView<R>
             .map(|summary| Listed {
                 place: summary.client.place().unwrap_or_default(),
                 owed: owed_text(&summary.owed),
+                aliases: summary.client.aliases().join(", "),
                 summary,
             })
             .collect();
@@ -155,9 +151,9 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientsView<R>
     }
 
     fn update_visible(&mut self) {
-        self.visible = self
-            .filter
-            .positions(&self.clients, |c| [c.summary.client.name(), &c.place]);
+        self.visible = self.filter.positions(&self.clients, |c| {
+            [c.summary.client.name(), &c.place, &c.aliases]
+        });
         self.selection.clamp(self.visible.len());
     }
 
@@ -174,87 +170,6 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientsView<R>
                 Action::Handled
             }
             Err(error) => Action::Notify(Notice::error(error.to_string())),
-        }
-    }
-
-    /// The opened client's details in a form; the name stays, so it is the form's subject
-    fn start_edit(&mut self) -> Action {
-        let Some(opened) = &self.opened else {
-            return Action::Ignored;
-        };
-        let fields = client_form::fields(&opened.account.client.details());
-        self.editing = Some(Form::new("Edit client", fields));
-        Action::Notify(Notice::info(format!(
-            "Editing {}; issued invoices keep the details they were printed with",
-            opened.account.client.name()
-        )))
-    }
-
-    /// Check the corrected details, then ask about the open projects that would change, or
-    /// save straight away when there are none
-    fn submit_edit(&mut self, form: &Form) -> Result<Notice, String> {
-        let client = &self.opened.as_ref().ok_or(NOT_OPEN)?.account.client;
-        let (id, details) = (client.id(), client_form::read(form, 0, client.name())?);
-        let stale = self
-            .service
-            .projects_to_update(id, &details)
-            .map_err(|e| e.to_string())?;
-        if stale.is_empty() {
-            return self.save_edit(details, false);
-        }
-        let names: Vec<_> = stale.iter().map(|p| p.name()).collect();
-        let message = format!(
-            "Update {} open project(s) too: {}? n saves the client only. {}",
-            stale.len(),
-            names.join(", "),
-            "Issued invoices never change."
-        );
-        self.pending = Some(Pending {
-            confirm: Confirm::new(message),
-            details,
-            form: form.clone(),
-        });
-        Ok(Notice::info(
-            "Choose whether their open projects change too",
-        ))
-    }
-
-    fn save_edit(&mut self, details: ClientDetails, with_projects: bool) -> Result<Notice, String> {
-        let opened = self.opened.as_mut().ok_or(NOT_OPEN)?;
-        let account = self
-            .service
-            .update(opened.account.client.id(), details, with_projects)
-            .map_err(|e| e.to_string())?;
-        opened.replace(account);
-        self.reload_list().map_err(|e| e.to_string())?;
-        Ok(Notice::success(if with_projects {
-            "Client and their open projects saved"
-        } else {
-            "Client saved"
-        }))
-    }
-
-    /// `y` or `n` saves; `Esc` goes back to the form, as does a refused save, with the error
-    fn answer_pending(&mut self, pending: Pending, key: Key) -> Action {
-        let with_projects = match key {
-            Key::Esc => {
-                self.editing = Some(pending.form);
-                return Action::Handled;
-            }
-            key => Confirm::answer(key),
-        };
-        let Some(with_projects) = with_projects else {
-            self.pending = Some(pending);
-            return Action::Handled;
-        };
-        match self.save_edit(pending.details, with_projects) {
-            Ok(notice) => Action::Notify(notice),
-            Err(error) => {
-                let mut form = pending.form;
-                form.set_error(error);
-                self.editing = Some(form);
-                Action::Handled
-            }
         }
     }
 
@@ -380,7 +295,12 @@ impl Opened {
         // Room for every project up to ten, then the invoices take the rest
         let project_rows = u16::try_from(account.projects.len().clamp(1, 10)).unwrap_or(10);
         let [summary_area, projects_area, invoices_area] = Layout::vertical([
-            Constraint::Length(5),
+            // Three lines, a fourth for earlier names, in a border
+            Constraint::Length(if account.client.aliases().is_empty() {
+                5
+            } else {
+                6
+            }),
             Constraint::Length(project_rows + 3),
             Constraint::Min(4),
         ])
@@ -394,7 +314,7 @@ impl Opened {
         let client = &self.account.client;
         let block = panel(client.name(), false, theme);
         let address = client.address().join(", ");
-        let lines = vec![
+        let mut lines = vec![
             Line::from(vec![
                 Span::styled("GSTIN / place ", theme.dim()),
                 Span::raw(if self.place.is_empty() {
@@ -418,6 +338,12 @@ impl Opened {
                     .collect::<Vec<_>>(),
             ),
         ];
+        if !client.aliases().is_empty() {
+            lines.push(Line::from(vec![
+                Span::styled("Also known as ", theme.dim()),
+                Span::raw(client.aliases().join(", ")),
+            ]));
+        }
         frame.render_widget(Paragraph::new(lines).block(block), area);
     }
 
@@ -523,8 +449,12 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> View for Clien
             Some(opened) => opened.render(frame, area, theme),
             None => self.render_list(frame, area, theme),
         }
-        if let Some(form) = self.search.as_ref().or(self.editing.as_ref()) {
+        let form = self.search.as_ref().or(self.editing.as_ref());
+        if let Some(form) = form.or(self.renaming.as_ref()) {
             form.render(frame, theme);
+        }
+        if let Some(merging) = &self.merging {
+            merging.picker.render(frame, theme);
         }
         if let Some(pending) = &self.pending {
             pending.confirm.render(frame, theme);
@@ -542,6 +472,14 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> View for Clien
             self.editing = form;
             return action;
         }
+        if let Some(form) = self.renaming.take() {
+            let (form, action) = form.step(key, |form| self.submit_rename(form));
+            self.renaming = form;
+            return action;
+        }
+        if let Some(merging) = self.merging.take() {
+            return self.step_merge(merging, key);
+        }
         if let Some(pending) = self.pending.take() {
             return self.answer_pending(pending, key);
         }
@@ -551,15 +489,19 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> View for Clien
                 Action::Handled
             }
             Some(_) if key == Key::Char('e') => self.start_edit(),
+            Some(_) if key == Key::Char('r') => self.start_rename(),
+            Some(_) if key == Key::Char('m') => self.start_merge(),
             Some(opened) => opened.handle_key(key),
             None => self.handle_list(key),
         }
     }
 
     fn key_hints(&self) -> &'static [KeyHint] {
-        if self.pending.is_some() {
-            PENDING_HINTS
-        } else if self.search.is_some() || self.editing.is_some() {
+        if let Some(pending) = &self.pending {
+            pending.hints()
+        } else if self.merging.is_some() {
+            ListPicker::HINTS
+        } else if self.search.is_some() || self.editing.is_some() || self.renaming.is_some() {
             Form::HINTS
         } else if self.opened.is_some() {
             ACCOUNT_HINTS
