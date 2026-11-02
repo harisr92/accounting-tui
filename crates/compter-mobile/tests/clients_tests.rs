@@ -100,3 +100,35 @@ fn an_opened_client_lists_their_projects_and_invoices() {
     let error = app.client("not an id".to_owned()).unwrap_err();
     assert_eq!(error.field.as_deref(), Some("client_id"));
 }
+
+#[test]
+fn a_corrected_client_offers_their_open_projects_and_keeps_their_invoices() {
+    let (_scratch, mut app) = demo();
+    let acme = app.client(app.client_list().unwrap().remove(0).id).unwrap();
+    assert_eq!(acme.edit.gstin.as_deref(), Some("27AAPFU0939F2ZU"));
+    let mut input = acme.edit.clone();
+    input.address = vec!["Plot 9, MIDC".to_owned(), "Pune 411019".to_owned()];
+
+    let offered = app
+        .client_projects_to_update(acme.id.clone(), input.clone())
+        .unwrap();
+    assert_eq!(offered, ["Website Revamp"]);
+
+    let saved = app.edit_client(acme.id.clone(), input, true).unwrap();
+    assert_eq!(saved.address, ["Plot 9, MIDC", "Pune 411019"]);
+    assert_eq!(saved.invoices.len(), acme.invoices.len());
+    let website = app.project(saved.projects[0].id.clone()).unwrap();
+    assert_eq!(website.edit.client_address, ["Plot 9, MIDC", "Pune 411019"]);
+}
+
+#[test]
+fn a_bad_correction_names_its_field() {
+    let (_scratch, app) = demo();
+    let acme = app.client(app.client_list().unwrap().remove(0).id).unwrap();
+    let mut input = acme.edit.clone();
+    input.gstin = None;
+    input.state = Some("99".to_owned());
+
+    let error = app.client_projects_to_update(acme.id, input).unwrap_err();
+    assert_eq!(error.field.as_deref(), Some("client_state"));
+}

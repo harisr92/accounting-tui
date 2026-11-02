@@ -4,7 +4,7 @@ use redb::ReadableDatabase;
 use crate::demo;
 use crate::domain::{Billing, Client, ClientDetails, Project, ProjectId, ProjectStatus};
 use crate::storage::tables::{PROJECT_SUMMARIES, PROJECTS};
-use crate::storage::{ClientRepository, ProjectRepository, StorageError, Store};
+use crate::storage::{ClientRecord, ClientRepository, ProjectRepository, StorageError, Store};
 
 fn store_with_samples() -> (Store, Vec<Project>) {
     let store = Store::in_memory().unwrap();
@@ -184,4 +184,28 @@ fn saving_a_client_again_replaces_its_record() {
     repo.save_with_client(&project, &client).unwrap();
 
     assert_eq!(repo.clients().unwrap(), [client]);
+}
+
+#[test]
+fn a_client_is_saved_with_the_projects_taking_their_details() {
+    let store = Store::in_memory().unwrap();
+    let mut repo = store.repository();
+    let mut project = Project::new("Site", "Acme", None, Billing::Fixed).unwrap();
+    let mut client = Client::new(project.client_details()).unwrap();
+    repo.save_with_client(&project, &client).unwrap();
+
+    let corrected = ClientDetails {
+        address: vec!["Pune".to_owned()],
+        ..ClientDetails::named("Acme", None)
+    };
+    client.update(corrected.clone()).unwrap();
+    project.adopt_client(corrected).unwrap();
+    repo.save_client(&ClientRecord {
+        client: &client,
+        projects: std::slice::from_ref(&project),
+    })
+    .unwrap();
+
+    assert_eq!(repo.clients().unwrap(), [client]);
+    assert_eq!(repo.load(project.id()).unwrap(), project);
 }

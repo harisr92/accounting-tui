@@ -67,6 +67,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  ClientInput dco_decode_box_autoadd_client_input(dynamic raw);
+
+  @protected
   CreditInput dco_decode_box_autoadd_credit_input(dynamic raw);
 
   @protected
@@ -95,6 +98,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ClientDetail dco_decode_client_detail(dynamic raw);
+
+  @protected
+  ClientInput dco_decode_client_input(dynamic raw);
 
   @protected
   ClientRow dco_decode_client_row(dynamic raw);
@@ -322,6 +328,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  ClientInput sse_decode_box_autoadd_client_input(SseDeserializer deserializer);
+
+  @protected
   CreditInput sse_decode_box_autoadd_credit_input(SseDeserializer deserializer);
 
   @protected
@@ -360,6 +369,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ClientDetail sse_decode_client_detail(SseDeserializer deserializer);
+
+  @protected
+  ClientInput sse_decode_client_input(SseDeserializer deserializer);
 
   @protected
   ClientRow sse_decode_client_row(SseDeserializer deserializer);
@@ -609,6 +621,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_client_input(
+    ClientInput self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_credit_input(
     CreditInput self,
     SseSerializer serializer,
@@ -664,6 +682,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_client_detail(ClientDetail self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_client_input(ClientInput self, SseSerializer serializer);
 
   @protected
   void sse_encode_client_row(ClientRow self, SseSerializer serializer);

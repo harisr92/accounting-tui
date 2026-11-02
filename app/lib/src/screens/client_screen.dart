@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../compter.dart';
+import '../forms/client_form.dart';
 import '../router.dart';
 import '../rust/api/clients.dart';
 import '../ui/figures.dart';
@@ -14,7 +15,8 @@ import '../ui/theme.dart';
 import 'clients_screen.dart';
 
 /// One client: what they owe, their address, their projects and every invoice issued to them.
-/// Tapping a project or an invoice opens it. Read-only.
+/// Tapping a project or an invoice opens it. The edit button corrects the client's details,
+/// and their open projects' copies if asked; issued invoices never change.
 class ClientScreen extends ConsumerWidget {
   const ClientScreen({super.key, required this.id});
 
@@ -26,7 +28,27 @@ class ClientScreen extends ConsumerWidget {
     return LargeTitleScope(
       child: Scaffold(
         extendBodyBehindAppBar: true,
-        appBar: TitleBar(title: client.value?.name ?? 'Client'),
+        appBar: TitleBar(
+          title: client.value?.name ?? 'Client',
+          actions: [
+            if (client.value case final detail?)
+              IconButton(
+                tooltip: 'Edit client',
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () async {
+                  final saved = await clientForm(
+                    context,
+                    ref.read(compterProvider),
+                    detail,
+                  );
+                  if (saved == null) return;
+                  // Reloads this client and the list; projects may have taken the details
+                  ref.invalidate(projectsProvider);
+                  ref.invalidate(projectProvider);
+                },
+              ),
+          ],
+        ),
         body: client.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => Center(child: Text('$error')),

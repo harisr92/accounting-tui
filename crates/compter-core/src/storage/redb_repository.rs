@@ -12,8 +12,9 @@ use super::tables::{
     SETTINGS, TRANSACTIONS,
 };
 use super::{
-    ClientRepository, CreditRecord, ExpenseRecord, ExpenseRepository, InvoiceRepository,
-    IssueRecord, PaymentRecord, ProjectRepository, SettingsRepository, StorageError,
+    ClientRecord, ClientRepository, CreditRecord, ExpenseRecord, ExpenseRepository,
+    InvoiceRepository, IssueRecord, PaymentRecord, ProjectRepository, SettingsRepository,
+    StorageError,
 };
 use crate::domain::{
     Appearance, BusinessProfile, Client, CreditNote, Expense, ExpenseId, FiscalYear, Invoice,
@@ -170,6 +171,16 @@ impl ClientRepository for RedbRepository {
         }
         clients.sort_by_cached_key(|c: &Client| (c.name().to_lowercase(), c.id()));
         Ok(clients)
+    }
+
+    fn save_client(&mut self, record: &ClientRecord) -> Result<(), StorageError> {
+        let txn = self.db.begin_write()?;
+        put_client(&txn, record.client)?;
+        for project in record.projects {
+            put_project(&txn, project)?;
+        }
+        txn.commit()?;
+        Ok(())
     }
 }
 

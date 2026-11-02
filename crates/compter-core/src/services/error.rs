@@ -34,6 +34,16 @@ pub enum ServiceError {
     NoSuchClient(crate::domain::ClientId),
     #[error("more than one project is named {0:?}")]
     AmbiguousProject(String),
+    #[error(
+        "a client's name can't be changed here: their projects and invoices are filed under it"
+    )]
+    ClientNameFixed,
+    #[error("project {project}: {source}")]
+    ProjectRefusedClient {
+        project: String,
+        #[source]
+        source: Box<DomainError>,
+    },
     #[error("PDFs are not saved in demo mode")]
     NoPdfFolder,
     #[error("GST input credit can only be claimed once your GSTIN is in Settings")]

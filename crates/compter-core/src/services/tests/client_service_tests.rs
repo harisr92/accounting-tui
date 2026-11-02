@@ -2,10 +2,15 @@ use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 
 use crate::demo;
-use crate::domain::{Billing, ClientId, Currency, ExchangeRate};
+use crate::domain::{
+    Billing, ClientDetails, ClientId, ClientRegion, Currency, DomainError, ExchangeRate, ProjectId,
+};
 use crate::services::{
     ClientService, ClientSummary, InvoiceService, MilestoneDraft, Owed, ProjectDraft,
     ProjectService, ServiceError,
+};
+use crate::storage::{
+    ClientRepository, InvoiceRepository, ProjectRepository, RedbRepository, Store,
 };
 
 fn rupees(amount: i64) -> Vec<Owed> {
@@ -135,4 +140,177 @@ fn an_unknown_client_is_refused() {
         .account(ClientId::generate())
         .unwrap_err();
     assert!(matches!(error, ServiceError::NoSuchClient(_)));
+}
+
+/// The demo's Acme with a corrected address and a GSTIN from the same state
+fn acme_corrected(service: &ClientService<RedbRepository>) -> (ClientId, ClientDetails) {
+    let acme = named(&service.list().unwrap(), "Acme Pvt Ltd")
+        .client
+        .clone();
+    let details = ClientDetails {
+        address: vec!["Plot 9, MIDC".to_owned(), "Pune 411019".to_owned()],
+        gstin: Some("27AAPFU0939F1ZV".to_owned()),
+        ..acme.details()
+    };
+    (acme.id(), details)
+}
+
+/// A second, finished and archived project for Acme: its only milestone invoiced
+fn finished_acme_project(store: &Store, acme: ClientDetails) -> ProjectId {
+    let mut projects = ProjectService::new(store.repository());
+    let project = projects
+        .create(ProjectDraft {
+            name: "Logo".to_owned(),
+            client: acme,
+            billing: Billing::Fixed,
+        })
+        .unwrap();
+    let project = projects
+        .add_milestone(
+            project.id(),
+            MilestoneDraft {
+                name: "Logo".to_owned(),
+                due_date: NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
+                amount: Some(BigDecimal::from(10_000)),
+            },
+        )
+        .unwrap();
+    let milestone = project.milestones()[0].id();
+    InvoiceService::new(store.repository(), None)
+        .issue(
+            project.id(),
+            &[milestone],
+            NaiveDate::from_ymd_opt(2026, 10, 2).unwrap(),
+            None,
+            None,
+        )
+        .unwrap();
+    projects.set_archived(project.id(), true).unwrap();
+    project.id()
+}
+
+#[test]
+fn a_corrected_client_offers_and_updates_only_their_open_projects() {
+    let store = demo::store().unwrap();
+    let mut service = ClientService::new(store.repository());
+    let (id, corrected) = acme_corrected(&service);
+    let logo = finished_acme_project(&store, service.account(id).unwrap().client.details());
+    let invoices_before = store.repository().list_invoices().unwrap();
+
+    let offered: Vec<_> = service
+        .projects_to_update(id, &corrected)
+        .unwrap()
+        .iter()
+        .map(|p| p.name().to_owned())
+        .collect();
+    assert_eq!(offered, ["Website Revamp"]);
+
+    let account = service.update(id, corrected.clone(), true).unwrap();
+    assert!(account.client.details().same_as(&corrected));
+    let repo = store.repository();
+    let website = account
+        .projects
+        .iter()
+        .find(|p| p.name() == "Website Revamp")
+        .unwrap();
+    assert!(
+        repo.load(website.id())
+            .unwrap()
+            .client_details()
+            .same_as(&corrected)
+    );
+    // The archived project and every issued invoice keep what they were billed with
+    assert_eq!(
+        repo.load(logo).unwrap().client_address(),
+        ["Plot 7, MIDC", "Pune 411019"]
+    );
+    assert_eq!(repo.list_invoices().unwrap(), invoices_before);
+    assert!(
+        service
+            .projects_to_update(id, &corrected)
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_corrected_client_can_leave_their_projects_as_they_are() {
+    let store = demo::store().unwrap();
+    let mut service = ClientService::new(store.repository());
+    let (id, corrected) = acme_corrected(&service);
+
+    let account = service.update(id, corrected.clone(), false).unwrap();
+    assert!(account.client.details().same_as(&corrected));
+    let website = store.repository().load(account.projects[0].id()).unwrap();
+    assert_eq!(website.client_address(), ["Plot 7, MIDC", "Pune 411019"]);
+    assert_eq!(service.projects_to_update(id, &corrected).unwrap().len(), 1);
+}
+
+#[test]
+fn a_clients_name_cannot_be_changed() {
+    let store = demo::store().unwrap();
+    let mut service = ClientService::new(store.repository());
+    let (id, mut corrected) = acme_corrected(&service);
+    corrected.name = "Acme Private Limited".to_owned();
+
+    let error = service.update(id, corrected, true).unwrap_err();
+    assert!(matches!(error, ServiceError::ClientNameFixed));
+    assert_eq!(
+        service.account(id).unwrap().client.address(),
+        ["Plot 7, MIDC", "Pune 411019"]
+    );
+}
+
+#[test]
+fn a_project_that_refuses_the_correction_saves_nothing() {
+    let store = demo::store().unwrap();
+    let mut service = ClientService::new(store.repository());
+    let initrode = named(&service.list().unwrap(), "Initrode GmbH")
+        .client
+        .clone();
+    // API Audit, finished but not archived, is billed in euros: it can't follow them to India
+    let before = store.repository().clients().unwrap();
+    let moved = ClientDetails {
+        region: ClientRegion::India { state: None },
+        currency: Currency::Inr,
+        ..initrode.details()
+    };
+
+    let error = service
+        .update(initrode.id(), moved.clone(), true)
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        ServiceError::ProjectRefusedClient { ref project, ref source }
+            if project == "API Audit" && matches!(**source, DomainError::ForeignCurrencyInIndia)
+    ));
+    assert_eq!(store.repository().clients().unwrap(), before);
+    // Without the projects, the client alone is corrected
+    service.update(initrode.id(), moved, false).unwrap();
+}
+
+#[test]
+fn an_unchanged_client_is_not_saved_again() {
+    let store = demo::store().unwrap();
+    let mut service = ClientService::new(store.repository());
+    let acme = named(&service.list().unwrap(), "Acme Pvt Ltd")
+        .client
+        .clone();
+    let mut tidied = acme.details();
+    tidied.name = " Acme Pvt Ltd ".to_owned();
+    tidied.address.push(String::new());
+
+    let account = service.update(acme.id(), tidied, true).unwrap();
+    assert_eq!(account.client, acme);
+}
+
+#[test]
+fn a_bad_gstin_is_refused_as_the_clients_not_a_projects() {
+    let store = demo::store().unwrap();
+    let mut service = ClientService::new(store.repository());
+    let (id, mut corrected) = acme_corrected(&service);
+    corrected.gstin = Some("27NOTAGSTIN".to_owned());
+
+    let error = service.update(id, corrected, true).unwrap_err();
+    assert!(matches!(error, ServiceError::Domain(_)), "{error:?}");
 }

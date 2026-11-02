@@ -653,3 +653,39 @@ fn a_discounted_milestone_is_billed_and_credited_net_of_its_discount() {
     assert_eq!(p.milestones()[0].status(), MilestoneStatus::Credited);
     assert_eq!(p.outstanding_amount(), BigDecimal::from(0));
 }
+
+#[test]
+fn adopting_a_client_keeps_the_name_and_the_projects_currency() {
+    let mut p = Project::for_client("Audit", abroad_in(Currency::Usd), Billing::Fixed).unwrap();
+    p.add_milestone("Report", date(), rupees(1000)).unwrap();
+    p.invoice_milestone(0, "INV/26-27/001").unwrap();
+    let corrected = ClientDetails {
+        name: "INITRODE".to_owned(),
+        address: vec!["Hauptstrasse 2".to_owned(), "10115 Berlin".to_owned()],
+        region: ClientRegion::Abroad {
+            country: "Germany".to_owned(),
+        },
+        currency: Currency::Eur,
+        gstin: None,
+    };
+
+    assert!(p.would_adopt(&corrected));
+    p.adopt_client(corrected.clone()).unwrap();
+    assert_eq!(p.client_name(), "Initrode GmbH");
+    assert_eq!(p.currency(), Currency::Usd);
+    assert_eq!(p.client_address(), ["Hauptstrasse 2", "10115 Berlin"]);
+    assert_eq!(p.milestones()[0].status(), MilestoneStatus::Invoiced);
+    assert!(!p.would_adopt(&corrected));
+}
+
+#[test]
+fn a_foreign_currency_project_cannot_adopt_a_client_in_india() {
+    let mut p = Project::for_client("Audit", abroad_in(Currency::Usd), Billing::Fixed).unwrap();
+    let moved = ClientDetails::named("Initrode GmbH", Some(GSTIN));
+    assert!(matches!(
+        p.adopt_client(moved),
+        Err(DomainError::ForeignCurrencyInIndia)
+    ));
+    assert!(p.client_region().is_abroad());
+    assert!(p.client_gstin().is_none());
+}

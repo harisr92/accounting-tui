@@ -22,11 +22,11 @@ use super::expenses::{category, fiscal_year};
 use super::profile::{currency, this_year};
 use super::reports::month_label;
 use super::{
-    ApiError, ClientChoiceRow, ClientDetail, ClientSummaryRow, CreditInput, CreditLineInput,
-    CreditPreviewRow, CreditedRow, DashboardRow, ExpenseInput, ExpenseList, ExpenseRow, ExportRow,
-    InvoiceDetail, InvoiceList, InvoicePreviewRow, InvoiceRow, IssuedRow, MilestoneInput,
-    PaymentInput, ProfileInput, ProfileRow, ProjectDetail, ProjectInput, ProjectRow, ReceivedRow,
-    ReportRow, SentRow, SyncStatusRow, TimeInput,
+    ApiError, ClientChoiceRow, ClientDetail, ClientInput, ClientSummaryRow, CreditInput,
+    CreditLineInput, CreditPreviewRow, CreditedRow, DashboardRow, ExpenseInput, ExpenseList,
+    ExpenseRow, ExportRow, InvoiceDetail, InvoiceList, InvoicePreviewRow, InvoiceRow, IssuedRow,
+    MilestoneInput, PaymentInput, ProfileInput, ProfileRow, ProjectDetail, ProjectInput,
+    ProjectRow, ReceivedRow, ReportRow, SentRow, SyncStatusRow, TimeInput,
 };
 
 /// The open database and the services over it. Dart opens one at start-up and keeps it for the
@@ -150,10 +150,43 @@ impl CompterApp {
 
     /// One client with their projects and invoices
     pub fn client(&self, id: String) -> Result<ClientDetail, ApiError> {
-        let id: ClientId = id
-            .parse()
-            .map_err(|_| ApiError::invalid("client_id", "not a client id"))?;
-        Ok(ClientDetail::from(&self.clients.account(id)?))
+        Ok(ClientDetail::from(&self.clients.account(client_id(&id)?)?))
+    }
+
+    /// The names of the client's open projects that the corrected details in `input` would
+    /// change: asked about before [`edit_client`](Self::edit_client). Details that would be
+    /// refused are refused here.
+    pub fn client_projects_to_update(
+        &self,
+        id: String,
+        input: ClientInput,
+    ) -> Result<Vec<String>, ApiError> {
+        let id = client_id(&id)?;
+        let details = client_details(self.clients.client(id)?.name(), input)?;
+        Ok(self
+            .clients
+            .projects_to_update(id, &details)?
+            .iter()
+            .map(|p| p.name().to_owned())
+            .collect())
+    }
+
+    /// Correct a client's GSTIN, place, address or currency, and with `update_projects` their
+    /// open projects' copies too (each keeps its own currency). The name can't change, and
+    /// issued invoices never do.
+    pub fn edit_client(
+        &mut self,
+        id: String,
+        input: ClientInput,
+        update_projects: bool,
+    ) -> Result<ClientDetail, ApiError> {
+        let id = client_id(&id)?;
+        let details = client_details(self.clients.client(id)?.name(), input)?;
+        Ok(ClientDetail::from(&self.clients.update(
+            id,
+            details,
+            update_projects,
+        )?))
     }
 
     pub fn create_project(&mut self, input: ProjectInput) -> Result<ProjectDetail, ApiError> {
@@ -700,6 +733,11 @@ fn project_id(id: &str) -> Result<ProjectId, ApiError> {
         .map_err(|_| ApiError::invalid("project_id", "not a project id"))
 }
 
+fn client_id(id: &str) -> Result<ClientId, ApiError> {
+    id.parse()
+        .map_err(|_| ApiError::invalid("client_id", "not a client id"))
+}
+
 fn milestone_id(id: &str) -> Result<MilestoneId, ApiError> {
     id.parse()
         .map_err(|_| ApiError::invalid("milestone_id", "not a milestone id"))
@@ -724,11 +762,28 @@ fn project_draft(input: ProjectInput) -> Result<ProjectDraft, ApiError> {
         }
         None => Billing::Fixed,
     };
+    let client = ClientInput {
+        gstin: input.client_gstin,
+        state: input.client_state,
+        country: input.client_country,
+        address: input.client_address,
+        currency: input.currency,
+    };
+    Ok(ProjectDraft {
+        name: input.name.trim().to_owned(),
+        client: client_details(&input.client_name, client)?,
+        billing,
+    })
+}
+
+/// The client called `name` as typed; errors name the project form's fields, which the edit
+/// client form shares
+fn client_details(name: &str, input: ClientInput) -> Result<ClientDetails, ApiError> {
     let optional = |text: &Option<String>| text.as_deref().and_then(input::optional);
-    let region = match optional(&input.client_country) {
+    let region = match optional(&input.country) {
         Some(country) => ClientRegion::Abroad { country },
         None => ClientRegion::India {
-            state: optional(&input.client_state)
+            state: optional(&input.state)
                 .map(|code| StateCode::parse(&code))
                 .transpose()
                 .map_err(|e| ApiError::invalid("client_state", e.to_string()))?,
@@ -739,18 +794,14 @@ fn project_draft(input: ProjectInput) -> Result<ProjectDraft, ApiError> {
             .ok_or_else(|| ApiError::invalid("currency", "choose INR, USD, GBP or EUR"))?,
         None => Currency::Inr,
     };
-    Ok(ProjectDraft {
-        name: input.name.trim().to_owned(),
-        client: ClientDetails {
-            name: input.client_name.trim().to_owned(),
-            // Upper-cased as the terminal does; a GSTIN on a client abroad is refused by the
-            // domain rather than dropped
-            gstin: optional(&input.client_gstin).map(|g| g.to_uppercase()),
-            address: input.client_address,
-            region,
-            currency,
-        },
-        billing,
+    Ok(ClientDetails {
+        name: name.trim().to_owned(),
+        // Upper-cased as the terminal does; a GSTIN on a client abroad is refused by the
+        // domain rather than dropped
+        gstin: optional(&input.gstin).map(|g| g.to_uppercase()),
+        address: input.address,
+        region,
+        currency,
     })
 }
 

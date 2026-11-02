@@ -1,5 +1,5 @@
 //! Clients tab: every saved client with what they still owe; open one to see their projects
-//! and invoices
+//! and invoices, and to correct their details
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -7,13 +7,14 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Row, Table};
 
 use crate::ui::filter::Filter;
-use crate::ui::form::Form;
+use crate::ui::form::{Confirm, Form};
 use crate::ui::key::Key;
 use crate::ui::selection::{Nav, Selection};
 use crate::ui::theme::Theme;
 use crate::ui::view::{Action, KeyHint, Notice, View};
+use crate::ui::views::client_form;
 use crate::ui::widgets::{header, money_in, panel, status_span};
-use compter_core::domain::ClientId;
+use compter_core::domain::{ClientDetails, ClientId};
 use compter_core::services::{ClientAccount, ClientService, ClientSummary, Owed, ServiceError};
 use compter_core::storage::{ClientRepository, InvoiceRepository, ProjectRepository};
 
@@ -27,11 +28,21 @@ const LIST_HINTS: &[KeyHint] = &[
 const ACCOUNT_HINTS: &[KeyHint] = &[
     KeyHint::new("j/k", "move"),
     KeyHint::new("Tab", "projects/invoices"),
+    KeyHint::new("e", "edit client"),
     KeyHint::new("Esc", "back to clients"),
 ];
 
 /// Shown for a client without a GSTIN or a known place, and for one who owes nothing
 const NONE: &str = "—";
+
+const NOT_OPEN: &str = "No client is open";
+
+/// Asking whether the open projects take the corrected details too
+const PENDING_HINTS: &[KeyHint] = &[
+    KeyHint::new("y", "update projects too"),
+    KeyHint::new("n", "client only"),
+    KeyHint::new("Esc", "back to the form"),
+];
 
 /// A client in the list, with the text the search looks through
 struct Listed {
@@ -69,6 +80,23 @@ impl Opened {
             invoices: Selection::default(),
         }
     }
+
+    /// Show `account`, re-read after a change, with the cursors kept where they fit
+    fn replace(&mut self, account: ClientAccount) {
+        self.place = account.client.place().unwrap_or_default();
+        self.owed = owed_text(&account.owed);
+        self.projects.clamp(account.projects.len());
+        self.invoices.clamp(account.invoices.len());
+        self.account = account;
+    }
+}
+
+/// Corrected details waiting on whether the client's open projects take them too, with the
+/// form they came from, which `Esc` or a refused save goes back to
+struct Pending {
+    confirm: Confirm,
+    details: ClientDetails,
+    form: Form,
 }
 
 pub struct ClientsView<R> {
@@ -80,6 +108,9 @@ pub struct ClientsView<R> {
     selection: Selection,
     opened: Option<Opened>,
     search: Option<Form>,
+    /// Correcting the opened client's details
+    editing: Option<Form>,
+    pending: Option<Pending>,
 }
 
 impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientsView<R> {
@@ -92,6 +123,8 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientsView<R>
             selection: Selection::default(),
             opened: None,
             search: None,
+            editing: None,
+            pending: None,
         };
         view.reload()?;
         Ok(view)
@@ -99,6 +132,14 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientsView<R>
 
     /// Re-read the list, and the opened client's account with its cursors kept where they fit
     fn reload(&mut self) -> Result<(), ServiceError> {
+        self.reload_list()?;
+        if let Some(opened) = &mut self.opened {
+            opened.replace(self.service.account(opened.account.client.id())?);
+        }
+        Ok(())
+    }
+
+    fn reload_list(&mut self) -> Result<(), ServiceError> {
         self.clients = self
             .service
             .list()?
@@ -110,13 +151,6 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientsView<R>
             })
             .collect();
         self.update_visible();
-        if let Some(opened) = &mut self.opened {
-            opened.account = self.service.account(opened.account.client.id())?;
-            opened.place = opened.account.client.place().unwrap_or_default();
-            opened.owed = owed_text(&opened.account.owed);
-            opened.projects.clamp(opened.account.projects.len());
-            opened.invoices.clamp(opened.account.invoices.len());
-        }
         Ok(())
     }
 
@@ -140,6 +174,87 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientsView<R>
                 Action::Handled
             }
             Err(error) => Action::Notify(Notice::error(error.to_string())),
+        }
+    }
+
+    /// The opened client's details in a form; the name stays, so it is the form's subject
+    fn start_edit(&mut self) -> Action {
+        let Some(opened) = &self.opened else {
+            return Action::Ignored;
+        };
+        let fields = client_form::fields(&opened.account.client.details());
+        self.editing = Some(Form::new("Edit client", fields));
+        Action::Notify(Notice::info(format!(
+            "Editing {}; issued invoices keep the details they were printed with",
+            opened.account.client.name()
+        )))
+    }
+
+    /// Check the corrected details, then ask about the open projects that would change, or
+    /// save straight away when there are none
+    fn submit_edit(&mut self, form: &Form) -> Result<Notice, String> {
+        let client = &self.opened.as_ref().ok_or(NOT_OPEN)?.account.client;
+        let (id, details) = (client.id(), client_form::read(form, 0, client.name())?);
+        let stale = self
+            .service
+            .projects_to_update(id, &details)
+            .map_err(|e| e.to_string())?;
+        if stale.is_empty() {
+            return self.save_edit(details, false);
+        }
+        let names: Vec<_> = stale.iter().map(|p| p.name()).collect();
+        let message = format!(
+            "Update {} open project(s) too: {}? n saves the client only. {}",
+            stale.len(),
+            names.join(", "),
+            "Issued invoices never change."
+        );
+        self.pending = Some(Pending {
+            confirm: Confirm::new(message),
+            details,
+            form: form.clone(),
+        });
+        Ok(Notice::info(
+            "Choose whether their open projects change too",
+        ))
+    }
+
+    fn save_edit(&mut self, details: ClientDetails, with_projects: bool) -> Result<Notice, String> {
+        let opened = self.opened.as_mut().ok_or(NOT_OPEN)?;
+        let account = self
+            .service
+            .update(opened.account.client.id(), details, with_projects)
+            .map_err(|e| e.to_string())?;
+        opened.replace(account);
+        self.reload_list().map_err(|e| e.to_string())?;
+        Ok(Notice::success(if with_projects {
+            "Client and their open projects saved"
+        } else {
+            "Client saved"
+        }))
+    }
+
+    /// `y` or `n` saves; `Esc` goes back to the form, as does a refused save, with the error
+    fn answer_pending(&mut self, pending: Pending, key: Key) -> Action {
+        let with_projects = match key {
+            Key::Esc => {
+                self.editing = Some(pending.form);
+                return Action::Handled;
+            }
+            key => Confirm::answer(key),
+        };
+        let Some(with_projects) = with_projects else {
+            self.pending = Some(pending);
+            return Action::Handled;
+        };
+        match self.save_edit(pending.details, with_projects) {
+            Ok(notice) => Action::Notify(notice),
+            Err(error) => {
+                let mut form = pending.form;
+                form.set_error(error);
+                self.editing = Some(form);
+                Action::Handled
+            }
         }
     }
 
@@ -408,8 +523,11 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> View for Clien
             Some(opened) => opened.render(frame, area, theme),
             None => self.render_list(frame, area, theme),
         }
-        if let Some(form) = &self.search {
+        if let Some(form) = self.search.as_ref().or(self.editing.as_ref()) {
             form.render(frame, theme);
+        }
+        if let Some(pending) = &self.pending {
+            pending.confirm.render(frame, theme);
         }
     }
 
@@ -419,21 +537,34 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> View for Clien
             self.search = form;
             return action;
         }
+        if let Some(form) = self.editing.take() {
+            let (form, action) = form.step(key, |form| self.submit_edit(form));
+            self.editing = form;
+            return action;
+        }
+        if let Some(pending) = self.pending.take() {
+            return self.answer_pending(pending, key);
+        }
         match &mut self.opened {
             Some(_) if key == Key::Esc => {
                 self.opened = None;
                 Action::Handled
             }
+            Some(_) if key == Key::Char('e') => self.start_edit(),
             Some(opened) => opened.handle_key(key),
             None => self.handle_list(key),
         }
     }
 
     fn key_hints(&self) -> &'static [KeyHint] {
-        match (&self.search, &self.opened) {
-            (Some(_), _) => Form::HINTS,
-            (None, Some(_)) => ACCOUNT_HINTS,
-            (None, None) => LIST_HINTS,
+        if self.pending.is_some() {
+            PENDING_HINTS
+        } else if self.search.is_some() || self.editing.is_some() {
+            Form::HINTS
+        } else if self.opened.is_some() {
+            ACCOUNT_HINTS
+        } else {
+            LIST_HINTS
         }
     }
 
