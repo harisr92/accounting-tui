@@ -1,3 +1,4 @@
+mod client_service_tests;
 mod dashboard_service_tests;
 mod expense_service_tests;
 mod fixtures;

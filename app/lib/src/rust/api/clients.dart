@@ -4,10 +4,12 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'invoicing.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'rows.dart';
 
-// These functions are ignored because they are not marked as `pub`: `location`, `region_fields`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `from`
+// These functions are ignored because they are not marked as `pub`: `owed`, `region_fields`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`
 
 /// Every GST state, in code order: the choices for a client's state
 List<StateRow> gstStates() => RustLib.instance.api.crateApiClientsGstStates();
@@ -70,6 +72,102 @@ class ClientChoiceRow {
           country == other.country &&
           address == other.address &&
           currency == other.currency;
+}
+
+/// An opened client: their details, projects and invoices
+class ClientDetail {
+  final String id;
+  final String name;
+
+  /// As in [`ClientSummaryRow::place`]
+  final String? place;
+
+  /// Address lines, top to bottom
+  final List<String> address;
+
+  /// As in [`ClientSummaryRow::owed`]
+  final String? owed;
+
+  /// Sorted by name, archived ones included
+  final List<ProjectRow> projects;
+
+  /// Newest first
+  final List<InvoiceRow> invoices;
+
+  const ClientDetail({
+    required this.id,
+    required this.name,
+    this.place,
+    required this.address,
+    this.owed,
+    required this.projects,
+    required this.invoices,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      place.hashCode ^
+      address.hashCode ^
+      owed.hashCode ^
+      projects.hashCode ^
+      invoices.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ClientDetail &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          place == other.place &&
+          address == other.address &&
+          owed == other.owed &&
+          projects == other.projects &&
+          invoices == other.invoices;
+}
+
+/// A line of the Clients screen
+class ClientSummaryRow {
+  final String id;
+  final String name;
+
+  /// The GSTIN, else `Karnataka (29)` or `Germany`; `None` for a client known by name only
+  final String? place;
+
+  /// Projects for the client, archived ones included
+  final int projects;
+
+  /// `₹35,400.00`, or `₹1,000.00 · €250.00` across currencies; `None` when nothing is due
+  final String? owed;
+
+  const ClientSummaryRow({
+    required this.id,
+    required this.name,
+    this.place,
+    required this.projects,
+    this.owed,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      place.hashCode ^
+      projects.hashCode ^
+      owed.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ClientSummaryRow &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          place == other.place &&
+          projects == other.projects &&
+          owed == other.owed;
 }
 
 /// A GST state or union territory a client in India can be in

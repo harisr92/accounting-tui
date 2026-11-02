@@ -18,7 +18,7 @@ mod states;
 
 pub use appearance::Appearance;
 pub use billing::{Billing, MAX_ENTRY_MINUTES, TimeEntry, format_duration};
-pub use client::{Client, ClientDetails, ClientId, ClientRegion, same_client};
+pub use client::{Client, ClientDetails, ClientId, ClientRegion, client_key, same_client};
 pub use credit_note::{CREDIT_NOTE_PREFIX, CreditLine, CreditNote, CreditNoteParts};
 pub use currency::{Currency, ExchangeRate};
 pub use discount::Discount;

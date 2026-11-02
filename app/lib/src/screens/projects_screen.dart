@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../compter.dart';
 import '../forms/project_forms.dart';
+import '../router.dart';
 import '../rust/api/rows.dart';
 import '../subscription/subscription_section.dart';
 import '../ui/collapsing_fab.dart';
@@ -37,6 +38,11 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen>
             title: archivedOnly ? 'Archived' : 'Projects',
             hint: 'Name or client',
             actions: [
+              IconButton(
+                tooltip: 'Clients',
+                icon: const Icon(Icons.people_outline),
+                onPressed: () => context.push(clientsPath),
+              ),
               IconButton(
                 tooltip: archivedOnly ? 'Show projects' : 'Show archived',
                 icon: Icon(

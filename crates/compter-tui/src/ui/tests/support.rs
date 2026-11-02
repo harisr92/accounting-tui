@@ -9,10 +9,11 @@ use crate::ui::draw;
 use crate::ui::theme::Theme;
 use crate::ui::view::View;
 use crate::ui::views::{
-    DashboardView, ExpensesView, InvoicesView, ProjectsView, ReportsView, SettingsView,
+    ClientsView, DashboardView, ExpensesView, InvoicesView, ProjectsView, ReportsView, SettingsView,
 };
 use compter_core::services::{
-    DashboardService, ExpenseService, InvoiceService, PreferencesService, ReportService,
+    ClientService, DashboardService, ExpenseService, InvoiceService, PreferencesService,
+    ReportService,
 };
 use compter_core::storage::{DataDir, Store};
 
@@ -20,6 +21,16 @@ use compter_core::storage::{DataDir, Store};
 pub fn projects_app(store: &Store) -> App {
     let view = ProjectsView::new(store.repository(), None).unwrap();
     let views: Vec<Box<dyn View>> = vec![Box::new(view)];
+    App::new(views, Theme::default())
+}
+
+/// Projects (tab 1) and Clients (tab 2) on `store`
+pub fn clients_app(store: &Store) -> App {
+    let repo = store.repository();
+    let views: Vec<Box<dyn View>> = vec![
+        Box::new(ProjectsView::new(repo.clone(), None).unwrap()),
+        Box::new(ClientsView::new(ClientService::new(repo)).unwrap()),
+    ];
     App::new(views, Theme::default())
 }
 

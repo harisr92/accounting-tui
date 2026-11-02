@@ -30,6 +30,8 @@ pub enum ServiceError {
     MissingMilestone(String),
     #[error("no project is named {0:?}")]
     NoSuchProject(String),
+    #[error("client {0} is not in the address book")]
+    NoSuchClient(crate::domain::ClientId),
     #[error("more than one project is named {0:?}")]
     AmbiguousProject(String),
     #[error("PDFs are not saved in demo mode")]

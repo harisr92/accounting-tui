@@ -4,7 +4,7 @@ use compter_core::domain::{
     format_duration,
 };
 
-use super::clients::{location, region_fields};
+use super::clients::region_fields;
 
 /// One line of the project list, from the stored summary (never the full record)
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,7 +84,7 @@ impl From<&Project> for ProjectDetail {
             name: project.name().to_owned(),
             client_name: project.client_name().to_owned(),
             client_gstin: project.client_gstin().map(ToString::to_string),
-            client_location: location(project.client_region()),
+            client_location: project.client_region().location(),
             currency: currency.code().to_owned(),
             billing,
             hourly,

@@ -83,6 +83,8 @@ Needs Rust 1.88+ (the `pdf` feature of `accounting-core`) and a terminal with Un
 | milestones | `i` | invoice a pending milestone: shows the number, total and tax, then asks |
 | milestones | `p` | record a payment, whole or part, for an invoiced milestone |
 
+**Clients tab**: every client you have billed, from the address book the project form picks clients from, with their GSTIN (or state, or country), how many projects they have, and what they still owe in each currency. `/` searches by name, GSTIN or place (`Esc` clears it). `Enter` opens a client: their address, their projects and every invoice issued to them; `Tab` moves between the two lists and `Esc` goes back. Projects and invoices count as a client's when their client name matches, ignoring case. On the phone, the people button on Projects opens the same list; tapping a project or invoice there opens it.
+
 **Invoices tab**: `j`/`k` move, `o` opens the PDF in your viewer (it's regenerated if the file is missing), `p` records a payment, whole or part, `c` issues a credit note (see [Credit notes](#credit-notes)), `O` opens the latest credit note's PDF, and `/` searches by number, client, milestone, kind or status (`Esc` clears it). The list shows each invoice's amount due and status (ISSUED, PART PAID, PAID, CREDITED); below it, the selected invoice's payments and credit notes. The title shows the total still outstanding.
 
 **Dashboard tab**: this financial year's invoiced (net of credit notes), credit notes, received, outstanding, TDS, expenses and books profit (the tiles wrap onto two rows on narrow screens), plus every unpaid invoice and how long it has been waiting (red after 30 days).

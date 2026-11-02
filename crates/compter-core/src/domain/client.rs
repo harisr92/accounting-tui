@@ -32,6 +32,15 @@ impl ClientRegion {
     pub fn is_abroad(&self) -> bool {
         matches!(self, Self::Abroad { .. })
     }
+
+    /// `Karnataka (29)` or `Germany`; `None` for a client in India whose state isn't known
+    pub fn location(&self) -> Option<String> {
+        match self {
+            Self::India { state: Some(code) } => Some(state_label(code.as_str())),
+            Self::India { state: None } => None,
+            Self::Abroad { country } => Some(country.clone()),
+        }
+    }
 }
 
 /// Everything about a client, as entered; validated by [`Client`] and [`Project`](super::Project)
@@ -295,9 +304,23 @@ impl Client {
     pub fn matches(&self, name: &str) -> bool {
         same_client(&self.name, name)
     }
+
+    /// What tells the client apart: their GSTIN, else where they are (`Karnataka (29)`,
+    /// `Germany`); `None` for a client in India known by name only
+    pub fn place(&self) -> Option<String> {
+        self.gstin
+            .as_ref()
+            .map(ToString::to_string)
+            .or_else(|| self.region.location())
+    }
 }
 
 /// Two client names are one client when they differ only in case and surrounding spaces
 pub fn same_client(a: &str, b: &str) -> bool {
-    a.trim().to_lowercase() == b.trim().to_lowercase()
+    client_key(a) == client_key(b)
+}
+
+/// The form of a client name that [`same_client`] compares, for grouping records by client
+pub fn client_key(name: &str) -> String {
+    name.trim().to_lowercase()
 }

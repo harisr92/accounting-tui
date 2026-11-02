@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'screens/client_screen.dart';
+import 'screens/clients_screen.dart';
 import 'screens/expenses_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/invoice_screen.dart';
@@ -20,6 +22,12 @@ String invoicePath(String number) => '/invoices/${Uri.encodeComponent(number)}';
 
 /// Settings, opened from the gear on Home over the tabs
 const settingsPath = '/settings';
+
+/// The Clients list, opened from Projects over the tabs
+const clientsPath = '/clients';
+
+/// Where client [id] opens
+String clientPath(String id) => '$clientsPath/$id';
 
 /// A screen pushed over the tabs. Built as a [MaterialPage] here rather than left to
 /// go_router, which can take the app for a plain WidgetsApp and show it with no transition,
@@ -43,6 +51,19 @@ GoRouter buildRouter({bool welcome = false}) {
         path: settingsPath,
         parentNavigatorKey: root,
         pageBuilder: (context, state) => _detail(state, const SettingsScreen()),
+      ),
+      GoRoute(
+        path: clientsPath,
+        parentNavigatorKey: root,
+        pageBuilder: (context, state) => _detail(state, const ClientsScreen()),
+        routes: [
+          GoRoute(
+            path: ':id',
+            parentNavigatorKey: root,
+            pageBuilder: (context, state) =>
+                _detail(state, ClientScreen(id: state.pathParameters['id']!)),
+          ),
+        ],
       ),
       GoRoute(
         path: '/welcome',
