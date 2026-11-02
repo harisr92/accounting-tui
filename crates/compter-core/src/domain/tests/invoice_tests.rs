@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use crate::domain::{
     Currency, DomainError, ExchangeRate, FiscalYear, Invoice, InvoiceAmounts, InvoiceKind,
     InvoiceLine, InvoiceNumber, InvoiceParts, InvoiceStatus, InvoiceSummary, LogoId, MilestoneId,
-    OVERDUE_DAYS, ProjectId,
+    OVERDUE_DAYS, ProjectId, RecordField,
 };
 
 fn date(day: u32) -> NaiveDate {
@@ -121,7 +121,7 @@ fn a_payment_must_be_positive_and_not_before_the_invoice() {
     ));
     assert!(matches!(
         inv.record_payment(date(5), rupees(1100), rupees(-100)),
-        Err(DomainError::NegativeAmount)
+        Err(DomainError::NegativeAmount(RecordField::Payment(_)))
     ));
     let too_early = NaiveDate::from_ymd_opt(2026, 9, 30).unwrap();
     assert!(matches!(
@@ -436,4 +436,15 @@ fn an_invoice_is_overdue_only_while_something_is_due_past_the_limit() {
     inv.record_payment(after(1), BigDecimal::from(1000), BigDecimal::from(0))
         .unwrap();
     assert!(!InvoiceSummary::from(&inv).is_overdue(after(OVERDUE_DAYS + 1)));
+}
+
+#[test]
+fn tds_counts_as_withheld_only_once_a_payment_carries_some() {
+    let mut inv = invoice();
+    let rupees = BigDecimal::from;
+    inv.record_payment(date(5), rupees(400), rupees(0)).unwrap();
+    assert!(!inv.tds_withheld());
+    inv.record_payment(date(6), rupees(400), rupees(100))
+        .unwrap();
+    assert!(inv.tds_withheld());
 }

@@ -2,8 +2,9 @@ use bigdecimal::{BigDecimal, Zero};
 use chrono::NaiveDate;
 
 use crate::domain::{
-    Billing, ClientDetails, ClientRegion, Currency, DomainError, MilestoneId, MilestoneStatus,
-    Project, ProjectId, ProjectStatus, ProjectSummary, TimeEntry,
+    Billing, ClientDetails, ClientField, ClientRegion, Currency, DomainError, MilestoneField,
+    MilestoneId, MilestoneStatus, Project, ProjectField, ProjectId, ProjectStatus, ProjectSummary,
+    RecordField, TimeEntry,
 };
 
 const GSTIN: &str = "29AAPFU0939F1ZR";
@@ -147,11 +148,15 @@ fn billing_type_must_match() {
 fn rejects_invalid_input() {
     assert!(matches!(
         Project::new(" ", "Acme", None, Billing::Fixed),
-        Err(DomainError::EmptyField("project name"))
+        Err(DomainError::EmptyField(RecordField::Project(
+            ProjectField::Name
+        )))
     ));
     assert!(matches!(
         Project::new("Site", "", None, Billing::Fixed),
-        Err(DomainError::EmptyField("client name"))
+        Err(DomainError::EmptyField(RecordField::Client(
+            ClientField::Name
+        )))
     ));
     assert!(matches!(
         Project::new("Site", "Acme", Some("29ABCDE1234F1Z5"), Billing::Fixed),
@@ -164,7 +169,9 @@ fn rejects_invalid_input() {
     ));
     assert!(matches!(
         p.add_milestone("", date(), rupees(10)),
-        Err(DomainError::EmptyField("milestone name"))
+        Err(DomainError::EmptyField(RecordField::Milestone(
+            MilestoneField::Name
+        )))
     ));
 }
 
@@ -273,7 +280,9 @@ fn edits_pending_milestones_only() {
 
     assert!(matches!(
         p.edit_milestone(0, "", due, rupees(1)),
-        Err(DomainError::EmptyField("milestone name"))
+        Err(DomainError::EmptyField(RecordField::Milestone(
+            MilestoneField::Name
+        )))
     ));
     assert!(matches!(
         p.edit_milestone(0, "X", due, None),
@@ -375,7 +384,9 @@ fn foreign_clients_have_a_country_and_no_gstin() {
     ));
     assert!(matches!(
         Project::for_client("Audit", abroad(" ", None), Billing::Fixed),
-        Err(DomainError::EmptyField("client country"))
+        Err(DomainError::EmptyField(RecordField::Client(
+            ClientField::Country
+        )))
     ));
 }
 

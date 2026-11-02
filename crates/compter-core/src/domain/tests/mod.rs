@@ -10,3 +10,4 @@ mod logo_tests;
 mod milestone_tests;
 mod profile_tests;
 mod project_tests;
+mod record_field_tests;

@@ -180,10 +180,10 @@ impl TryFrom<ProfileDraft> for BusinessProfile {
     type Error = DomainError;
 
     fn try_from(draft: ProfileDraft) -> Result<Self, Self::Error> {
-        require(&draft.name, "business name")?;
+        require(&draft.name, ProfileField::Name)?;
         let address = non_blank(draft.address);
         if address.is_empty() {
-            return Err(DomainError::EmptyField("business address"));
+            return Err(DomainError::EmptyField(ProfileField::Address.into()));
         }
         let gstin = draft
             .gstin
@@ -300,4 +300,22 @@ fn non_blank(lines: Vec<String>) -> Vec<String> {
         .map(|line| line.trim().to_owned())
         .filter(|line| !line.is_empty())
         .collect()
+}
+
+/// The business profile's text that can't be left blank, named in [`DomainError::EmptyField`]
+/// through [`RecordField`](super::RecordField)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ProfileField {
+    Name,
+    Address,
+}
+
+impl ProfileField {
+    /// How the user knows it, in an error's message
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Name => "business name",
+            Self::Address => "business address",
+        }
+    }
 }

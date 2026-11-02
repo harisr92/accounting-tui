@@ -334,7 +334,7 @@ impl TryFrom<RawInvoice> for Invoice {
     type Error = DomainError;
 
     fn try_from(raw: RawInvoice) -> Result<Self, Self::Error> {
-        require(raw.number.as_str(), "invoice number")?;
+        require(raw.number.as_str(), InvoiceField::Number)?;
         if raw.status.is_some() {
             return Err(DomainError::OutdatedInvoiceFormat);
         }
@@ -566,6 +566,12 @@ impl Invoice {
         &self.payments
     }
 
+    /// Whether the client withheld TDS from any payment: only then can a credit note have the
+    /// client reverse some of it
+    pub fn tds_withheld(&self) -> bool {
+        self.payments.iter().any(|p| !p.tds.is_zero())
+    }
+
     /// Received plus TDS across every payment
     pub fn settled(&self) -> BigDecimal {
         self.payments.iter().map(Payment::settled).sum()
@@ -778,7 +784,7 @@ fn check_lines(lines: &[InvoiceLine], amounts: &InvoiceAmounts) -> Result<(), Do
         return Err(DomainError::NoInvoiceLines);
     }
     for (i, line) in lines.iter().enumerate() {
-        require(&line.milestone_name, "milestone name")?;
+        require(&line.milestone_name, InvoiceField::MilestoneName)?;
         if line.discount < BigDecimal::zero() {
             return Err(DomainError::NonPositiveAmount);
         }
@@ -901,8 +907,11 @@ fn check_payment(
         }
         _ => {}
     }
-    if payment.received < BigDecimal::zero() || payment.tds < BigDecimal::zero() {
-        return Err(DomainError::NegativeAmount);
+    if payment.received < BigDecimal::zero() {
+        return Err(DomainError::NegativeAmount(PaymentField::Received.into()));
+    }
+    if payment.tds < BigDecimal::zero() {
+        return Err(DomainError::NegativeAmount(PaymentField::Tds.into()));
     }
     if payment.settled() <= BigDecimal::zero() {
         return Err(DomainError::NonPositiveAmount);
@@ -1012,6 +1021,44 @@ impl From<&Invoice> for InvoiceSummary {
             total: invoice.amounts.total.clone(),
             balance: invoice.balance(),
             status: invoice.status(),
+        }
+    }
+}
+
+/// An invoice's text that can't be left blank; all generated, so blank only in a damaged record,
+/// named in [`DomainError::EmptyField`] through [`RecordField`](super::RecordField)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum InvoiceField {
+    Number,
+    /// A line's milestone, copied when issued
+    MilestoneName,
+}
+
+impl InvoiceField {
+    /// How the user knows it, in an error's message
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Number => "invoice number",
+            Self::MilestoneName => "milestone name",
+        }
+    }
+}
+
+/// A payment's amount a refusal names, through [`RecordField`](super::RecordField)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PaymentField {
+    /// What reached the bank, in the invoice's currency
+    Received,
+    /// What the client withheld
+    Tds,
+}
+
+impl PaymentField {
+    /// How the user knows it, in an error's message
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Received => "amount received",
+            Self::Tds => "TDS",
         }
     }
 }

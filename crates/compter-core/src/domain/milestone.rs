@@ -249,7 +249,7 @@ impl Milestone {
         number: String,
         discount: &BigDecimal,
     ) -> Result<(), DomainError> {
-        require(&number, "invoice number")?;
+        require(&number, MilestoneField::InvoiceNumber)?;
         if *discount < BigDecimal::zero() || (!discount.is_zero() && *discount >= self.amount) {
             return Err(DomainError::InvalidMilestoneDiscount);
         }
@@ -301,7 +301,7 @@ impl Milestone {
     }
 
     pub(super) fn validate(&self) -> Result<(), DomainError> {
-        require(&self.name, "milestone name")?;
+        require(&self.name, MilestoneField::Name)?;
         if self.amount < BigDecimal::zero() {
             return Err(DomainError::NonPositiveAmount);
         }
@@ -376,5 +376,24 @@ impl MilestoneSort {
             order.then(a.cmp(&b))
         });
         positions
+    }
+}
+
+/// A milestone's text that can't be left blank, named in [`DomainError::EmptyField`] through
+/// [`RecordField`](super::RecordField)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MilestoneField {
+    Name,
+    /// The invoice an invoiced milestone was billed on; generated, never typed
+    InvoiceNumber,
+}
+
+impl MilestoneField {
+    /// How the user knows it, in an error's message
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Name => "milestone name",
+            Self::InvoiceNumber => "invoice number",
+        }
     }
 }

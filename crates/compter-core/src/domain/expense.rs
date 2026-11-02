@@ -186,16 +186,33 @@ impl Expense {
     }
 
     fn validate(&self) -> Result<(), DomainError> {
-        require(&self.description, "expense description")?;
+        require(&self.description, ExpenseField::Description)?;
         if self.amount <= BigDecimal::zero() {
             return Err(DomainError::NonPositiveAmount);
         }
         if self.gst_credit < BigDecimal::zero() {
-            return Err(DomainError::NegativeAmount);
+            return Err(DomainError::NegativeAmount(ExpenseField::GstCredit.into()));
         }
         if self.gst_credit >= self.amount {
             return Err(DomainError::GstCreditTooLarge);
         }
         Ok(())
+    }
+}
+
+/// An expense's field a refusal names, through [`RecordField`](super::RecordField)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ExpenseField {
+    Description,
+    GstCredit,
+}
+
+impl ExpenseField {
+    /// How the user knows it, in an error's message
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Description => "expense description",
+            Self::GstCredit => "GST credit",
+        }
     }
 }
