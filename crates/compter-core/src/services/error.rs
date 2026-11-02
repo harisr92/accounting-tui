@@ -38,6 +38,10 @@ pub enum ServiceError {
         "a client's name can't be changed here: their projects and invoices are filed under it"
     )]
     ClientNameFixed,
+    #[error("{other} already goes by that name; merge one client into the other instead")]
+    ClientNameTaken { other: String },
+    #[error("a client can't be merged into themselves")]
+    MergeIntoSelf,
     #[error("project {project}: {source}")]
     ProjectRefusedClient {
         project: String,

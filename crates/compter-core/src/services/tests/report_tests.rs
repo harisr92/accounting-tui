@@ -4,7 +4,7 @@ use chrono::NaiveDate;
 use crate::demo;
 use crate::domain::{ExpenseCategory, FiscalYear, IncomeBasis};
 use crate::services::reports::PresumptiveCheck;
-use crate::services::{InvoiceService, ReportService};
+use crate::services::{ClientService, InvoiceService, ReportService};
 use crate::storage::{ProjectRepository, Store};
 
 fn rupees(amount: i64) -> BigDecimal {
@@ -267,4 +267,26 @@ fn a_refund_comes_off_the_cash_receipts_without_its_gst() {
     // credit note itself takes nothing more off: the invoice was counted on cash.
     assert_eq!(report.tax_receipts, rupees(160_450));
     assert_eq!(report.gross_receipts, rupees(240_750));
+}
+
+#[test]
+fn a_renamed_client_is_one_row_under_their_current_name() {
+    let store = demo::store().unwrap();
+    let mut clients = ClientService::new(store.repository());
+    let acme = clients
+        .list()
+        .unwrap()
+        .into_iter()
+        .find(|c| c.client.name() == "Acme Pvt Ltd")
+        .unwrap()
+        .client
+        .id();
+    clients.rename(acme, "Acme Private Limited", false).unwrap();
+
+    let report = ReportService::new(store.repository(), None)
+        .year(fy(2026))
+        .unwrap();
+    let names: Vec<_> = report.clients.iter().map(|c| c.client.as_str()).collect();
+    assert!(names.contains(&"Acme Private Limited"), "{names:?}");
+    assert!(!names.contains(&"Acme Pvt Ltd"), "{names:?}");
 }

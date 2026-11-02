@@ -7,7 +7,7 @@ use compter_core::demo;
 use compter_core::domain::{
     BasisSchedule, Billing, ClientDetails, ClientId, ClientRegion, Currency, Discount, DomainError,
     ExchangeRate, ExpenseId, IncomeBasis, Invoice, InvoiceNumber, MilestoneId, ProfileDraft,
-    Project, ProjectId, ReturnKind, ReturnTerms, TimeEntry,
+    Project, ProjectId, ProjectSummary, ReturnKind, ReturnTerms, TimeEntry,
 };
 use compter_core::input;
 use compter_core::services::{
@@ -163,12 +163,9 @@ impl CompterApp {
     ) -> Result<Vec<String>, ApiError> {
         let id = client_id(&id)?;
         let details = client_details(self.clients.client(id)?.name(), input)?;
-        Ok(self
-            .clients
-            .projects_to_update(id, &details)?
-            .iter()
-            .map(|p| p.name().to_owned())
-            .collect())
+        Ok(project_names(
+            &self.clients.projects_to_update(id, &details)?,
+        ))
     }
 
     /// Correct a client's GSTIN, place, address or currency, and with `update_projects` their
@@ -185,6 +182,62 @@ impl CompterApp {
         Ok(ClientDetail::from(&self.clients.update(
             id,
             details,
+            update_projects,
+        )?))
+    }
+
+    /// The names of the client's open projects that renaming them `name` would change: asked
+    /// about before [`rename_client`](Self::rename_client). A name another client goes by is
+    /// refused here.
+    pub fn client_projects_to_rename(
+        &self,
+        id: String,
+        name: String,
+    ) -> Result<Vec<String>, ApiError> {
+        let id = client_id(&id)?;
+        Ok(project_names(&self.clients.projects_to_rename(id, &name)?))
+    }
+
+    /// Call a client `name` from now on, and with `update_projects` their open projects too.
+    /// The old name stays on the client as an alias: issued invoices keep it.
+    pub fn rename_client(
+        &mut self,
+        id: String,
+        name: String,
+        update_projects: bool,
+    ) -> Result<ClientDetail, ApiError> {
+        let id = client_id(&id)?;
+        Ok(ClientDetail::from(&self.clients.rename(
+            id,
+            &name,
+            update_projects,
+        )?))
+    }
+
+    /// The names of the open projects of `from` that merging it into `into` would give
+    /// `into`'s details: asked about before [`merge_client`](Self::merge_client). A merge that
+    /// would be refused is refused here.
+    pub fn client_projects_to_merge(
+        &self,
+        from: String,
+        into: String,
+    ) -> Result<Vec<String>, ApiError> {
+        let (from, into) = (client_id(&from)?, client_id(&into)?);
+        Ok(project_names(&self.clients.projects_to_merge(from, into)?))
+    }
+
+    /// Merge the client `from`, a duplicate, into `into`, whose details are kept; with
+    /// `update_projects`, `from`'s open projects take them too. Returns `into`.
+    pub fn merge_client(
+        &mut self,
+        from: String,
+        into: String,
+        update_projects: bool,
+    ) -> Result<ClientDetail, ApiError> {
+        let (from, into) = (client_id(&from)?, client_id(&into)?);
+        Ok(ClientDetail::from(&self.clients.merge(
+            from,
+            into,
             update_projects,
         )?))
     }
@@ -731,6 +784,11 @@ fn date(input: &str, field: &str) -> Result<NaiveDate, ApiError> {
 fn project_id(id: &str) -> Result<ProjectId, ApiError> {
     id.parse()
         .map_err(|_| ApiError::invalid("project_id", "not a project id"))
+}
+
+/// The projects' names, as a question about them lists them
+fn project_names(projects: &[ProjectSummary]) -> Vec<String> {
+    projects.iter().map(|p| p.name().to_owned()).collect()
 }
 
 fn client_id(id: &str) -> Result<ClientId, ApiError> {

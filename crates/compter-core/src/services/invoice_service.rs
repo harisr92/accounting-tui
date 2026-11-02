@@ -18,8 +18,8 @@ use crate::domain::{
     Project, ProjectId, ReturnKind, Returned,
 };
 use crate::storage::{
-    CreditRecord, DataDir, InvoiceRepository, IssueRecord, PaymentRecord, ProjectRepository,
-    SettingsRepository, write_file,
+    ClientRepository, CreditRecord, DataDir, InvoiceRepository, IssueRecord, PaymentRecord,
+    ProjectRepository, SettingsRepository, write_file,
 };
 
 /// What issuing would produce, shown for confirmation before anything is saved
@@ -101,7 +101,9 @@ pub struct InvoiceService<R> {
     data_dir: Option<DataDir>,
 }
 
-impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceService<R> {
+impl<R: ProjectRepository + InvoiceRepository + SettingsRepository + ClientRepository>
+    InvoiceService<R>
+{
     pub fn new(repo: R, data_dir: Option<DataDir>) -> Self {
         Self { repo, data_dir }
     }
@@ -440,11 +442,14 @@ impl<R: ProjectRepository + InvoiceRepository + SettingsRepository> InvoiceServi
         Ok(Credited { note, invoice, pdf })
     }
 
-    /// Rupees held for `client` as an advance by credit notes on their paid invoices
+    /// Rupees held for `client` as an advance by credit notes on their paid invoices, those
+    /// issued under any of the client's names (see [`Client::matches`](crate::domain::Client))
     pub fn client_advance(&self, client: &str) -> Result<BigDecimal, ServiceError> {
+        let known = self.repo.clients()?.into_iter().find(|c| c.matches(client));
+        let theirs = |name: &str| known.as_ref().map_or(name == client, |c| c.matches(name));
         let mut held = BigDecimal::zero();
         self.repo.scan_invoices(&mut |invoice| {
-            if invoice.client_name() == client {
+            if theirs(invoice.client_name()) {
                 held += invoice.advance_inr();
             }
         })?;

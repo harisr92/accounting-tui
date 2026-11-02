@@ -26,6 +26,7 @@ pub(super) const MIGRATIONS: &[Migration] = &[
     invoice_lines,
     invoice_discounts,
     clients,
+    client_aliases,
 ];
 
 /// Run every step from `from` up to the current version, inside the caller's transaction
@@ -126,6 +127,14 @@ fn clients(txn: &WriteTransaction) -> Result<(), StorageError> {
     for client in &clients {
         put_client(txn, client)?;
     }
+    Ok(())
+}
+
+/// v7 → v8: nothing to rewrite. Clients record their earlier names (`aliases`, defaulted), kept
+/// when one is renamed or merged into another. The version moves so an older compter refuses the
+/// file instead of dropping those names on its next save, which would part a client from the
+/// invoices issued under them and add a merged-away client back.
+fn client_aliases(_txn: &WriteTransaction) -> Result<(), StorageError> {
     Ok(())
 }
 

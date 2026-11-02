@@ -15,7 +15,7 @@ import 'profile.dart';
 import 'reports.dart';
 import 'rows.dart';
 
-// These functions are ignored because they are not marked as `pub`: `checked_draft`, `client_details`, `client_id`, `closed`, `credit_draft`, `credit_lines`, `date`, `detail_in`, `detail`, `discount_error`, `discount_of`, `exchange_rate`, `expense_draft`, `expense_id`, `index_of`, `milestone_draft`, `milestone_id`, `milestone_ids_of`, `optional_money`, `over`, `project_draft`, `project_id`, `today`
+// These functions are ignored because they are not marked as `pub`: `checked_draft`, `client_details`, `client_id`, `closed`, `credit_draft`, `credit_lines`, `date`, `detail_in`, `detail`, `discount_error`, `discount_of`, `exchange_rate`, `expense_draft`, `expense_id`, `index_of`, `milestone_draft`, `milestone_id`, `milestone_ids_of`, `optional_money`, `over`, `project_draft`, `project_id`, `project_names`, `today`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>>
 abstract class CompterApp implements RustOpaqueInterface {
@@ -40,6 +40,22 @@ abstract class CompterApp implements RustOpaqueInterface {
 
   /// The Clients screen: every saved client with their projects counted and what they owe
   Future<List<ClientSummaryRow>> clientList();
+
+  /// The names of the open projects of `from` that merging it into `into` would give
+  /// `into`'s details: asked about before [`merge_client`](Self::merge_client). A merge that
+  /// would be refused is refused here.
+  Future<List<String>> clientProjectsToMerge({
+    required String from,
+    required String into,
+  });
+
+  /// The names of the client's open projects that renaming them `name` would change: asked
+  /// about before [`rename_client`](Self::rename_client). A name another client goes by is
+  /// refused here.
+  Future<List<String>> clientProjectsToRename({
+    required String id,
+    required String name,
+  });
 
   /// The names of the client's open projects that the corrected details in `input` would
   /// change: asked about before [`edit_client`](Self::edit_client). Details that would be
@@ -152,6 +168,14 @@ abstract class CompterApp implements RustOpaqueInterface {
     required TimeInput input,
   });
 
+  /// Merge the client `from`, a duplicate, into `into`, whose details are kept; with
+  /// `update_projects`, `from`'s open projects take them too. Returns `into`.
+  Future<ClientDetail> mergeClient({
+    required String from,
+    required String into,
+    required bool updateProjects,
+  });
+
   /// Open (or create) `compter.redb` in `data_dir`, the app's private support folder. PDFs
   /// and returns are written under it too.
   static Future<CompterApp> open({required String dataDir}) =>
@@ -199,6 +223,14 @@ abstract class CompterApp implements RustOpaqueInterface {
   Future<ProjectDetail> removeMilestone({
     required String projectId,
     required String milestoneId,
+  });
+
+  /// Call a client `name` from now on, and with `update_projects` their open projects too.
+  /// The old name stays on the client as an alias: issued invoices keep it.
+  Future<ClientDetail> renameClient({
+    required String id,
+    required String name,
+    required bool updateProjects,
   });
 
   /// The financial year starting in April of `year`, in numbers

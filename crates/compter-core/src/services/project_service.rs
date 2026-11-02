@@ -66,11 +66,14 @@ impl<R: ProjectRepository + ClientRepository> ProjectService<R> {
         project.update_details(draft.name, draft.client)?;
         project.set_billing(draft.billing)?;
         // Only a change to the client is news: saving an older project as it was (a new rate,
-        // a new name) must not put its older client details back over newer ones
-        if project.client_details().same_as(&before) {
-            self.repo.save(&project)?;
-        } else {
+        // a new name) must not put its older client details back over newer ones. The client's
+        // name in other capitals is news, of the name alone.
+        if !project.client_details().same_as(&before) {
             self.save_recording_client(&project)?;
+        } else if project.client_name() != before.name {
+            self.save_recasing_client(&project)?;
+        } else {
+            self.repo.save(&project)?;
         }
         Ok(project)
     }
@@ -181,9 +184,10 @@ impl<R: ProjectRepository + ClientRepository> ProjectService<R> {
         Ok((project, added))
     }
 
-    /// Save `project` with its client recorded: the stored client of that name updated, or a
-    /// new one. A stored client its details only tidy (see [`ClientDetails::same_as`]) is
-    /// left as it is, so a form with fewer address lines never rewrites theirs.
+    /// Save `project` with its client recorded: the stored client going by that name (or an
+    /// earlier one) updated, or a new one. A stored client its details only tidy (see
+    /// [`ClientDetails::same_as`]) is left as it is, so a form with fewer address lines never
+    /// rewrites theirs.
     fn save_recording_client(&mut self, project: &Project) -> Result<(), ServiceError> {
         let details = project.client_details();
         let known = self
@@ -192,8 +196,13 @@ impl<R: ProjectRepository + ClientRepository> ProjectService<R> {
             .into_iter()
             .find(|c| c.matches(&details.name));
         let client = match known {
-            Some(client) if client.details().same_as(&details) => {
-                return Ok(self.repo.save(project)?);
+            // Only the name's capitals may differ, which renames the client and nothing else
+            Some(mut client) if client.details().same_as(&details) => {
+                if !client.recased_by(&details.name) {
+                    return Ok(self.repo.save(project)?);
+                }
+                client.rename(&details.name)?;
+                client
             }
             Some(mut client) => {
                 client.update(details)?;
@@ -202,6 +211,24 @@ impl<R: ProjectRepository + ClientRepository> ProjectService<R> {
             None => Client::new(details)?,
         };
         Ok(self.repo.save_with_client(project, &client)?)
+    }
+
+    /// Save `project`, whose client's name was only typed in other capitals, with their stored
+    /// client spelled the same way and nothing else about them changed
+    fn save_recasing_client(&mut self, project: &Project) -> Result<(), ServiceError> {
+        let name = project.client_name();
+        let known = self
+            .repo
+            .clients()?
+            .into_iter()
+            .find(|c| c.recased_by(name));
+        match known {
+            Some(mut client) => {
+                client.rename(name)?;
+                Ok(self.repo.save_with_client(project, &client)?)
+            }
+            None => Ok(self.repo.save(project)?),
+        }
     }
 
     /// Load, change, save. A failed change is never saved, since the edit is on a fresh copy.

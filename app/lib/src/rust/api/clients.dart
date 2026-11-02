@@ -23,6 +23,8 @@ String? gstinState({required String gstin}) =>
 /// A client billed before, with what the project form needs to fill itself in: the same fields
 /// as `ProjectInput`, so picking one copies them across
 class ClientChoiceRow {
+  /// For merging one client into another
+  final String id;
   final String name;
 
   /// What tells clients apart in the list: `29AAPFU0939F1ZR`, `Karnataka (29)` or
@@ -41,6 +43,7 @@ class ClientChoiceRow {
   final String currency;
 
   const ClientChoiceRow({
+    required this.id,
     required this.name,
     required this.summary,
     this.gstin,
@@ -52,6 +55,7 @@ class ClientChoiceRow {
 
   @override
   int get hashCode =>
+      id.hashCode ^
       name.hashCode ^
       summary.hashCode ^
       gstin.hashCode ^
@@ -65,6 +69,7 @@ class ClientChoiceRow {
       identical(this, other) ||
       other is ClientChoiceRow &&
           runtimeType == other.runtimeType &&
+          id == other.id &&
           name == other.name &&
           summary == other.summary &&
           gstin == other.gstin &&
@@ -85,6 +90,9 @@ class ClientDetail {
   /// As in [`ClientSummaryRow::place`]
   final String? place;
 
+  /// As in [`ClientSummaryRow::aliases`]
+  final List<String> aliases;
+
   /// Address lines, top to bottom
   final List<String> address;
 
@@ -102,6 +110,7 @@ class ClientDetail {
     required this.name,
     required this.edit,
     this.place,
+    required this.aliases,
     required this.address,
     this.owed,
     required this.projects,
@@ -114,6 +123,7 @@ class ClientDetail {
       name.hashCode ^
       edit.hashCode ^
       place.hashCode ^
+      aliases.hashCode ^
       address.hashCode ^
       owed.hashCode ^
       projects.hashCode ^
@@ -128,6 +138,7 @@ class ClientDetail {
           name == other.name &&
           edit == other.edit &&
           place == other.place &&
+          aliases == other.aliases &&
           address == other.address &&
           owed == other.owed &&
           projects == other.projects &&
@@ -189,6 +200,9 @@ class ClientSummaryRow {
   /// The GSTIN, else `Karnataka (29)` or `Germany`; `None` for a client known by name only
   final String? place;
 
+  /// Names the client went by before being renamed or merged, which the search looks through
+  final List<String> aliases;
+
   /// Projects for the client, archived ones included
   final int projects;
 
@@ -199,6 +213,7 @@ class ClientSummaryRow {
     required this.id,
     required this.name,
     this.place,
+    required this.aliases,
     required this.projects,
     this.owed,
   });
@@ -208,6 +223,7 @@ class ClientSummaryRow {
       id.hashCode ^
       name.hashCode ^
       place.hashCode ^
+      aliases.hashCode ^
       projects.hashCode ^
       owed.hashCode;
 
@@ -219,6 +235,7 @@ class ClientSummaryRow {
           id == other.id &&
           name == other.name &&
           place == other.place &&
+          aliases == other.aliases &&
           projects == other.projects &&
           owed == other.owed;
 }

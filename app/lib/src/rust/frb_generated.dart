@@ -73,7 +73,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 989285696;
+  int get rustContentHash => 989804164;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -109,6 +109,18 @@ abstract class RustLibApi extends BaseApi {
 
   Future<List<ClientSummaryRow>> crateApiAppCompterAppClientList({
     required CompterApp that,
+  });
+
+  Future<List<String>> crateApiAppCompterAppClientProjectsToMerge({
+    required CompterApp that,
+    required String from,
+    required String into,
+  });
+
+  Future<List<String>> crateApiAppCompterAppClientProjectsToRename({
+    required CompterApp that,
+    required String id,
+    required String name,
   });
 
   Future<List<String>> crateApiAppCompterAppClientProjectsToUpdate({
@@ -235,6 +247,13 @@ abstract class RustLibApi extends BaseApi {
     required TimeInput input,
   });
 
+  Future<ClientDetail> crateApiAppCompterAppMergeClient({
+    required CompterApp that,
+    required String from,
+    required String into,
+    required bool updateProjects,
+  });
+
   Future<CompterApp> crateApiAppCompterAppOpen({required String dataDir});
 
   Future<CreditPreviewRow> crateApiAppCompterAppPreviewCredit({
@@ -282,6 +301,13 @@ abstract class RustLibApi extends BaseApi {
     required CompterApp that,
     required String projectId,
     required String milestoneId,
+  });
+
+  Future<ClientDetail> crateApiAppCompterAppRenameClient({
+    required CompterApp that,
+    required String id,
+    required String name,
+    required bool updateProjects,
   });
 
   Future<ReportRow> crateApiAppCompterAppReport({
@@ -541,6 +567,86 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<List<String>> crateApiAppCompterAppClientProjectsToMerge({
+    required CompterApp that,
+    required String from,
+    required String into,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(from, serializer);
+          sse_encode_String(into, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_String,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppClientProjectsToMergeConstMeta,
+        argValues: [that, from, into],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppClientProjectsToMergeConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_client_projects_to_merge",
+        argNames: ["that", "from", "into"],
+      );
+
+  @override
+  Future<List<String>> crateApiAppCompterAppClientProjectsToRename({
+    required CompterApp that,
+    required String id,
+    required String name,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(id, serializer);
+          sse_encode_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_String,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppClientProjectsToRenameConstMeta,
+        argValues: [that, id, name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppClientProjectsToRenameConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_client_projects_to_rename",
+        argNames: ["that", "id", "name"],
+      );
+
+  @override
   Future<List<String>> crateApiAppCompterAppClientProjectsToUpdate({
     required CompterApp that,
     required String id,
@@ -559,7 +665,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 8,
             port: port_,
           );
         },
@@ -595,7 +701,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 9,
             port: port_,
           );
         },
@@ -630,7 +736,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 10,
             port: port_,
           );
         },
@@ -668,7 +774,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 11,
             port: port_,
           );
         },
@@ -704,7 +810,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 12,
             port: port_,
           );
         },
@@ -742,7 +848,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 13,
             port: port_,
           );
         },
@@ -780,7 +886,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 14,
             port: port_,
           );
         },
@@ -811,7 +917,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 15,
             port: port_,
           );
         },
@@ -853,7 +959,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 16,
             port: port_,
           );
         },
@@ -893,7 +999,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 17,
             port: port_,
           );
         },
@@ -935,7 +1041,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 18,
             port: port_,
           );
         },
@@ -975,7 +1081,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 19,
             port: port_,
           );
         },
@@ -1013,7 +1119,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 20,
             port: port_,
           );
         },
@@ -1057,7 +1163,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 21,
             port: port_,
           );
         },
@@ -1103,7 +1209,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 22,
             port: port_,
           );
         },
@@ -1141,7 +1247,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 23,
             port: port_,
           );
         },
@@ -1179,7 +1285,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 24,
             port: port_,
           );
         },
@@ -1215,7 +1321,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 25,
             port: port_,
           );
         },
@@ -1252,7 +1358,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 26,
             port: port_,
           );
         },
@@ -1296,7 +1402,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 27,
             port: port_,
           );
         },
@@ -1334,7 +1440,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 28,
             port: port_,
           );
         },
@@ -1372,7 +1478,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1414,7 +1520,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1436,6 +1542,48 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ClientDetail> crateApiAppCompterAppMergeClient({
+    required CompterApp that,
+    required String from,
+    required String into,
+    required bool updateProjects,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(from, serializer);
+          sse_encode_String(into, serializer);
+          sse_encode_bool(updateProjects, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 31,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_client_detail,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppMergeClientConstMeta,
+        argValues: [that, from, into, updateProjects],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppMergeClientConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_merge_client",
+        argNames: ["that", "from", "into", "updateProjects"],
+      );
+
+  @override
   Future<CompterApp> crateApiAppCompterAppOpen({required String dataDir}) {
     return handler.executeNormal(
       NormalTask(
@@ -1445,7 +1593,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 32,
             port: port_,
           );
         },
@@ -1483,7 +1631,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 33,
             port: port_,
           );
         },
@@ -1527,7 +1675,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 34,
             port: port_,
           );
         },
@@ -1561,7 +1709,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 35,
             port: port_,
           );
         },
@@ -1594,7 +1742,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 36,
             port: port_,
           );
         },
@@ -1632,7 +1780,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 34,
+            funcId: 37,
             port: port_,
           );
         },
@@ -1670,7 +1818,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 35,
+            funcId: 38,
             port: port_,
           );
         },
@@ -1708,7 +1856,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 36,
+            funcId: 39,
             port: port_,
           );
         },
@@ -1748,7 +1896,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 37,
+            funcId: 40,
             port: port_,
           );
         },
@@ -1788,7 +1936,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 38,
+            funcId: 41,
             port: port_,
           );
         },
@@ -1810,6 +1958,48 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ClientDetail> crateApiAppCompterAppRenameClient({
+    required CompterApp that,
+    required String id,
+    required String name,
+    required bool updateProjects,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerCompterApp(
+            that,
+            serializer,
+          );
+          sse_encode_String(id, serializer);
+          sse_encode_String(name, serializer);
+          sse_encode_bool(updateProjects, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 42,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_client_detail,
+          decodeErrorData: sse_decode_api_error,
+        ),
+        constMeta: kCrateApiAppCompterAppRenameClientConstMeta,
+        argValues: [that, id, name, updateProjects],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppCompterAppRenameClientConstMeta =>
+      const TaskConstMeta(
+        debugName: "CompterApp_rename_client",
+        argNames: ["that", "id", "name", "updateProjects"],
+      );
+
+  @override
   Future<ReportRow> crateApiAppCompterAppReport({
     required CompterApp that,
     required int year,
@@ -1826,7 +2016,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 39,
+            funcId: 43,
             port: port_,
           );
         },
@@ -1864,7 +2054,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 40,
+            funcId: 44,
             port: port_,
           );
         },
@@ -1904,7 +2094,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 41,
+            funcId: 45,
             port: port_,
           );
         },
@@ -1944,7 +2134,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 42,
+            funcId: 46,
             port: port_,
           );
         },
@@ -1986,7 +2176,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 43,
+            funcId: 47,
             port: port_,
           );
         },
@@ -2022,7 +2212,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 44,
+            funcId: 48,
             port: port_,
           );
         },
@@ -2062,7 +2252,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 45,
+            funcId: 49,
             port: port_,
           );
         },
@@ -2089,7 +2279,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 46)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 50)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_i_32,
@@ -2111,7 +2301,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 47)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 51)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
@@ -2133,7 +2323,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 48)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 52)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_state_row,
@@ -2156,7 +2346,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(gstin, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 49)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 53)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_String,
@@ -2298,16 +2488,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ClientChoiceRow dco_decode_client_choice_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return ClientChoiceRow(
-      name: dco_decode_String(arr[0]),
-      summary: dco_decode_String(arr[1]),
-      gstin: dco_decode_opt_String(arr[2]),
-      state: dco_decode_opt_String(arr[3]),
-      country: dco_decode_opt_String(arr[4]),
-      address: dco_decode_list_String(arr[5]),
-      currency: dco_decode_String(arr[6]),
+      id: dco_decode_String(arr[0]),
+      name: dco_decode_String(arr[1]),
+      summary: dco_decode_String(arr[2]),
+      gstin: dco_decode_opt_String(arr[3]),
+      state: dco_decode_opt_String(arr[4]),
+      country: dco_decode_opt_String(arr[5]),
+      address: dco_decode_list_String(arr[6]),
+      currency: dco_decode_String(arr[7]),
     );
   }
 
@@ -2315,17 +2506,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ClientDetail dco_decode_client_detail(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return ClientDetail(
       id: dco_decode_String(arr[0]),
       name: dco_decode_String(arr[1]),
       edit: dco_decode_client_input(arr[2]),
       place: dco_decode_opt_String(arr[3]),
-      address: dco_decode_list_String(arr[4]),
-      owed: dco_decode_opt_String(arr[5]),
-      projects: dco_decode_list_project_row(arr[6]),
-      invoices: dco_decode_list_invoice_row(arr[7]),
+      aliases: dco_decode_list_String(arr[4]),
+      address: dco_decode_list_String(arr[5]),
+      owed: dco_decode_opt_String(arr[6]),
+      projects: dco_decode_list_project_row(arr[7]),
+      invoices: dco_decode_list_invoice_row(arr[8]),
     );
   }
 
@@ -2362,14 +2554,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ClientSummaryRow dco_decode_client_summary_row(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return ClientSummaryRow(
       id: dco_decode_String(arr[0]),
       name: dco_decode_String(arr[1]),
       place: dco_decode_opt_String(arr[2]),
-      projects: dco_decode_u_32(arr[3]),
-      owed: dco_decode_opt_String(arr[4]),
+      aliases: dco_decode_list_String(arr[3]),
+      projects: dco_decode_u_32(arr[4]),
+      owed: dco_decode_opt_String(arr[5]),
     );
   }
 
@@ -3242,6 +3435,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   ClientChoiceRow sse_decode_client_choice_row(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
     var var_name = sse_decode_String(deserializer);
     var var_summary = sse_decode_String(deserializer);
     var var_gstin = sse_decode_opt_String(deserializer);
@@ -3250,6 +3444,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_address = sse_decode_list_String(deserializer);
     var var_currency = sse_decode_String(deserializer);
     return ClientChoiceRow(
+      id: var_id,
       name: var_name,
       summary: var_summary,
       gstin: var_gstin,
@@ -3267,6 +3462,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_name = sse_decode_String(deserializer);
     var var_edit = sse_decode_client_input(deserializer);
     var var_place = sse_decode_opt_String(deserializer);
+    var var_aliases = sse_decode_list_String(deserializer);
     var var_address = sse_decode_list_String(deserializer);
     var var_owed = sse_decode_opt_String(deserializer);
     var var_projects = sse_decode_list_project_row(deserializer);
@@ -3276,6 +3472,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       name: var_name,
       edit: var_edit,
       place: var_place,
+      aliases: var_aliases,
       address: var_address,
       owed: var_owed,
       projects: var_projects,
@@ -3321,12 +3518,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_id = sse_decode_String(deserializer);
     var var_name = sse_decode_String(deserializer);
     var var_place = sse_decode_opt_String(deserializer);
+    var var_aliases = sse_decode_list_String(deserializer);
     var var_projects = sse_decode_u_32(deserializer);
     var var_owed = sse_decode_opt_String(deserializer);
     return ClientSummaryRow(
       id: var_id,
       name: var_name,
       place: var_place,
+      aliases: var_aliases,
       projects: var_projects,
       owed: var_owed,
     );
@@ -4433,6 +4632,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
     sse_encode_String(self.name, serializer);
     sse_encode_String(self.summary, serializer);
     sse_encode_opt_String(self.gstin, serializer);
@@ -4449,6 +4649,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.name, serializer);
     sse_encode_client_input(self.edit, serializer);
     sse_encode_opt_String(self.place, serializer);
+    sse_encode_list_String(self.aliases, serializer);
     sse_encode_list_String(self.address, serializer);
     sse_encode_opt_String(self.owed, serializer);
     sse_encode_list_project_row(self.projects, serializer);
@@ -4483,6 +4684,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.id, serializer);
     sse_encode_String(self.name, serializer);
     sse_encode_opt_String(self.place, serializer);
+    sse_encode_list_String(self.aliases, serializer);
     sse_encode_u_32(self.projects, serializer);
     sse_encode_opt_String(self.owed, serializer);
   }
@@ -5234,6 +5436,30 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
   Future<List<ClientSummaryRow>> clientList() =>
       RustLib.instance.api.crateApiAppCompterAppClientList(that: this);
 
+  /// The names of the open projects of `from` that merging it into `into` would give
+  /// `into`'s details: asked about before [`merge_client`](Self::merge_client). A merge that
+  /// would be refused is refused here.
+  Future<List<String>> clientProjectsToMerge({
+    required String from,
+    required String into,
+  }) => RustLib.instance.api.crateApiAppCompterAppClientProjectsToMerge(
+    that: this,
+    from: from,
+    into: into,
+  );
+
+  /// The names of the client's open projects that renaming them `name` would change: asked
+  /// about before [`rename_client`](Self::rename_client). A name another client goes by is
+  /// refused here.
+  Future<List<String>> clientProjectsToRename({
+    required String id,
+    required String name,
+  }) => RustLib.instance.api.crateApiAppCompterAppClientProjectsToRename(
+    that: this,
+    id: id,
+    name: name,
+  );
+
   /// The names of the client's open projects that the corrected details in `input` would
   /// change: asked about before [`edit_client`](Self::edit_client). Details that would be
   /// refused are refused here.
@@ -5406,6 +5632,19 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
     input: input,
   );
 
+  /// Merge the client `from`, a duplicate, into `into`, whose details are kept; with
+  /// `update_projects`, `from`'s open projects take them too. Returns `into`.
+  Future<ClientDetail> mergeClient({
+    required String from,
+    required String into,
+    required bool updateProjects,
+  }) => RustLib.instance.api.crateApiAppCompterAppMergeClient(
+    that: this,
+    from: from,
+    into: into,
+    updateProjects: updateProjects,
+  );
+
   /// The credit note `input` would make against invoice `number`, without saving
   Future<CreditPreviewRow> previewCredit({
     required String number,
@@ -5476,6 +5715,19 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
     that: this,
     projectId: projectId,
     milestoneId: milestoneId,
+  );
+
+  /// Call a client `name` from now on, and with `update_projects` their open projects too.
+  /// The old name stays on the client as an alias: issued invoices keep it.
+  Future<ClientDetail> renameClient({
+    required String id,
+    required String name,
+    required bool updateProjects,
+  }) => RustLib.instance.api.crateApiAppCompterAppRenameClient(
+    that: this,
+    id: id,
+    name: name,
+    updateProjects: updateProjects,
   );
 
   /// The financial year starting in April of `year`, in numbers

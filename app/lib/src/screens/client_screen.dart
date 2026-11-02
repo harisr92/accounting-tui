@@ -15,8 +15,9 @@ import '../ui/theme.dart';
 import 'clients_screen.dart';
 
 /// One client: what they owe, their address, their projects and every invoice issued to them.
-/// Tapping a project or an invoice opens it. The edit button corrects the client's details,
-/// and their open projects' copies if asked; issued invoices never change.
+/// Tapping a project or an invoice opens it. The menu corrects the client's details, renames
+/// them, or merges them into another client, and their open projects too if asked; issued
+/// invoices never change, so old names stay on the client as aliases.
 class ClientScreen extends ConsumerWidget {
   const ClientScreen({super.key, required this.id});
 
@@ -32,20 +33,21 @@ class ClientScreen extends ConsumerWidget {
           title: client.value?.name ?? 'Client',
           actions: [
             if (client.value case final detail?)
-              IconButton(
-                tooltip: 'Edit client',
+              PopupMenuButton<_Change>(
+                tooltip: 'Change client',
                 icon: const Icon(Icons.edit_outlined),
-                onPressed: () async {
-                  final saved = await clientForm(
-                    context,
-                    ref.read(compterProvider),
-                    detail,
-                  );
-                  if (saved == null) return;
-                  // Reloads this client and the list; projects may have taken the details
-                  ref.invalidate(projectsProvider);
-                  ref.invalidate(projectProvider);
-                },
+                onSelected: (change) => _change(context, ref, detail, change),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: _Change.edit,
+                    child: Text('Edit details'),
+                  ),
+                  PopupMenuItem(value: _Change.rename, child: Text('Rename')),
+                  PopupMenuItem(
+                    value: _Change.merge,
+                    child: Text('Merge into…'),
+                  ),
+                ],
               ),
           ],
         ),
@@ -56,6 +58,32 @@ class ClientScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+enum _Change { edit, rename, merge }
+
+Future<void> _change(
+  BuildContext context,
+  WidgetRef ref,
+  ClientDetail detail,
+  _Change change,
+) async {
+  final app = ref.read(compterProvider);
+  final saved = await switch (change) {
+    _Change.edit => clientForm(context, app, detail),
+    _Change.rename => renameClientForm(context, app, detail),
+    _Change.merge => mergeClientForm(context, app, detail),
+  };
+  if (saved == null) return;
+  // Reloads this client and the list; projects may have taken the change, and reports group
+  // a renamed or merged client under their name now
+  ref.invalidate(projectsProvider);
+  ref.invalidate(projectProvider);
+  ref.invalidate(reportProvider);
+  if (change == _Change.merge && context.mounted) {
+    // This client is gone; show the one kept
+    context.pushReplacement(clientPath(saved.id));
   }
 }
 
@@ -73,7 +101,7 @@ class _ClientBody extends StatelessWidget {
           icon: Icons.person,
           title: client.name,
           description: client.place ?? 'No GSTIN or place recorded',
-          details: client.address.isEmpty ? null : client.address.join(', '),
+          details: _details(client),
         ),
         FigureGrid([
           ('Owes', client.owed ?? 'Nothing'),
@@ -100,4 +128,13 @@ class _ClientBody extends StatelessWidget {
       ],
     );
   }
+}
+
+/// The address, and the names the client went by before; `null` when there are neither
+String? _details(ClientDetail client) {
+  final lines = [
+    if (client.address.isNotEmpty) client.address.join(', '),
+    if (client.aliases.isNotEmpty) 'Also known as ${client.aliases.join(', ')}',
+  ];
+  return lines.isEmpty ? null : lines.join('\n');
 }

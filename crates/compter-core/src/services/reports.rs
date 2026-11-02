@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use bigdecimal::{BigDecimal, Zero};
 
 use crate::domain::{
-    BasisSchedule, CreditNote, Currency, Expense, ExpenseCategory, FiscalYear, IncomeBasis,
-    Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber, Quarter, ReturnKind,
+    BasisSchedule, Client, ClientIndex, CreditNote, Currency, Expense, ExpenseCategory, FiscalYear,
+    IncomeBasis, Invoice, InvoiceAmounts, InvoiceKind, InvoiceNumber, Quarter, ReturnKind,
 };
 
 /// Share of gross receipts deemed to be profit under section 44ADA
@@ -204,6 +204,8 @@ pub struct YearReportBuilder {
     report: YearReport,
     schedule: BasisSchedule,
     clients: BTreeMap<String, ClientYear>,
+    /// Puts records under their client's current name, whatever name they were issued under
+    names: ClientIndex,
     /// Invoices counted on cash that have credit notes dated in the year; only refunds take
     /// anything off their receipts
     cash_credited: BTreeSet<InvoiceNumber>,
@@ -237,11 +239,20 @@ impl YearReportBuilder {
             },
             schedule,
             clients: BTreeMap::new(),
+            names: ClientIndex::default(),
             cash_credited: BTreeSet::new(),
         }
     }
 
+    /// Count each invoice and credit note under the current name of the client it was issued
+    /// to, so a renamed client, or two merged into one, is one row
+    pub fn with_clients(mut self, clients: &[Client]) -> Self {
+        self.names = ClientIndex::new(clients);
+        self
+    }
+
     fn client(&mut self, name: &str) -> &mut ClientYear {
+        let name = self.names.current_name(name);
         self.clients
             .entry(name.to_owned())
             .or_insert_with(|| ClientYear {

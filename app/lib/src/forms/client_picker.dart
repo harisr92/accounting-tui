@@ -8,24 +8,33 @@ import '../ui/theme.dart';
 /// What was picked from [pickClient]: an earlier client, or `null` for a new one
 typedef ClientPick = ({ClientChoiceRow? client});
 
-/// Pick one of [clients], those billed before, or a new client; `null` when dismissed. A
-/// search box narrows a long list by name, GSTIN or place.
+/// Pick one of [clients], those billed before, or (with [allowNew]) a new client; `null` when
+/// dismissed. A search box narrows a long list by name, GSTIN or place.
 Future<ClientPick?> pickClient(
   BuildContext context,
-  Future<List<ClientChoiceRow>> clients,
-) {
+  Future<List<ClientChoiceRow>> clients, {
+  String title = 'Client',
+  bool allowNew = true,
+}) {
   return showModalBottomSheet<ClientPick>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) => _ClientPicker(clients: clients),
+    builder: (_) =>
+        _ClientPicker(clients: clients, title: title, allowNew: allowNew),
   );
 }
 
 class _ClientPicker extends StatefulWidget {
-  const _ClientPicker({required this.clients});
+  const _ClientPicker({
+    required this.clients,
+    required this.title,
+    required this.allowNew,
+  });
 
   final Future<List<ClientChoiceRow>> clients;
+  final String title;
+  final bool allowNew;
 
   @override
   State<_ClientPicker> createState() => _ClientPickerState();
@@ -51,7 +60,7 @@ class _ClientPickerState extends State<_ClientPicker> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 8),
-            child: Text('Client', style: theme.textTheme.titleLarge),
+            child: Text(widget.title, style: theme.textTheme.titleLarge),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: gutter),
@@ -64,12 +73,14 @@ class _ClientPickerState extends State<_ClientPicker> {
               onChanged: (_) => setState(() {}),
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.person_add_alt_outlined),
-            title: const Text('New client'),
-            onTap: () => Navigator.of(context).pop((client: null)),
-          ),
-          const Divider(height: 1),
+          if (widget.allowNew) ...[
+            ListTile(
+              leading: const Icon(Icons.person_add_alt_outlined),
+              title: const Text('New client'),
+              onTap: () => Navigator.of(context).pop((client: null)),
+            ),
+            const Divider(height: 1),
+          ],
           Flexible(
             child: FutureBuilder(
               future: widget.clients,

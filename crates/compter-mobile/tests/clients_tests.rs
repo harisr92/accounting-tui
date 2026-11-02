@@ -132,3 +132,47 @@ fn a_bad_correction_names_its_field() {
     let error = app.client_projects_to_update(acme.id, input).unwrap_err();
     assert_eq!(error.field.as_deref(), Some("client_state"));
 }
+
+#[test]
+fn a_renamed_client_keeps_the_old_name_as_an_alias() {
+    let (_scratch, mut app) = demo();
+    let acme = app.client_list().unwrap().remove(0);
+
+    let asked = app
+        .client_projects_to_rename(acme.id.clone(), "Acme Private Limited".to_owned())
+        .unwrap();
+    assert_eq!(asked, ["Website Revamp"]);
+    let renamed = app
+        .rename_client(acme.id.clone(), "Acme Private Limited".to_owned(), false)
+        .unwrap();
+    assert_eq!(renamed.name, "Acme Private Limited");
+    assert_eq!(renamed.aliases, ["Acme Pvt Ltd"]);
+    assert_eq!(renamed.invoices.len(), 2);
+
+    let taken = app
+        .rename_client(acme.id, "Globex Labs".to_owned(), false)
+        .unwrap_err();
+    assert_eq!(taken.field.as_deref(), Some("client_name"));
+}
+
+#[test]
+fn a_duplicate_merges_into_the_client_kept() {
+    let (_scratch, mut app) = demo();
+    // "Acme Pvt Ltd" in Karnataka with no GSTIN is the demo's own Acme; a typo is a new one
+    let mut typo = project("Brochure", None);
+    typo.client_name = "Acme Pvt".to_owned();
+    app.create_project(typo).unwrap();
+    let clients = app.client_list().unwrap();
+    let id = |name: &str| clients.iter().find(|c| c.name == name).unwrap().id.clone();
+    let (from, into) = (id("Acme Pvt"), id("Acme Pvt Ltd"));
+
+    let asked = app
+        .client_projects_to_merge(from.clone(), into.clone())
+        .unwrap();
+    assert_eq!(asked, ["Brochure"]);
+    let merged = app.merge_client(from, into, true).unwrap();
+    assert_eq!(merged.name, "Acme Pvt Ltd");
+    assert_eq!(merged.aliases, ["Acme Pvt"]);
+    assert_eq!(merged.projects.len(), 2);
+    assert_eq!(app.client_list().unwrap().len(), 4);
+}

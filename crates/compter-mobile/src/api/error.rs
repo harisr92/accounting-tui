@@ -26,6 +26,7 @@ impl From<ServiceError> for ApiError {
         let field = match &error {
             ServiceError::CreditLine { milestone, .. } => Some(format!("line:{milestone}")),
             ServiceError::Domain(DomainError::StateNotGstins(_)) => Some("client_state".to_owned()),
+            ServiceError::ClientNameTaken { .. } => Some("client_name".to_owned()),
             _ => None,
         };
         Self {

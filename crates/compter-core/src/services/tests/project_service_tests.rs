@@ -3,7 +3,7 @@ use chrono::NaiveDate;
 
 use crate::domain::{Billing, ClientDetails, DomainError, ProjectStatus, TimeEntry};
 use crate::services::merge_import::WorkSession;
-use crate::services::{MilestoneDraft, ProjectDraft, ProjectService, ServiceError};
+use crate::services::{ClientService, MilestoneDraft, ProjectDraft, ProjectService, ServiceError};
 use crate::storage::{ProjectRepository, RedbRepository, StorageError, Store};
 
 fn service() -> ProjectService<RedbRepository> {
@@ -298,4 +298,59 @@ fn a_form_with_fewer_address_lines_never_rewrites_a_clients_address() {
         service.clients().unwrap()[0].address(),
         ["Plot 7", "MIDC", "Pune"]
     );
+}
+
+#[test]
+fn a_client_name_corrected_to_other_capitals_on_a_project_renames_the_client() {
+    let mut service = service();
+    let id = service.create(draft("Site", Billing::Fixed)).unwrap().id();
+    let mut moved = draft("App", Billing::Fixed);
+    moved.client.address = vec!["New street".to_owned()];
+    service.create(moved).unwrap();
+
+    let mut recased = draft("Site", Billing::Fixed);
+    recased.client = service.load(id).unwrap().client_details();
+    recased.client.name = "ACME".to_owned();
+    service.update_details(id, recased).unwrap();
+
+    let clients = service.clients().unwrap();
+    assert_eq!(clients.len(), 1);
+    assert_eq!(clients[0].name(), "ACME");
+    // Only the name: the older project's address doesn't come back
+    assert_eq!(clients[0].address(), ["New street"]);
+    assert!(clients[0].aliases().is_empty());
+}
+
+#[test]
+fn a_new_project_with_the_client_name_in_other_capitals_renames_the_client() {
+    let mut service = service();
+    service.create(draft("Site", Billing::Fixed)).unwrap();
+    let mut recased = draft("App", Billing::Fixed);
+    recased.client.name = "ACME".to_owned();
+    service.create(recased).unwrap();
+
+    let clients = service.clients().unwrap();
+    assert_eq!(clients.len(), 1);
+    assert_eq!(clients[0].name(), "ACME");
+    assert!(clients[0].aliases().is_empty());
+}
+
+#[test]
+fn a_project_under_a_clients_earlier_name_adds_no_client() {
+    let store = Store::in_memory().unwrap();
+    let mut service = ProjectService::new(store.repository());
+    service.create(draft("Site", Billing::Fixed)).unwrap();
+    let id = service.clients().unwrap()[0].id();
+    ClientService::new(store.repository())
+        .rename(id, "Acme Pvt Ltd", false)
+        .unwrap();
+
+    let mut old_name = draft("App", Billing::Fixed);
+    old_name.client.address = vec!["Plot 7".to_owned()];
+    service.create(old_name).unwrap();
+
+    let clients = service.clients().unwrap();
+    assert_eq!(clients.len(), 1);
+    assert_eq!(clients[0].name(), "Acme Pvt Ltd");
+    assert_eq!(clients[0].address(), ["Plot 7"]);
 }

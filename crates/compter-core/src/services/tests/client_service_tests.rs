@@ -314,3 +314,216 @@ fn a_bad_gstin_is_refused_as_the_clients_not_a_projects() {
     let error = service.update(id, corrected, true).unwrap_err();
     assert!(matches!(error, ServiceError::Domain(_)), "{error:?}");
 }
+
+/// The demo's client called `name`
+fn demo_client(service: &ClientService<RedbRepository>, name: &str) -> ClientId {
+    named(&service.list().unwrap(), name).client.id()
+}
+
+#[test]
+fn a_renamed_client_keeps_their_invoices_and_projects_under_the_old_name() {
+    let store = demo::store().unwrap();
+    let mut service = ClientService::new(store.repository());
+    let acme = demo_client(&service, "Acme Pvt Ltd");
+
+    let offered = service
+        .projects_to_rename(acme, "Acme Private Limited")
+        .unwrap();
+    let names: Vec<_> = offered.iter().map(|p| p.name()).collect();
+    assert_eq!(names, ["Website Revamp"]);
+
+    let account = service.rename(acme, "Acme Private Limited", false).unwrap();
+    assert_eq!(account.client.name(), "Acme Private Limited");
+    assert_eq!(account.client.aliases(), ["Acme Pvt Ltd"]);
+    assert_eq!(account.projects.len(), 1);
+    assert_eq!(account.invoices.len(), 2);
+    let renamed = named(&service.list().unwrap(), "Acme Private Limited").clone();
+    assert_eq!((renamed.projects, renamed.owed), (1, rupees(35_400)));
+    // The project kept its copy; the invoices never change
+    assert_eq!(account.projects[0].client_name(), "Acme Pvt Ltd");
+    assert!(
+        account
+            .invoices
+            .iter()
+            .all(|i| i.client_name() == "Acme Pvt Ltd")
+    );
+}
+
+#[test]
+fn a_rename_can_carry_the_new_name_to_the_open_projects() {
+    let store = demo::store().unwrap();
+    let mut service = ClientService::new(store.repository());
+    let acme = demo_client(&service, "Acme Pvt Ltd");
+
+    let account = service.rename(acme, "Acme Private Limited", true).unwrap();
+    assert_eq!(account.projects[0].client_name(), "Acme Private Limited");
+    assert!(
+        service
+            .projects_to_rename(acme, "Acme Private Limited")
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_name_another_client_goes_by_is_refused() {
+    let store = demo::store().unwrap();
+    let mut service = ClientService::new(store.repository());
+    let acme = demo_client(&service, "Acme Pvt Ltd");
+    let globex = demo_client(&service, "Globex Labs");
+    service.rename(globex, "Globex", false).unwrap();
+
+    for taken in [" globex labs", "GLOBEX"] {
+        let error = service.rename(acme, taken, false).unwrap_err();
+        assert!(
+            matches!(&error, ServiceError::ClientNameTaken { other, .. } if other == "Globex"),
+            "{error}"
+        );
+    }
+    assert!(matches!(
+        service.projects_to_rename(acme, "Globex"),
+        Err(ServiceError::ClientNameTaken { .. })
+    ));
+    // Their own name in other capitals, and back to an earlier one, are fine
+    service.rename(globex, "GLOBEX", false).unwrap();
+    service.rename(globex, "Globex Labs", false).unwrap();
+}
+
+/// A second entry for Acme, as typed on another project
+fn acme_typo(store: &Store) -> ClientId {
+    ProjectService::new(store.repository())
+        .create(ProjectDraft {
+            name: "Brochure".to_owned(),
+            client: ClientDetails::named("Acme Pvt", None),
+            billing: Billing::Fixed,
+        })
+        .unwrap();
+    demo_client(&ClientService::new(store.repository()), "Acme Pvt")
+}
+
+#[test]
+fn a_merged_client_leaves_the_book_and_their_projects_count_under_the_other() {
+    let store = demo::store().unwrap();
+    let typo = acme_typo(&store);
+    let mut service = ClientService::new(store.repository());
+    let acme = demo_client(&service, "Acme Pvt Ltd");
+
+    let offered = service.projects_to_merge(typo, acme).unwrap();
+    let names: Vec<_> = offered.iter().map(|p| p.name()).collect();
+    assert_eq!(names, ["Brochure"]);
+
+    let account = service.merge(typo, acme, false).unwrap();
+    assert_eq!(account.client.name(), "Acme Pvt Ltd");
+    assert_eq!(account.client.aliases(), ["Acme Pvt"]);
+    assert_eq!(account.projects.len(), 2);
+    assert!(matches!(
+        service.client(typo),
+        Err(ServiceError::NoSuchClient(_))
+    ));
+    let clients = service.list().unwrap();
+    assert_eq!(clients.len(), 4);
+    assert_eq!(named(&clients, "Acme Pvt Ltd").projects, 2);
+}
+
+#[test]
+fn a_merge_can_give_the_open_projects_the_surviving_clients_details() {
+    let store = demo::store().unwrap();
+    let typo = acme_typo(&store);
+    let mut service = ClientService::new(store.repository());
+    let acme = demo_client(&service, "Acme Pvt Ltd");
+
+    let account = service.merge(typo, acme, true).unwrap();
+    let brochure = account
+        .projects
+        .iter()
+        .find(|p| p.name() == "Brochure")
+        .unwrap();
+    let project = store.repository().load(brochure.id()).unwrap();
+    assert_eq!(project.client_name(), "Acme Pvt Ltd");
+    assert_eq!(
+        project.client_gstin().map(|g| g.as_str()),
+        Some("27AAPFU0939F2ZU")
+    );
+}
+
+#[test]
+fn a_merge_into_themselves_or_across_gstins_is_refused() {
+    let store = demo::store().unwrap();
+    let mut service = ClientService::new(store.repository());
+    let acme = demo_client(&service, "Acme Pvt Ltd");
+    let umbrella = demo_client(&service, "Umbrella Analytics");
+
+    assert!(matches!(
+        service.merge(acme, acme, false),
+        Err(ServiceError::MergeIntoSelf)
+    ));
+    assert!(matches!(
+        service.projects_to_merge(umbrella, acme),
+        Err(ServiceError::Domain(DomainError::ClientGstinsDiffer { .. }))
+    ));
+    assert!(service.merge(umbrella, acme, true).is_err());
+    assert_eq!(service.list().unwrap().len(), 4);
+}
+
+#[test]
+fn a_merge_that_fills_in_a_gstin_offers_the_kept_clients_own_projects_too() {
+    let store = demo::store().unwrap();
+    let typo = acme_typo(&store);
+    let mut service = ClientService::new(store.repository());
+    let acme = demo_client(&service, "Acme Pvt Ltd");
+
+    // Acme Pvt (no GSTIN) is kept; Acme Pvt Ltd's GSTIN comes across, so both projects change
+    let offered = service.projects_to_merge(acme, typo).unwrap();
+    let mut names: Vec<_> = offered.iter().map(|p| p.name()).collect();
+    names.sort_unstable();
+    assert_eq!(names, ["Brochure", "Website Revamp"]);
+
+    let account = service.merge(acme, typo, true).unwrap();
+    assert_eq!(
+        account.client.gstin().map(|g| g.as_str()),
+        Some("27AAPFU0939F2ZU")
+    );
+    for project in &account.projects {
+        let project = store.repository().load(project.id()).unwrap();
+        assert_eq!(project.client_name(), "Acme Pvt");
+        assert!(project.client_gstin().is_some());
+    }
+}
+
+#[test]
+fn a_project_that_refuses_a_merge_stops_only_the_merge_with_projects() {
+    let store = demo::store().unwrap();
+    let mut service = ClientService::new(store.repository());
+    // Initrode bills in euros from abroad; Globex is in India
+    let initrode = demo_client(&service, "Initrode GmbH");
+    let globex = demo_client(&service, "Globex Labs");
+
+    let offered = service.projects_to_merge(initrode, globex).unwrap();
+    assert_eq!(offered.len(), 1);
+    let error = service.merge(initrode, globex, true).unwrap_err();
+    assert!(
+        matches!(&error, ServiceError::ProjectRefusedClient { project, .. } if project == "API Audit"),
+        "{error}"
+    );
+    assert_eq!(service.list().unwrap().len(), 4);
+    // The clients alone merge; API Audit keeps its copy and still counts under Globex
+    let account = service.merge(initrode, globex, false).unwrap();
+    assert!(account.projects.iter().any(|p| p.name() == "API Audit"));
+}
+
+#[test]
+fn renaming_a_client_to_their_own_name_changes_nothing() {
+    let store = demo::store().unwrap();
+    let mut service = ClientService::new(store.repository());
+    let acme = demo_client(&service, "Acme Pvt Ltd");
+    let before = store.content_hash().unwrap();
+
+    assert!(
+        service
+            .projects_to_rename(acme, " Acme Pvt Ltd ")
+            .unwrap()
+            .is_empty()
+    );
+    service.rename(acme, "Acme Pvt Ltd", true).unwrap();
+    assert_eq!(store.content_hash().unwrap(), before);
+}
