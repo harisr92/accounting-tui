@@ -92,7 +92,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ClientChoiceRow dco_decode_client_choice_row(dynamic raw);
 
   @protected
+  ClientDetail dco_decode_client_detail(dynamic raw);
+
+  @protected
   ClientRow dco_decode_client_row(dynamic raw);
+
+  @protected
+  ClientSummaryRow dco_decode_client_summary_row(dynamic raw);
 
   @protected
   CreditInput dco_decode_credit_input(dynamic raw);
@@ -156,6 +162,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ClientRow> dco_decode_list_client_row(dynamic raw);
+
+  @protected
+  List<ClientSummaryRow> dco_decode_list_client_summary_row(dynamic raw);
 
   @protected
   List<CreditLineInput> dco_decode_list_credit_line_input(dynamic raw);
@@ -348,7 +357,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ClientChoiceRow sse_decode_client_choice_row(SseDeserializer deserializer);
 
   @protected
+  ClientDetail sse_decode_client_detail(SseDeserializer deserializer);
+
+  @protected
   ClientRow sse_decode_client_row(SseDeserializer deserializer);
+
+  @protected
+  ClientSummaryRow sse_decode_client_summary_row(SseDeserializer deserializer);
 
   @protected
   CreditInput sse_decode_credit_input(SseDeserializer deserializer);
@@ -416,6 +431,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ClientRow> sse_decode_list_client_row(SseDeserializer deserializer);
+
+  @protected
+  List<ClientSummaryRow> sse_decode_list_client_summary_row(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<CreditLineInput> sse_decode_list_credit_line_input(
@@ -641,7 +661,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_client_detail(ClientDetail self, SseSerializer serializer);
+
+  @protected
   void sse_encode_client_row(ClientRow self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_client_summary_row(
+    ClientSummaryRow self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_credit_input(CreditInput self, SseSerializer serializer);
@@ -721,6 +750,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_client_row(
     List<ClientRow> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_client_summary_row(
+    List<ClientSummaryRow> self,
     SseSerializer serializer,
   );
 

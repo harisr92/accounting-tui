@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/misc.dart' show ProviderOrFamily;
 import 'package:path_provider/path_provider.dart';
 
 import 'rust/api/app.dart';
+import 'rust/api/clients.dart';
 import 'rust/api/dashboard.dart';
 import 'rust/api/expenses.dart';
 import 'rust/api/error.dart';
@@ -71,6 +72,22 @@ class ProjectNotifier extends AsyncNotifier<ProjectDetail> {
   /// Show the project a change returned, which is what was saved, instead of loading it again
   void show(ProjectDetail saved) => state = AsyncData(saved);
 }
+
+/// The saved clients with their projects counted and what they owe. Worked out again whenever
+/// the project or invoice list is reloaded after a change, as both feed it.
+final clientsProvider = FutureProvider<List<ClientSummaryRow>>((ref) {
+  // Only to depend on them: their own screens show their errors
+  ref.watch(invoicesProvider.future).ignore();
+  ref.watch(projectsProvider.future).ignore();
+  return ref.watch(compterProvider).clientList();
+});
+
+/// One opened client with their projects and invoices, refreshed like [clientsProvider]
+final clientProvider = FutureProvider.family<ClientDetail, String>((ref, id) {
+  ref.watch(invoicesProvider.future).ignore();
+  ref.watch(projectsProvider.future).ignore();
+  return ref.watch(compterProvider).client(id: id);
+});
 
 /// The business profile, or `null` before it is set up. Invalidate it after saving.
 final profileProvider = FutureProvider<ProfileRow?>(

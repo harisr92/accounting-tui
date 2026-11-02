@@ -35,6 +35,12 @@ abstract class CompterApp implements RustOpaqueInterface {
     required List<CreditLineInput> lines,
   });
 
+  /// One client with their projects and invoices
+  Future<ClientDetail> client({required String id});
+
+  /// The Clients screen: every saved client with their projects counted and what they owe
+  Future<List<ClientSummaryRow>> clientList();
+
   /// Every client billed before, by name, to fill a new project's client from
   Future<List<ClientChoiceRow>> clients();
 
