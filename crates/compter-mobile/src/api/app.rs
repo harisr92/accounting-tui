@@ -5,15 +5,15 @@ use flutter_rust_bridge::frb;
 
 use compter_core::demo;
 use compter_core::domain::{
-    BasisSchedule, Billing, ClientDetails, ClientRegion, Currency, Discount, DomainError,
+    BasisSchedule, Billing, ClientDetails, ClientId, ClientRegion, Currency, Discount, DomainError,
     ExchangeRate, ExpenseId, IncomeBasis, Invoice, InvoiceNumber, MilestoneId, ProfileDraft,
     Project, ProjectId, ReturnKind, ReturnTerms, TimeEntry,
 };
 use compter_core::input;
 use compter_core::services::{
-    CreditDraft, CreditLineDraft, DashboardService, ExpenseDraft, ExpenseService, InvoiceService,
-    InvoicingError, MilestoneDraft, ProjectDraft, ProjectService, ReportService, ServiceError,
-    creditable_lines_of,
+    ClientService, CreditDraft, CreditLineDraft, DashboardService, ExpenseDraft, ExpenseService,
+    InvoiceService, InvoicingError, MilestoneDraft, ProjectDraft, ProjectService, ReportService,
+    ServiceError, creditable_lines_of,
 };
 use compter_core::storage::sync::{self, Lease, Resolution, SyncDir, SyncError};
 use compter_core::storage::{DataDir, RedbRepository, Store};
@@ -22,11 +22,11 @@ use super::expenses::{category, fiscal_year};
 use super::profile::{currency, this_year};
 use super::reports::month_label;
 use super::{
-    ApiError, ClientChoiceRow, CreditInput, CreditLineInput, CreditPreviewRow, CreditedRow,
-    DashboardRow, ExpenseInput, ExpenseList, ExpenseRow, ExportRow, InvoiceDetail, InvoiceList,
-    InvoicePreviewRow, InvoiceRow, IssuedRow, MilestoneInput, PaymentInput, ProfileInput,
-    ProfileRow, ProjectDetail, ProjectInput, ProjectRow, ReceivedRow, ReportRow, SentRow,
-    SyncStatusRow, TimeInput,
+    ApiError, ClientChoiceRow, ClientDetail, ClientSummaryRow, CreditInput, CreditLineInput,
+    CreditPreviewRow, CreditedRow, DashboardRow, ExpenseInput, ExpenseList, ExpenseRow, ExportRow,
+    InvoiceDetail, InvoiceList, InvoicePreviewRow, InvoiceRow, IssuedRow, MilestoneInput,
+    PaymentInput, ProfileInput, ProfileRow, ProjectDetail, ProjectInput, ProjectRow, ReceivedRow,
+    ReportRow, SentRow, SyncStatusRow, TimeInput,
 };
 
 /// The open database and the services over it. Dart opens one at start-up and keeps it for the
@@ -35,6 +35,7 @@ use super::{
 #[frb(opaque)]
 pub struct CompterApp {
     projects: ProjectService<RedbRepository>,
+    clients: ClientService<RedbRepository>,
     invoices: InvoiceService<RedbRepository>,
     expenses: ExpenseService<RedbRepository>,
     reports: ReportService<RedbRepository>,
@@ -63,6 +64,7 @@ impl CompterApp {
     fn over(store: Store, dir: DataDir, demo: bool) -> Self {
         Self {
             projects: ProjectService::new(store.repository()),
+            clients: ClientService::new(store.repository()),
             invoices: InvoiceService::new(store.repository(), Some(dir.clone())),
             expenses: ExpenseService::new(store.repository()),
             reports: ReportService::new(store.repository(), Some(dir.clone())),
@@ -91,14 +93,16 @@ impl CompterApp {
         );
         let Self {
             projects,
+            clients,
             invoices,
             expenses,
             reports,
+            dashboard,
             store,
             ..
         } = std::mem::replace(self, stand_in);
         // Every repository goes before the store can close
-        drop((projects, invoices, expenses, reports));
+        drop((projects, clients, invoices, expenses, reports, dashboard));
         store.close().map_err(ServiceError::from)?;
         let result = step(&dir);
         let store = Store::open(&dir).map_err(|e| ApiError {
@@ -132,6 +136,24 @@ impl CompterApp {
             .iter()
             .map(ClientChoiceRow::from)
             .collect())
+    }
+
+    /// The Clients screen: every saved client with their projects counted and what they owe
+    pub fn client_list(&self) -> Result<Vec<ClientSummaryRow>, ApiError> {
+        Ok(self
+            .clients
+            .list()?
+            .iter()
+            .map(ClientSummaryRow::from)
+            .collect())
+    }
+
+    /// One client with their projects and invoices
+    pub fn client(&self, id: String) -> Result<ClientDetail, ApiError> {
+        let id: ClientId = id
+            .parse()
+            .map_err(|_| ApiError::invalid("client_id", "not a client id"))?;
+        Ok(ClientDetail::from(&self.clients.account(id)?))
     }
 
     pub fn create_project(&mut self, input: ProjectInput) -> Result<ProjectDetail, ApiError> {

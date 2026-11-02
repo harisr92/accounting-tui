@@ -56,3 +56,47 @@ fn a_state_other_than_the_gstins_is_refused() {
     input.client_state = None;
     app.create_project(input).unwrap();
 }
+
+#[test]
+fn clients_show_their_place_projects_and_what_they_owe() {
+    let (_scratch, app) = demo();
+    let clients = app.client_list().unwrap();
+    let names: Vec<_> = clients.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "Acme Pvt Ltd",
+            "Globex Labs",
+            "Initrode GmbH",
+            "Umbrella Analytics"
+        ]
+    );
+    let acme = &clients[0];
+    assert_eq!(acme.place.as_deref(), Some("27AAPFU0939F2ZU"));
+    assert_eq!(acme.projects, 1);
+    assert_eq!(acme.owed.as_deref(), Some("₹35,400.00"));
+    assert_eq!(clients[1].place.as_deref(), Some("Karnataka (29)"));
+    assert_eq!(clients[2].place.as_deref(), Some("Germany"));
+    assert_eq!(clients[2].owed, None);
+}
+
+#[test]
+fn an_opened_client_lists_their_projects_and_invoices() {
+    let (_scratch, app) = demo();
+    let acme = app.client_list().unwrap().remove(0);
+    let detail = app.client(acme.id).unwrap();
+    assert_eq!(detail.name, "Acme Pvt Ltd");
+    assert_eq!(detail.address, ["Plot 7, MIDC", "Pune 411019"]);
+    assert_eq!(detail.owed.as_deref(), Some("₹35,400.00"));
+    let projects: Vec<_> = detail.projects.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(projects, ["Website Revamp"]);
+    let milestones: Vec<_> = detail
+        .invoices
+        .iter()
+        .map(|i| i.milestones.as_str())
+        .collect();
+    assert_eq!(milestones, ["Frontend", "Design"]);
+
+    let error = app.client("not an id".to_owned()).unwrap_err();
+    assert_eq!(error.field.as_deref(), Some("client_id"));
+}
