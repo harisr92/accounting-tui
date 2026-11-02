@@ -3,8 +3,10 @@ use std::collections::HashMap;
 use bigdecimal::{BigDecimal, Zero};
 
 use super::ServiceError;
-use crate::domain::{Client, ClientId, Currency, InvoiceSummary, ProjectSummary, client_key};
-use crate::storage::{ClientRepository, InvoiceRepository, ProjectRepository};
+use crate::domain::{
+    Client, ClientDetails, ClientId, Currency, InvoiceSummary, Project, ProjectSummary, client_key,
+};
+use crate::storage::{ClientRecord, ClientRepository, InvoiceRepository, ProjectRepository};
 
 /// What a client still owes in one currency. Amounts in different currencies are never added
 /// up or converted: a client billed in euros owes euros.
@@ -37,8 +39,9 @@ pub struct ClientAccount {
 }
 
 /// The saved clients with their projects and invoices, matched by client name ignoring case
-/// ([`Client::matches`]), as projects and invoices keep the name they were saved with. Reads
-/// summaries only.
+/// ([`Client::matches`]), as projects and invoices keep the name they were saved with. Lists
+/// read summaries only. A client's details can be corrected here, and carried to their open
+/// projects; issued invoices never change.
 pub struct ClientService<R> {
     repo: R,
 }
@@ -82,12 +85,7 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientService<
 
     /// The client `id` with their projects and invoices
     pub fn account(&self, id: ClientId) -> Result<ClientAccount, ServiceError> {
-        let client = self
-            .repo
-            .clients()?
-            .into_iter()
-            .find(|c| c.id() == id)
-            .ok_or(ServiceError::NoSuchClient(id))?;
+        let client = self.client(id)?;
         let projects: Vec<_> = self
             .repo
             .list()?
@@ -107,6 +105,109 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientService<
             invoices,
         })
     }
+
+    /// The client's open projects (not archived: they can still take new work, finished or
+    /// not) whose copy of the client `details` would change: what [`update`](Self::update)
+    /// offers to correct too. Details it would refuse are refused here, before anyone is asked.
+    pub fn projects_to_update(
+        &self,
+        id: ClientId,
+        details: &ClientDetails,
+    ) -> Result<Vec<ProjectSummary>, ServiceError> {
+        let client = self.client(id)?;
+        ensure_same_name(&client, details)?;
+        Client::with_id(id, details.clone())?;
+        Ok(self
+            .stale_projects(&client, details)?
+            .into_iter()
+            .map(|(summary, _)| summary)
+            .collect())
+    }
+
+    /// Correct the client `id`'s GSTIN, address, region or currency, and with
+    /// `update_projects` their open projects' copies too (each keeps its own currency), in one
+    /// write. The name can't change: projects and invoices are filed under it. Issued invoices
+    /// keep the details they were printed with. Nothing is saved if anything is refused.
+    pub fn update(
+        &mut self,
+        id: ClientId,
+        details: ClientDetails,
+        update_projects: bool,
+    ) -> Result<ClientAccount, ServiceError> {
+        let mut client = self.client(id)?;
+        ensure_same_name(&client, &details)?;
+        let unchanged = client.details().same_as(&details);
+        // Checked before any project, so a refusal of the details themselves names no project
+        client.update(details.clone())?;
+        let mut projects = Vec::new();
+        if update_projects {
+            for (_, mut project) in self.stale_projects(&client, &details)? {
+                adopt(&mut project, &details)?;
+                projects.push(project);
+            }
+        }
+        if projects.is_empty() && unchanged {
+            return self.account(id);
+        }
+        self.repo.save_client(&ClientRecord {
+            client: &client,
+            projects: &projects,
+        })?;
+        self.account(id)
+    }
+
+    /// The open projects of `client` whose copy of the client `details` would change
+    fn stale_projects(
+        &self,
+        client: &Client,
+        details: &ClientDetails,
+    ) -> Result<Vec<(ProjectSummary, Project)>, ServiceError> {
+        let mut stale = Vec::new();
+        for summary in self.repo.list()? {
+            if !is_open(client, &summary) {
+                continue;
+            }
+            let project = self.repo.load(summary.id())?;
+            if project.would_adopt(details) {
+                stale.push((summary, project));
+            }
+        }
+        Ok(stale)
+    }
+
+    /// The client `id` from the address book
+    pub fn client(&self, id: ClientId) -> Result<Client, ServiceError> {
+        self.repo
+            .clients()?
+            .into_iter()
+            .find(|c| c.id() == id)
+            .ok_or(ServiceError::NoSuchClient(id))
+    }
+}
+
+/// A client's name stays as it is: their projects and invoices are filed under it
+fn ensure_same_name(client: &Client, details: &ClientDetails) -> Result<(), ServiceError> {
+    if details.name.trim() == client.name() {
+        Ok(())
+    } else {
+        Err(ServiceError::ClientNameFixed)
+    }
+}
+
+/// A project of `client` that can still bill: any not archived, as a finished one can take
+/// new milestones, whose invoices print the project's copy of the client
+fn is_open(client: &Client, project: &ProjectSummary) -> bool {
+    client.matches(project.client_name()) && !project.is_archived()
+}
+
+/// `project` with the client's corrected details; a refusal names the project
+fn adopt(project: &mut Project, details: &ClientDetails) -> Result<(), ServiceError> {
+    project
+        .adopt_client(details.clone())
+        .map_err(|source| ServiceError::ProjectRefusedClient {
+            project: project.name().to_owned(),
+            source: Box::new(source),
+        })
 }
 
 /// The balances of `invoices`, added up per currency: rupees first, then by code

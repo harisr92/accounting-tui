@@ -18,8 +18,9 @@ pub use files::write_file;
 pub use ledger::RedbLedgerStorage;
 pub use redb_repository::RedbRepository;
 pub use repository::{
-    ClientRepository, CreditRecord, ExpenseRecord, ExpenseRepository, InvoiceRepository,
-    IssueRecord, PaymentRecord, ProjectRepository, Repository, SettingsRepository,
+    ClientRecord, ClientRepository, CreditRecord, ExpenseRecord, ExpenseRepository,
+    InvoiceRepository, IssueRecord, PaymentRecord, ProjectRepository, Repository,
+    SettingsRepository,
 };
 pub use store::Store;
 

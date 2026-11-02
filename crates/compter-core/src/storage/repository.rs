@@ -26,11 +26,23 @@ pub trait ProjectRepository {
     fn delete(&mut self, id: ProjectId) -> Result<(), StorageError>;
 }
 
+/// A client's details corrected from the address book, with the open projects that take them
+/// too, saved together or not at all
+pub struct ClientRecord<'a> {
+    pub client: &'a Client,
+    /// Projects whose copy of the client was updated; may be empty
+    pub projects: &'a [Project],
+}
+
 /// The clients billed so far: the address book a new project's client is picked from. Clients
-/// are written only with a project, through [`ProjectRepository::save_with_client`].
+/// are written with a project ([`ProjectRepository::save_with_client`]), or corrected on their
+/// own ([`save_client`](Self::save_client)).
 pub trait ClientRepository {
     /// Every client, sorted by name
     fn clients(&self) -> Result<Vec<Client>, StorageError>;
+
+    /// Replace a client's record, and the projects in `record`, in one write
+    fn save_client(&mut self, record: &ClientRecord) -> Result<(), StorageError>;
 }
 
 /// Everything that changes when an invoice is issued, saved together or not at all

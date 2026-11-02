@@ -435,6 +435,35 @@ impl Project {
         Ok(())
     }
 
+    /// Take a corrected GSTIN, address and region for the client from their address book entry.
+    /// The client's name and the project's currency stay: the name is how the client is
+    /// matched, and the currency belongs to the project (it may be fixed by what was billed).
+    /// Invoices already issued keep the details they were printed with.
+    pub fn adopt_client(&mut self, client: ClientDetails) -> Result<(), DomainError> {
+        let client = self.as_own_client(client).checked()?;
+        self.client_gstin = client.gstin;
+        self.client_address = client.address;
+        self.client_region = client.region;
+        Ok(())
+    }
+
+    /// Whether [`adopt_client`](Self::adopt_client) would change the project's copy of the
+    /// client (see [`ClientDetails::same_as`])
+    pub fn would_adopt(&self, client: &ClientDetails) -> bool {
+        !self
+            .as_own_client(client.clone())
+            .same_as(&self.client_details())
+    }
+
+    /// `client` with this project's client name and currency, which adopting never changes
+    fn as_own_client(&self, client: ClientDetails) -> ClientDetails {
+        ClientDetails {
+            name: self.client_name.clone(),
+            currency: self.currency,
+            ..client
+        }
+    }
+
     /// Change the hourly rate, or the billing type while there are no milestones
     ///
     /// A new rate re-prices pending milestones only; invoiced amounts stay as billed.
