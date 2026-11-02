@@ -242,6 +242,12 @@ impl CompterApp {
         )?))
     }
 
+    /// Take a client out of the address book. Refused while any project (archived included) or
+    /// invoice is still theirs; a new project under their name adds them again.
+    pub fn remove_client(&mut self, id: String) -> Result<(), ApiError> {
+        Ok(self.clients.remove(client_id(&id)?)?)
+    }
+
     pub fn create_project(&mut self, input: ProjectInput) -> Result<ProjectDetail, ApiError> {
         Ok(ProjectDetail::from(
             &self.projects.create(project_draft(input)?)?,
