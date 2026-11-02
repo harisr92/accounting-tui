@@ -58,7 +58,10 @@ class _ClientsScreenState extends ConsumerState<ClientsScreen> with Searching {
 
   /// A tile for each client that matches the search
   List<Widget> _matching(SearchQuery query, List<ClientSummaryRow> rows) {
-    final matches = query.apply(rows, (row) => [row.name, row.place ?? '']);
+    final matches = query.apply(
+      rows,
+      (row) => [row.name, row.place ?? '', ...row.aliases],
+    );
     if (matches.isEmpty) return [noMatches(query)];
     return [
       for (final row in matches)

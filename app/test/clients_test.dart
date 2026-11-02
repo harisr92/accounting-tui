@@ -14,6 +14,20 @@ void main() {
     await settle(tester);
   }
 
+  /// Pick [item] from the opened client's change menu
+  Future<void> change(WidgetTester tester, String item) async {
+    await tester.tap(find.byTooltip('Change client'));
+    await settle(tester);
+    await tester.tap(find.text(item));
+    await settle(tester);
+  }
+
+  Future<void> openAcme(WidgetTester tester) async {
+    await openClients(tester);
+    await tester.tap(find.text('Acme Pvt Ltd'));
+    await settle(tester);
+  }
+
   testWidgets(
     'lists each client with their place, projects and what they owe',
     (tester) async {
@@ -66,8 +80,7 @@ void main() {
     await openClients(tester);
     await tester.tap(find.text('Acme Pvt Ltd'));
     await settle(tester);
-    await tester.tap(find.byTooltip('Edit client'));
-    await settle(tester);
+    await change(tester, 'Edit details');
     expect(find.text('Edit Acme Pvt Ltd'), findsOneWidget);
 
     await tester.enterText(
@@ -81,5 +94,49 @@ void main() {
     await tester.tap(find.text('Update projects'));
     await pumpUntil(tester, find.text('Plot 9, MIDC, Pune 411019'));
     expect(find.text('Invoices · 2'), findsOneWidget);
+  });
+
+  testWidgets('a renamed client keeps the old name as an alias', (
+    tester,
+  ) async {
+    await openAcme(tester);
+    await change(tester, 'Rename');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Name'),
+      'Acme Private Limited',
+    );
+    await tester.tap(find.text('Save'));
+    await pumpUntil(tester, find.text('Rename on open projects too?'));
+
+    await tester.tap(find.text('Update projects'));
+    await pumpUntil(tester, find.textContaining('Also known as Acme Pvt Ltd'));
+    expect(find.text('Acme Private Limited'), findsWidgets);
+    expect(find.text('Invoices · 2'), findsOneWidget);
+  });
+
+  testWidgets('a duplicate merges into the client kept, which opens', (
+    tester,
+  ) async {
+    await openClients(tester);
+    await tester.tap(find.text('Globex Labs'));
+    await settle(tester);
+    await change(tester, 'Merge into…');
+    expect(find.text('Merge Globex Labs into'), findsOneWidget);
+    expect(find.text('New client'), findsNothing);
+
+    await tester.tap(find.text('Acme Pvt Ltd'));
+    await pumpUntil(tester, find.text('Merge into Acme Pvt Ltd?'));
+    expect(find.text('Clients only'), findsOneWidget);
+    await tester.tap(find.text('Update projects'));
+    await pumpUntil(tester, find.textContaining('Also known as Globex Labs'));
+    expect(find.text('Projects · 2 projects'), findsOneWidget);
+  });
+
+  testWidgets('clients with different GSTINs are not merged', (tester) async {
+    await openAcme(tester);
+    await change(tester, 'Merge into…');
+    await tester.tap(find.text('Umbrella Analytics'));
+    await pumpUntil(tester, find.textContaining('different GSTIN'));
+    expect(find.text('Merge into Umbrella Analytics?'), findsNothing);
   });
 }
