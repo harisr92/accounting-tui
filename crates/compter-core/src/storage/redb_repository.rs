@@ -17,8 +17,8 @@ use super::{
     StorageError,
 };
 use crate::domain::{
-    Appearance, BusinessProfile, Client, CreditNote, Expense, ExpenseId, FiscalYear, Invoice,
-    InvoiceNumber, InvoiceSummary, Logo, LogoId, Project, ProjectId, ProjectSummary,
+    Appearance, BusinessProfile, Client, ClientId, CreditNote, Expense, ExpenseId, FiscalYear,
+    Invoice, InvoiceNumber, InvoiceSummary, Logo, LogoId, Project, ProjectId, ProjectSummary,
 };
 
 /// All of compter's records on redb. One type behind every repository trait, so a change that
@@ -181,6 +181,16 @@ impl ClientRepository for RedbRepository {
         }
         if let Some(removed) = record.removed {
             txn.open_table(CLIENTS)?.remove(removed.as_uuid())?;
+        }
+        txn.commit()?;
+        Ok(())
+    }
+
+    fn delete_client(&mut self, id: ClientId) -> Result<(), StorageError> {
+        let txn = self.db.begin_write()?;
+        if txn.open_table(CLIENTS)?.remove(id.as_uuid())?.is_none() {
+            // Dropping the transaction aborts it
+            return Err(StorageError::ClientNotFound(id));
         }
         txn.commit()?;
         Ok(())

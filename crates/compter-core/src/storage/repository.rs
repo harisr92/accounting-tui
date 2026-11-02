@@ -39,6 +39,8 @@ pub struct ClientRecord<'a> {
 /// The clients billed so far: the address book a new project's client is picked from. Clients
 /// are written with a project ([`ProjectRepository::save_with_client`]), or corrected on their
 /// own ([`save_client`](Self::save_client)), which also removes a client merged into another.
+/// A client is deleted ([`delete_client`](Self::delete_client)) only once nothing is filed
+/// under them; the service checks that.
 pub trait ClientRepository {
     /// Every client, sorted by name
     fn clients(&self) -> Result<Vec<Client>, StorageError>;
@@ -46,6 +48,10 @@ pub trait ClientRepository {
     /// Replace a client's record and the projects in `record`, and remove the client it
     /// names as merged, in one write
     fn save_client(&mut self, record: &ClientRecord) -> Result<(), StorageError>;
+
+    /// Remove a client from the address book; [`StorageError::ClientNotFound`] when there is
+    /// no such client
+    fn delete_client(&mut self, id: ClientId) -> Result<(), StorageError>;
 }
 
 /// Everything that changes when an invoice is issued, saved together or not at all

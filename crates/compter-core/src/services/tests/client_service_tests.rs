@@ -527,3 +527,82 @@ fn renaming_a_client_to_their_own_name_changes_nothing() {
     service.rename(acme, "Acme Pvt Ltd", true).unwrap();
     assert_eq!(store.content_hash().unwrap(), before);
 }
+
+#[test]
+fn a_client_whose_last_project_was_deleted_can_be_removed_and_added_again() {
+    let store = demo::store().unwrap();
+    let draft = || ProjectDraft {
+        name: "Brochure".to_owned(),
+        client: ClientDetails::named("Hooli", None),
+        billing: Billing::Fixed,
+    };
+    let mut projects = ProjectService::new(store.repository());
+    let project = projects.create(draft()).unwrap();
+    let mut service = ClientService::new(store.repository());
+    let hooli = demo_client(&service, "Hooli");
+    projects.delete(project.id()).unwrap();
+    // Deleting the project leaves the client
+    assert_eq!(service.list().unwrap().len(), 5);
+
+    service.ensure_removable(hooli).unwrap();
+    service.remove(hooli).unwrap();
+
+    assert_eq!(service.list().unwrap().len(), 4);
+    assert!(matches!(
+        service.client(hooli),
+        Err(ServiceError::NoSuchClient(_))
+    ));
+    // A new project under their name adds them again
+    projects.create(draft()).unwrap();
+    assert_eq!(named(&service.list().unwrap(), "Hooli").projects, 1);
+}
+
+#[test]
+fn a_client_with_projects_or_invoices_stays() {
+    let store = demo::store().unwrap();
+    let mut service = ClientService::new(store.repository());
+    let acme = demo_client(&service, "Acme Pvt Ltd");
+    let account = service.account(acme).unwrap();
+
+    let error = service.remove(acme).unwrap_err();
+
+    match error {
+        ServiceError::ClientInUse {
+            name,
+            projects,
+            invoices,
+        } => {
+            assert_eq!(name, "Acme Pvt Ltd");
+            assert_eq!(projects, account.projects.len());
+            assert_eq!(invoices, account.invoices.len());
+            assert!(projects > 0 && invoices > 0);
+        }
+        other => panic!("{other:?}"),
+    }
+    assert!(service.client(acme).is_ok());
+}
+
+#[test]
+fn a_client_counts_projects_under_an_earlier_name_before_removal() {
+    let store = demo::store().unwrap();
+    let typo = acme_typo(&store);
+    let mut service = ClientService::new(store.repository());
+    // The Brochure project keeps "Acme Pvt", now an alias of the renamed client
+    service.rename(typo, "Acme Brochures", false).unwrap();
+
+    let error = service.remove(typo).unwrap_err();
+
+    assert!(
+        matches!(error, ServiceError::ClientInUse { projects: 1, .. }),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn removing_an_unknown_client_is_refused() {
+    let store = demo::store().unwrap();
+    let error = ClientService::new(store.repository())
+        .remove(ClientId::generate())
+        .unwrap_err();
+    assert!(matches!(error, ServiceError::NoSuchClient(_)));
+}
