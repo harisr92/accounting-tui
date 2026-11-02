@@ -2459,11 +2459,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ApiError dco_decode_api_error(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return ApiError(
-      field: dco_decode_opt_String(arr[0]),
-      message: dco_decode_String(arr[1]),
+      field: dco_decode_opt_box_autoadd_input_field(arr[0]),
+      line: dco_decode_opt_String(arr[1]),
+      message: dco_decode_String(arr[2]),
     );
   }
 
@@ -2489,6 +2490,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ExpenseInput dco_decode_box_autoadd_expense_input(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_expense_input(raw);
+  }
+
+  @protected
+  InputField dco_decode_box_autoadd_input_field(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_input_field(raw);
   }
 
   @protected
@@ -2773,6 +2780,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  InputField dco_decode_input_field(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return InputField.values[raw as int];
+  }
+
+  @protected
   InvoiceDetail dco_decode_invoice_detail(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -3034,6 +3047,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   String? dco_decode_opt_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_String(raw);
+  }
+
+  @protected
+  InputField? dco_decode_opt_box_autoadd_input_field(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_input_field(raw);
   }
 
   @protected
@@ -3396,9 +3415,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   ApiError sse_decode_api_error(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_field = sse_decode_opt_String(deserializer);
+    var var_field = sse_decode_opt_box_autoadd_input_field(deserializer);
+    var var_line = sse_decode_opt_String(deserializer);
     var var_message = sse_decode_String(deserializer);
-    return ApiError(field: var_field, message: var_message);
+    return ApiError(field: var_field, line: var_line, message: var_message);
   }
 
   @protected
@@ -3429,6 +3449,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_expense_input(deserializer));
+  }
+
+  @protected
+  InputField sse_decode_box_autoadd_input_field(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_input_field(deserializer));
   }
 
   @protected
@@ -3736,6 +3762,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   int sse_decode_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getInt32();
+  }
+
+  @protected
+  InputField sse_decode_input_field(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return InputField.values[inner];
   }
 
   @protected
@@ -4165,6 +4198,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  InputField? sse_decode_opt_box_autoadd_input_field(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_input_field(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   ProfileRow? sse_decode_opt_box_autoadd_profile_row(
     SseDeserializer deserializer,
   ) {
@@ -4578,7 +4624,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_api_error(ApiError self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_opt_String(self.field, serializer);
+    sse_encode_opt_box_autoadd_input_field(self.field, serializer);
+    sse_encode_opt_String(self.line, serializer);
     sse_encode_String(self.message, serializer);
   }
 
@@ -4613,6 +4660,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_expense_input(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_input_field(
+    InputField self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_input_field(self, serializer);
   }
 
   @protected
@@ -4844,6 +4900,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putInt32(self);
+  }
+
+  @protected
+  void sse_encode_input_field(InputField self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected
@@ -5191,6 +5253,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_input_field(
+    InputField? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_input_field(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_profile_row(
     ProfileRow? self,
     SseSerializer serializer,
@@ -5461,7 +5536,7 @@ class CompterAppImpl extends RustOpaque implements CompterApp {
 
   /// Check the lines picked for a credit note against invoice `number` before asking when and
   /// why: each amount is a number, more than zero and no more than is left on its line. A
-  /// refusal names the line's field, `line:<milestone_id>`.
+  /// refusal names the line ([`InputField::CreditLine`], with its milestone as `line`).
   Future<void> checkCreditLines({
     required String number,
     required List<CreditLineInput> lines,

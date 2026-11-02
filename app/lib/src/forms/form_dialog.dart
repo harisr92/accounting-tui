@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../rust/api/error.dart';
+import '../ui/error_toast.dart';
 import '../subscription/paywall.dart';
 import '../ui/theme.dart';
 
 /// Fills in some of a form's fields at once, by their keys; `null` when nothing was picked
 typedef FieldPicker =
-    Future<Map<String, String>?> Function(BuildContext context);
+    Future<Map<InputField, String>?> Function(BuildContext context);
 
-/// One field of a [FormDialog]. [key] is the name Rust uses in `ApiError.field`, so a refused
-/// value is shown under the field that holds it. With [options] the field is a dropdown of
+/// One field of a [FormDialog]. [key] is the [InputField] Rust names in `ApiError.field`, so a
+/// refused value is shown under the field that holds it, and a key renamed on one side only
+/// doesn't build. With [options] the field is a dropdown of
 /// those values instead of free text, each shown as its entry in [optionLabels] if it has one.
 ///
 /// [pick] adds a button to a text field that fills in other fields too, e.g. a client's
@@ -34,7 +36,7 @@ class FieldSpec {
     this.derivedHint,
   });
 
-  final String key;
+  final InputField key;
   final String label;
   final String? hint;
   final TextInputType? keyboardType;
@@ -45,15 +47,16 @@ class FieldSpec {
   final bool multiline;
   final FieldPicker? pick;
   final String? pickTooltip;
-  final String? Function(Map<String, String> values)? derive;
-  final List<String> deriveFrom;
+  final String? Function(Map<InputField, String> values)? derive;
+  final List<InputField> deriveFrom;
   final String? derivedHint;
 }
 
 /// Every form in the app, as a bottom sheet: its fields, then Cancel and the one filled action
 /// at the foot, within thumb's reach. Values are passed to [submit] as typed; Rust parses and
-/// validates them. On a refusal the sheet stays open with the error, like `Form::step` in the
-/// terminal app.
+/// validates them. On a refusal the sheet stays open, like `Form::step` in the terminal app: an
+/// error about a field shows under it until that field is edited, and any other shows at the
+/// foot of the form as an [ErrorToast] the user closes.
 class FormDialog<T> extends StatefulWidget {
   const FormDialog({
     super.key,
@@ -65,7 +68,7 @@ class FormDialog<T> extends StatefulWidget {
 
   final String title;
   final List<FieldSpec> fields;
-  final Future<T> Function(Map<String, String> values) submit;
+  final Future<T> Function(Map<InputField, String> values) submit;
 
   /// `Preview` when a confirmation follows, `Save` otherwise
   final String submitLabel;
@@ -76,7 +79,7 @@ class FormDialog<T> extends StatefulWidget {
     BuildContext context, {
     required String title,
     required List<FieldSpec> fields,
-    required Future<T> Function(Map<String, String> values) submit,
+    required Future<T> Function(Map<InputField, String> values) submit,
     String submitLabel = 'Save',
     bool writes = true,
   }) async {
@@ -102,18 +105,23 @@ class FormDialog<T> extends StatefulWidget {
 }
 
 class _FormDialogState<T> extends State<FormDialog<T>> {
-  late final Map<String, TextEditingController> _controllers = {
+  late final Map<InputField, TextEditingController> _controllers = {
     for (final field in widget.fields)
       field.key: TextEditingController(text: field.initial),
   };
-  ApiError? _error;
+
+  /// The refusal about one of the fields, with what that field held when it was refused
+  (ApiError, String)? _fieldError;
+
+  /// A refusal about none of the fields, until closed
+  String? _toast;
   bool _saving = false;
 
   /// Fields [FieldSpec.derive] currently works out, so they are locked, each with what it
   /// held before, put back once it no longer is
-  final Map<String, String> _derived = {};
+  final Map<InputField, String> _derived = {};
 
-  Map<String, String> get _values => {
+  Map<InputField, String> get _values => {
     for (final entry in _controllers.entries) entry.key: entry.value.text,
   };
 
@@ -128,6 +136,17 @@ class _FormDialogState<T> extends State<FormDialog<T>> {
       _controllers[key]?.addListener(_rederive);
     }
     if (widget.fields.any((f) => f.derive != null)) _rederive();
+    for (final entry in _controllers.entries) {
+      entry.value.addListener(() => _edited(entry.key));
+    }
+  }
+
+  /// A field's error goes once its text changes; moving the cursor doesn't count
+  void _edited(InputField key) {
+    final refused = _fieldError;
+    if (refused == null || refused.$1.field != key) return;
+    if (_controllers[key]?.text == refused.$2) return;
+    setState(() => _fieldError = null);
   }
 
   /// Work out every derived field again from the fields it is derived from
@@ -170,7 +189,8 @@ class _FormDialogState<T> extends State<FormDialog<T>> {
           _controllers[entry.key]?.text = entry.value;
         }
       }
-      _error = null;
+      _fieldError = null;
+      _toast = null;
     });
     _rederive();
   }
@@ -186,7 +206,8 @@ class _FormDialogState<T> extends State<FormDialog<T>> {
   Future<void> _save() async {
     setState(() {
       _saving = true;
-      _error = null;
+      _fieldError = null;
+      _toast = null;
     });
     final values = {
       for (final entry in _values.entries)
@@ -196,19 +217,25 @@ class _FormDialogState<T> extends State<FormDialog<T>> {
       final result = await widget.submit(values);
       if (mounted) Navigator.of(context).pop(result);
     } on ApiError catch (error) {
-      if (mounted) setState(() => _error = error);
+      if (mounted) setState(() => _refused(error));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
+  /// Under its field when [error] names one of this form's, else as the toast
+  void _refused(ApiError error) {
+    final field = _controllers[error.field];
+    if (field == null) {
+      _toast = error.message;
+    } else {
+      _fieldError = (error, field.text);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final error = _error;
-    final fieldKeys = widget.fields.map((f) => f.key).toSet();
-    final general = error != null && !fieldKeys.contains(error.field)
-        ? error.message
-        : null;
+    final error = _fieldError?.$1;
     final theme = Theme.of(context);
     return Padding(
       // Above the keyboard while typing
@@ -222,39 +249,33 @@ class _FormDialogState<T> extends State<FormDialog<T>> {
             child: Text(widget.title, style: theme.textTheme.titleLarge),
           ),
           Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: gutter),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (general != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Text(
-                        general,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.error,
+            child: WithErrorToast(
+              message: _toast,
+              onClose: () => setState(() => _toast = null),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: gutter),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final field in widget.fields)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _input(
+                          field,
+                          InputDecoration(
+                            labelText: field.label.isEmpty ? null : field.label,
+                            // Under the field, so it still shows once a value is in it
+                            helperText: _derived.containsKey(field.key)
+                                ? field.derivedHint ?? field.hint
+                                : field.hint,
+                            errorText: error?.field == field.key
+                                ? error!.message
+                                : null,
+                          ),
                         ),
                       ),
-                    ),
-                  for (final field in widget.fields)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: _input(
-                        field,
-                        InputDecoration(
-                          labelText: field.label.isEmpty ? null : field.label,
-                          // Under the field, so it still shows once a value is in it
-                          helperText: _derived.containsKey(field.key)
-                              ? field.derivedHint ?? field.hint
-                              : field.hint,
-                          errorText: error?.field == field.key
-                              ? error!.message
-                              : null,
-                        ),
-                      ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

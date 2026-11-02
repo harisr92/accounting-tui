@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../rust/api/error.dart';
 import '../rust/api/app.dart';
 import '../rust/api/expenses.dart';
 import 'form_dialog.dart';
@@ -18,28 +19,33 @@ Future<ExpenseRow?> expenseForm(
     context,
     title: existing == null ? 'Add expense' : 'Edit expense',
     fields: [
-      FieldSpec('date', 'Date', date: true, initial: values?.date ?? ''),
       FieldSpec(
-        'category',
+        InputField.date,
+        'Date',
+        date: true,
+        initial: values?.date ?? '',
+      ),
+      FieldSpec(
+        InputField.category,
         'Category',
         initial: values?.category ?? categories.first,
         options: categories,
       ),
       FieldSpec(
-        'description',
+        InputField.description,
         'Description',
         hint: 'e.g. Figma, annual plan',
         initial: values?.description ?? '',
       ),
       FieldSpec(
-        'amount',
+        InputField.amount,
         'Amount',
         hint: 'total paid, GST included',
         keyboardType: _amount,
         initial: values?.amount ?? '',
       ),
       FieldSpec(
-        'gst_credit',
+        InputField.gstCredit,
         'GST credit',
         hint: 'GST in the amount to claim back; blank for none',
         keyboardType: _amount,
@@ -48,11 +54,11 @@ Future<ExpenseRow?> expenseForm(
     ],
     submit: (values) {
       final input = ExpenseInput(
-        date: values['date']!,
-        category: values['category']!,
-        description: values['description']!,
-        amount: values['amount']!,
-        gstCredit: values['gst_credit']!,
+        date: values[InputField.date]!,
+        category: values[InputField.category]!,
+        description: values[InputField.description]!,
+        amount: values[InputField.amount]!,
+        gstCredit: values[InputField.gstCredit]!,
       );
       return existing == null
           ? app.addExpense(input: input)

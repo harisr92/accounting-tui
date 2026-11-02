@@ -121,6 +121,27 @@ void main() {
     expect(find.byTooltip('Archive project'), findsNothing);
   });
 
+  testWidgets('a refusal shows under its field until the field is edited', (
+    tester,
+  ) async {
+    await launchDemo(tester);
+    await tester.tap(find.byTooltip('New project'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Client'), 'Acme');
+    await tester.tap(find.text('Save'));
+    await settle(tester);
+
+    final name = find.widgetWithText(TextField, 'Name');
+    String? error() => tester.widget<TextField>(name).decoration?.errorText;
+    expect(error(), 'project name must not be empty');
+    // Nothing floats over the form: the error is the field's
+    expect(find.byTooltip('Dismiss'), findsNothing);
+
+    await tester.enterText(name, 'Support');
+    await tester.pump();
+    expect(error(), isNull);
+  });
+
   testWidgets('a refused rate stays in the form under its field', (
     tester,
   ) async {

@@ -187,9 +187,12 @@ class _TabsState extends ConsumerState<_Tabs> {
         maxScaleFactor: 1.3,
         child: CupertinoTabBar(
           currentIndex: shell.currentIndex,
-          // A second tap on the current tab goes back to its list
-          onTap: (i) =>
-              shell.goBranch(i, initialLocation: i == shell.currentIndex),
+          // A second tap on the current tab goes back to its list. A notice belongs to the tab
+          // it was raised on, so it goes with it.
+          onTap: (i) {
+            ScaffoldMessenger.of(context).clearSnackBars();
+            shell.goBranch(i, initialLocation: i == shell.currentIndex);
+          },
           backgroundColor: Glass.tint(scheme),
           activeColor: scheme.primary,
           // Its 10 pt labels sit over glass: halfway to the foreground keeps them at 4.5:1

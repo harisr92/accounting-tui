@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../rust/api/error.dart';
 import '../rust/api/app.dart';
 import '../rust/api/reports.dart';
 import 'form_dialog.dart';
@@ -21,13 +22,13 @@ Future<ExportRow?> exportGstr1(
     writes: false,
     fields: [
       FieldSpec(
-        'quarter',
+        InputField.quarter,
         'Quarter',
         initial: report.quarters[report.quarterToFile - 1],
         options: report.quarters,
       ),
       const FieldSpec(
-        'filed',
+        InputField.filed,
         'IFF filed',
         hint: 'months whose B2B invoices went in an IFF are left out',
         initial: 'neither',
@@ -35,10 +36,10 @@ Future<ExportRow?> exportGstr1(
       ),
     ],
     submit: (values) {
-      final filed = _filed.indexOf(values['filed']!);
+      final filed = _filed.indexOf(values[InputField.filed]!);
       return app.exportGstr1(
         year: year,
-        quarter: report.quarters.indexOf(values['quarter']!) + 1,
+        quarter: report.quarters.indexOf(values[InputField.quarter]!) + 1,
         firstMonthFiled: filed == 1 || filed == 3,
         secondMonthFiled: filed == 2 || filed == 3,
       );
@@ -60,7 +61,7 @@ Future<ExportRow?> exportIff(
     writes: false,
     fields: [
       FieldSpec(
-        'month',
+        InputField.month,
         'Month',
         initial: report.iffMonths[report.iffMonthToFile],
         options: report.iffMonths,
@@ -68,7 +69,7 @@ Future<ExportRow?> exportIff(
     ],
     submit: (values) => app.exportIff(
       year: year,
-      month: report.iffMonths.indexOf(values['month']!),
+      month: report.iffMonths.indexOf(values[InputField.month]!),
     ),
   );
 }

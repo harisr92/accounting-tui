@@ -74,6 +74,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ExpenseInput dco_decode_box_autoadd_expense_input(dynamic raw);
 
   @protected
+  InputField dco_decode_box_autoadd_input_field(dynamic raw);
+
+  @protected
   MilestoneInput dco_decode_box_autoadd_milestone_input(dynamic raw);
 
   @protected
@@ -141,6 +144,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int dco_decode_i_32(dynamic raw);
+
+  @protected
+  InputField dco_decode_input_field(dynamic raw);
 
   @protected
   InvoiceDetail dco_decode_invoice_detail(dynamic raw);
@@ -225,6 +231,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  InputField? dco_decode_opt_box_autoadd_input_field(dynamic raw);
 
   @protected
   ProfileRow? dco_decode_opt_box_autoadd_profile_row(dynamic raw);
@@ -337,6 +346,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  InputField sse_decode_box_autoadd_input_field(SseDeserializer deserializer);
+
+  @protected
   MilestoneInput sse_decode_box_autoadd_milestone_input(
     SseDeserializer deserializer,
   );
@@ -412,6 +424,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
+  InputField sse_decode_input_field(SseDeserializer deserializer);
 
   @protected
   InvoiceDetail sse_decode_invoice_detail(SseDeserializer deserializer);
@@ -512,6 +527,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  InputField? sse_decode_opt_box_autoadd_input_field(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ProfileRow? sse_decode_opt_box_autoadd_profile_row(
@@ -637,6 +657,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_input_field(
+    InputField self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_milestone_input(
     MilestoneInput self,
     SseSerializer serializer,
@@ -734,6 +760,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_input_field(InputField self, SseSerializer serializer);
 
   @protected
   void sse_encode_invoice_detail(InvoiceDetail self, SseSerializer serializer);
@@ -875,6 +904,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_input_field(
+    InputField? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_profile_row(

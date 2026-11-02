@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
-/// A message at the bottom of the screen, like `Notice` in the terminal's footer
+import 'ui/error_toast.dart';
+
+/// A message at the bottom of the screen, like `Notice` in the terminal's footer. An [error]
+/// can be closed, and otherwise goes after [errorShownFor], as a form's [ErrorToast] does;
+/// information goes sooner. Switching tabs clears either (`router.dart`).
 void notify(BuildContext context, String message, {bool error = false}) {
   final scheme = Theme.of(context).colorScheme;
   ScaffoldMessenger.of(context)
@@ -14,6 +18,9 @@ void notify(BuildContext context, String message, {bool error = false}) {
           style: error ? TextStyle(color: scheme.onErrorContainer) : null,
         ),
         backgroundColor: error ? scheme.errorContainer : null,
+        showCloseIcon: error,
+        closeIconColor: error ? scheme.onErrorContainer : null,
+        duration: error ? errorShownFor : const Duration(seconds: 4),
       ),
     );
 }

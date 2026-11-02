@@ -30,11 +30,11 @@ Future<ClientDetail?> clientForm(
     ),
     submit: (values) async {
       final input = ClientInput(
-        gstin: values['client_gstin'],
-        state: values['client_state'],
-        country: values['client_country'],
-        address: values['address']!.split('\n'),
-        currency: values['currency'],
+        gstin: values[InputField.clientGstin],
+        state: values[InputField.clientState],
+        country: values[InputField.clientCountry],
+        address: values[InputField.address]!.split('\n'),
+        currency: values[InputField.currency],
       );
       final projects = await app.clientProjectsToUpdate(
         id: client.id,
@@ -78,14 +78,14 @@ Future<ClientDetail?> renameClientForm(
     title: 'Rename ${client.name}',
     fields: [
       FieldSpec(
-        'client_name',
+        InputField.clientName,
         'Name',
         hint: 'Issued invoices keep the old name, which stays as an alias',
         initial: client.name,
       ),
     ],
     submit: (values) async {
-      final name = values['client_name']!;
+      final name = values[InputField.clientName]!;
       final projects = await app.clientProjectsToRename(
         id: client.id,
         name: name,

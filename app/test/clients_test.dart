@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:compter/src/rust/api/app.dart';
 import 'package:compter/src/rust/api/rows.dart';
+import 'package:compter/src/ui/error_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -98,6 +99,74 @@ void main() {
     await tester.tap(find.text('Update projects'));
     await pumpUntil(tester, find.text('Plot 9, MIDC, Pune 411019'));
     expect(find.text('Invoices · 2'), findsOneWidget);
+  });
+
+  testWidgets('a refusal about no field shows on the form and can be closed', (
+    tester,
+  ) async {
+    await openAcme(tester);
+    await change(tester, 'Edit details');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Address'),
+      'Plot 9, MIDC\nPune 411019',
+    );
+    await tester.tap(find.text('Save'));
+    await pumpUntil(tester, find.text('Update open projects too?'));
+    // Dismissing the question saves nothing and says so
+    await tester.tapAt(const Offset(8, 8));
+    await settle(tester);
+
+    expect(find.textContaining('Not saved'), findsOneWidget);
+    expect(find.text('Edit Acme Pvt Ltd'), findsOneWidget);
+    await tester.tap(find.byTooltip('Dismiss'));
+    await settle(tester);
+    expect(find.textContaining('Not saved'), findsNothing);
+    expect(find.text('Edit Acme Pvt Ltd'), findsOneWidget);
+  });
+
+  testWidgets('a refusal about no field goes from the form by itself', (
+    tester,
+  ) async {
+    await openAcme(tester);
+    await change(tester, 'Edit details');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Address'),
+      'Plot 9, MIDC\nPune 411019',
+    );
+    await tester.tap(find.text('Save'));
+    await pumpUntil(tester, find.text('Update open projects too?'));
+    await tester.tapAt(const Offset(8, 8));
+    await settle(tester);
+    expect(find.textContaining('Not saved'), findsOneWidget);
+
+    await tester.pump(errorShownFor);
+    await settle(tester);
+    expect(find.textContaining('Not saved'), findsNothing);
+    // The form stays open with what was typed
+    expect(find.text('Edit Acme Pvt Ltd'), findsOneWidget);
+  });
+
+  Future<void> refuseMerge(WidgetTester tester) async {
+    await openAcme(tester);
+    await change(tester, 'Merge into…');
+    await tester.tap(find.text('Umbrella Analytics'));
+    await pumpUntil(tester, find.textContaining('different GSTIN'));
+  }
+
+  testWidgets('an error notice can be closed', (tester) async {
+    await refuseMerge(tester);
+    await tester.tap(find.byIcon(Icons.close));
+    await settle(tester);
+    expect(find.textContaining('different GSTIN'), findsNothing);
+  });
+
+  testWidgets('an error notice goes by itself after a while', (tester) async {
+    await refuseMerge(tester);
+    await tester.pump(errorShownFor ~/ 2);
+    expect(find.textContaining('different GSTIN'), findsOneWidget);
+    await tester.pump(errorShownFor);
+    await settle(tester);
+    expect(find.textContaining('different GSTIN'), findsNothing);
   });
 
   testWidgets('a renamed client keeps the old name as an alias', (
