@@ -1,6 +1,7 @@
 //! Use-cases: load a record, apply a domain change, save it. Views call these, never storage.
 
 pub mod chart;
+mod client_service;
 mod credit_note_builder;
 mod dashboard_service;
 mod error;
@@ -14,6 +15,7 @@ mod project_service;
 mod report_service;
 pub mod reports;
 
+pub use client_service::{ClientAccount, ClientService, ClientSummary, Owed};
 pub use credit_note_builder::{BuiltCreditNote, CreditDraft, CreditLineDraft};
 pub use dashboard_service::{Dashboard, DashboardService, ReadyMilestone};
 pub use error::ServiceError;

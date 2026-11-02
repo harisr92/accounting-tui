@@ -1,6 +1,8 @@
 use accounting_core::StateCode;
 
-use crate::domain::{Client, ClientDetails, ClientRegion, Currency, DomainError, same_client};
+use crate::domain::{
+    Client, ClientDetails, ClientRegion, Currency, DomainError, client_key, same_client,
+};
 
 fn abroad(country: &str) -> ClientRegion {
     ClientRegion::Abroad {
@@ -133,4 +135,40 @@ fn tidying_alone_is_not_a_different_client() {
         ..tidied.clone()
     };
     assert!(!tidied.same_as(&moved));
+}
+
+#[test]
+fn a_client_is_told_apart_by_gstin_else_by_place() {
+    let registered = Client::new(ClientDetails::named("Acme", Some("29aapfu0939f1zr"))).unwrap();
+    assert_eq!(registered.place().as_deref(), Some("29AAPFU0939F1ZR"));
+
+    let mut details = ClientDetails::named("Globex", None);
+    details.region = ClientRegion::India {
+        state: accounting_core::StateCode::parse("29").ok(),
+    };
+    let in_state = Client::new(details).unwrap();
+    assert_eq!(in_state.place().as_deref(), Some("Karnataka (29)"));
+
+    let mut details = ClientDetails::named("Initrode", None);
+    details.region = ClientRegion::Abroad {
+        country: "Germany".to_owned(),
+    };
+    details.currency = Currency::Eur;
+    assert_eq!(
+        Client::new(details).unwrap().place().as_deref(),
+        Some("Germany")
+    );
+
+    assert_eq!(
+        Client::new(ClientDetails::named("Hooli", None))
+            .unwrap()
+            .place(),
+        None
+    );
+}
+
+#[test]
+fn client_keys_ignore_case_and_surrounding_spaces() {
+    assert_eq!(client_key("  Acme Pvt Ltd "), client_key("ACME PVT LTD"));
+    assert_ne!(client_key("Acme"), client_key("Acme Pvt Ltd"));
 }
