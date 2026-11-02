@@ -40,7 +40,8 @@ pub struct ClientAccount {
 /// ignoring case ([`Client::matches`]), as projects and invoices keep the name they were saved
 /// with. Lists read summaries only. A client's details can be corrected here, the client renamed,
 /// or a duplicate merged into them, and each change carried to their open projects; issued
-/// invoices never change, so the old names stay on the client as aliases.
+/// invoices never change, so the old names stay on the client as aliases. A client with no
+/// projects or invoices left can be removed.
 pub struct ClientService<R> {
     repo: R,
 }
@@ -237,6 +238,41 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientService<
         }
         client.rename(name)?;
         Ok(Some(client))
+    }
+
+    /// Refused with [`ServiceError::ClientInUse`] while any project (archived ones included) or
+    /// invoice is filed under the client `id`: what [`remove`](Self::remove) checks, so a front
+    /// end can refuse before asking
+    pub fn ensure_removable(&self, id: ClientId) -> Result<(), ServiceError> {
+        let client = self.client(id)?;
+        let projects = self
+            .repo
+            .list()?
+            .iter()
+            .filter(|p| client.matches(p.client_name()))
+            .count();
+        let invoices = self
+            .repo
+            .list_invoices()?
+            .iter()
+            .filter(|i| client.matches(i.client_name()))
+            .count();
+        if projects == 0 && invoices == 0 {
+            return Ok(());
+        }
+        Err(ServiceError::ClientInUse {
+            name: client.name().to_owned(),
+            projects,
+            invoices,
+        })
+    }
+
+    /// Take the client `id` out of the address book, once nothing is filed under them (see
+    /// [`ensure_removable`](Self::ensure_removable)). Deleting a project leaves its client, so
+    /// this is how one no longer billed goes; a new project under their name adds them again.
+    pub fn remove(&mut self, id: ClientId) -> Result<(), ServiceError> {
+        self.ensure_removable(id)?;
+        Ok(self.repo.delete_client(id)?)
     }
 
     /// The client `into` with `from` absorbed, answering to both clients' names

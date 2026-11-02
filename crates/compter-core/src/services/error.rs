@@ -42,6 +42,14 @@ pub enum ServiceError {
     ClientNameTaken { other: String },
     #[error("a client can't be merged into themselves")]
     MergeIntoSelf,
+    #[error(
+        "{name} still has {projects} project(s) and {invoices} invoice(s); only a client with none can be removed"
+    )]
+    ClientInUse {
+        name: String,
+        projects: usize,
+        invoices: usize,
+    },
     #[error("project {project}: {source}")]
     ProjectRefusedClient {
         project: String,

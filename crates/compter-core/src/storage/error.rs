@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use accounting_core::LedgerError;
 
 use super::tables::SCHEMA_VERSION;
-use crate::domain::ProjectId;
+use crate::domain::{ClientId, ProjectId};
 
 /// Why reading or writing the database failed
 #[derive(Debug, thiserror::Error)]
@@ -27,6 +27,8 @@ pub enum StorageError {
     UnsupportedSchema(u32),
     #[error("project {0} not found")]
     ProjectNotFound(ProjectId),
+    #[error("client {0} not found")]
+    ClientNotFound(ClientId),
     #[error("invoice {0} not found")]
     InvoiceNotFound(String),
     #[error("credit note {0} not found")]

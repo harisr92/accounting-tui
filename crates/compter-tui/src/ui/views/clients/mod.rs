@@ -1,5 +1,5 @@
 //! Clients tab: every saved client with what they still owe; open one to see their projects
-//! and invoices, and to correct, rename or merge them
+//! and invoices, and to correct, rename or merge them, or remove one with nothing left
 
 mod changes;
 
@@ -10,7 +10,7 @@ use ratatui::widgets::{Paragraph, Row, Table};
 
 use self::changes::{Merging, Pending};
 use crate::ui::filter::Filter;
-use crate::ui::form::{Form, ListPicker};
+use crate::ui::form::{Confirm, Form, ListPicker};
 use crate::ui::key::Key;
 use crate::ui::selection::{Nav, Selection};
 use crate::ui::theme::Theme;
@@ -33,6 +33,7 @@ const ACCOUNT_HINTS: &[KeyHint] = &[
     KeyHint::new("e", "edit client"),
     KeyHint::new("r", "rename"),
     KeyHint::new("m", "merge into…"),
+    KeyHint::new("x", "remove"),
     KeyHint::new("Esc", "back to clients"),
 ];
 
@@ -104,6 +105,8 @@ pub struct ClientsView<R> {
     renaming: Option<Form>,
     merging: Option<Merging>,
     pending: Option<Pending>,
+    /// Asking before the opened client is removed
+    removing: Option<Confirm>,
 }
 
 impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientsView<R> {
@@ -120,6 +123,7 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientsView<R>
             renaming: None,
             merging: None,
             pending: None,
+            removing: None,
         };
         view.reload()?;
         Ok(view)
@@ -456,8 +460,13 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> View for Clien
         if let Some(merging) = &self.merging {
             merging.picker.render(frame, theme);
         }
-        if let Some(pending) = &self.pending {
-            pending.confirm.render(frame, theme);
+        if let Some(confirm) = self
+            .pending
+            .as_ref()
+            .map(|p| &p.confirm)
+            .or(self.removing.as_ref())
+        {
+            confirm.render(frame, theme);
         }
     }
 
@@ -483,6 +492,9 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> View for Clien
         if let Some(pending) = self.pending.take() {
             return self.answer_pending(pending, key);
         }
+        if let Some(confirm) = self.removing.take() {
+            return self.answer_remove(confirm, key);
+        }
         match &mut self.opened {
             Some(_) if key == Key::Esc => {
                 self.opened = None;
@@ -491,6 +503,7 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> View for Clien
             Some(_) if key == Key::Char('e') => self.start_edit(),
             Some(_) if key == Key::Char('r') => self.start_rename(),
             Some(_) if key == Key::Char('m') => self.start_merge(),
+            Some(_) if key == Key::Char('x') => self.start_remove(),
             Some(opened) => opened.handle_key(key),
             None => self.handle_list(key),
         }
@@ -499,6 +512,8 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> View for Clien
     fn key_hints(&self) -> &'static [KeyHint] {
         if let Some(pending) = &self.pending {
             pending.hints()
+        } else if self.removing.is_some() {
+            Confirm::HINTS
         } else if self.merging.is_some() {
             ListPicker::HINTS
         } else if self.search.is_some() || self.editing.is_some() || self.renaming.is_some() {

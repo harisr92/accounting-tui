@@ -176,3 +176,25 @@ fn a_duplicate_merges_into_the_client_kept() {
     assert_eq!(merged.projects.len(), 2);
     assert_eq!(app.client_list().unwrap().len(), 4);
 }
+
+#[test]
+fn a_client_without_projects_is_removed_and_one_with_them_stays() {
+    let (_scratch, mut app) = demo();
+    let mut draft = project("Brochure", None);
+    draft.client_name = "Hooli".to_owned();
+    let brochure = app.create_project(draft).unwrap();
+    app.delete_project(brochure.id).unwrap();
+    let clients = app.client_list().unwrap();
+    let id = |name: &str| clients.iter().find(|c| c.name == name).unwrap().id.clone();
+
+    let refused = app.remove_client(id("Acme Pvt Ltd")).unwrap_err();
+    assert!(
+        refused.message.contains("only a client with none"),
+        "{refused:?}"
+    );
+    app.remove_client(id("Hooli")).unwrap();
+
+    let left = app.client_list().unwrap();
+    assert!(left.iter().all(|c| c.name != "Hooli"));
+    assert!(left.iter().any(|c| c.name == "Acme Pvt Ltd"));
+}

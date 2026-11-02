@@ -236,3 +236,27 @@ fn a_merged_client_goes_in_the_same_write() {
 
     assert_eq!(repo.clients().unwrap(), [acme]);
 }
+
+#[test]
+fn a_client_is_deleted_on_their_own() {
+    let store = Store::in_memory().unwrap();
+    let mut repo = store.repository();
+    let acme = Client::new(ClientDetails::named("Acme", None)).unwrap();
+    let globex = Client::new(ClientDetails::named("Globex", None)).unwrap();
+    for client in [&acme, &globex] {
+        repo.save_client(&ClientRecord {
+            client,
+            projects: &[],
+            removed: None,
+        })
+        .unwrap();
+    }
+
+    repo.delete_client(globex.id()).unwrap();
+
+    assert_eq!(repo.clients().unwrap(), [acme]);
+    assert!(matches!(
+        repo.delete_client(globex.id()),
+        Err(StorageError::ClientNotFound(_))
+    ));
+}

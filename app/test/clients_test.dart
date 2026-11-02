@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'package:compter/src/rust/api/app.dart';
+import 'package:compter/src/rust/api/rows.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -138,5 +142,43 @@ void main() {
     await tester.tap(find.text('Umbrella Analytics'));
     await pumpUntil(tester, find.textContaining('different GSTIN'));
     expect(find.text('Merge into Umbrella Analytics?'), findsNothing);
+  });
+
+  testWidgets('a client with projects offers no removal', (tester) async {
+    await openAcme(tester);
+    await tester.tap(find.byTooltip('Change client'));
+    await settle(tester);
+    expect(find.text('Merge into…'), findsOneWidget);
+    expect(find.text('Remove client'), findsNothing);
+  });
+
+  testWidgets('a client whose last project was deleted is removed', (
+    tester,
+  ) async {
+    final compter = await tester.runAsync(() async {
+      final scratch = await Directory.systemTemp.createTemp('compter_test');
+      final app = await CompterApp.demo(scratchDir: scratch.path);
+      final project = await app.createProject(
+        input: const ProjectInput(
+          name: 'Brochure',
+          clientName: 'Hooli',
+          clientAddress: [],
+        ),
+      );
+      await app.deleteProject(id: project.id);
+      return app;
+    });
+    await launchWith(tester, compter!);
+    await tester.tap(find.byTooltip('Clients'));
+    await settle(tester);
+    await tester.tap(find.text('Hooli'));
+    await settle(tester);
+
+    await change(tester, 'Remove client');
+    expect(find.text('Remove Hooli?'), findsOneWidget);
+    await tester.tap(find.text('Remove'));
+    await pumpUntil(tester, find.text('Removed Hooli'));
+    expect(find.text('Hooli'), findsNothing);
+    expect(find.text('Acme Pvt Ltd'), findsOneWidget);
   });
 }
