@@ -14,7 +14,7 @@ pub mod reports;
 pub mod rows;
 
 pub use app::CompterApp;
-pub use clients::{ClientChoiceRow, ClientDetail, ClientSummaryRow, StateRow};
+pub use clients::{ClientChoiceRow, ClientDetail, ClientInput, ClientSummaryRow, StateRow};
 pub use dashboard::{DashboardRow, ReadyRow, UnpaidRow};
 pub use error::ApiError;
 pub use expenses::{ExpenseInput, ExpenseList, ExpenseRow};

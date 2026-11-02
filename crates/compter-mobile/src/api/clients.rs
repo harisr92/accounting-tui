@@ -107,11 +107,43 @@ impl From<&ClientSummary> for ClientSummaryRow {
     }
 }
 
+/// A client's details as typed into the edit client form, which can't change the name. The
+/// fields and their meanings are `ProjectInput`'s client fields.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientInput {
+    /// Blank for an unregistered client or one abroad
+    pub gstin: Option<String>,
+    /// GST state code (`29`): the place of supply for a client in India without a GSTIN
+    pub state: Option<String>,
+    /// Blank for a client in India
+    pub country: Option<String>,
+    /// One entry per line; blank lines are dropped
+    pub address: Vec<String>,
+    /// `INR`, `USD`, `GBP` or `EUR`; blank means INR. The default for new projects: each
+    /// project keeps its own.
+    pub currency: Option<String>,
+}
+
+impl From<&Client> for ClientInput {
+    fn from(client: &Client) -> Self {
+        let (state, country) = region_fields(client.region());
+        Self {
+            gstin: client.gstin().map(ToString::to_string),
+            state,
+            country,
+            address: client.address().to_vec(),
+            currency: Some(client.currency().code().to_owned()),
+        }
+    }
+}
+
 /// An opened client: their details, projects and invoices
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientDetail {
     pub id: String,
     pub name: String,
+    /// The details as the edit client form starts from
+    pub edit: ClientInput,
     /// As in [`ClientSummaryRow::place`]
     pub place: Option<String>,
     /// Address lines, top to bottom
@@ -130,6 +162,7 @@ impl From<&ClientAccount> for ClientDetail {
         Self {
             id: client.id().to_string(),
             name: client.name().to_owned(),
+            edit: ClientInput::from(client),
             place: client.place(),
             address: client.address().to_vec(),
             owed: owed(&account.owed),
