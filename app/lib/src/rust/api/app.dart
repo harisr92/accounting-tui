@@ -15,7 +15,7 @@ import 'profile.dart';
 import 'reports.dart';
 import 'rows.dart';
 
-// These functions are ignored because they are not marked as `pub`: `checked_draft`, `closed`, `credit_draft`, `credit_lines`, `date`, `detail_in`, `detail`, `discount_error`, `discount_of`, `exchange_rate`, `expense_draft`, `expense_id`, `index_of`, `milestone_draft`, `milestone_id`, `milestone_ids_of`, `optional_money`, `over`, `project_draft`, `project_id`, `today`
+// These functions are ignored because they are not marked as `pub`: `checked_draft`, `client_details`, `client_id`, `closed`, `credit_draft`, `credit_lines`, `date`, `detail_in`, `detail`, `discount_error`, `discount_of`, `exchange_rate`, `expense_draft`, `expense_id`, `index_of`, `milestone_draft`, `milestone_id`, `milestone_ids_of`, `optional_money`, `over`, `project_draft`, `project_id`, `today`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>>
 abstract class CompterApp implements RustOpaqueInterface {
@@ -41,6 +41,14 @@ abstract class CompterApp implements RustOpaqueInterface {
   /// The Clients screen: every saved client with their projects counted and what they owe
   Future<List<ClientSummaryRow>> clientList();
 
+  /// The names of the client's open projects that the corrected details in `input` would
+  /// change: asked about before [`edit_client`](Self::edit_client). Details that would be
+  /// refused are refused here.
+  Future<List<String>> clientProjectsToUpdate({
+    required String id,
+    required ClientInput input,
+  });
+
   /// Every client billed before, by name, to fill a new project's client from
   Future<List<ClientChoiceRow>> clients();
 
@@ -62,6 +70,15 @@ abstract class CompterApp implements RustOpaqueInterface {
   /// returns are written to `scratch_dir`, a cache folder.
   static Future<CompterApp> demo({required String scratchDir}) =>
       RustLib.instance.api.crateApiAppCompterAppDemo(scratchDir: scratchDir);
+
+  /// Correct a client's GSTIN, place, address or currency, and with `update_projects` their
+  /// open projects' copies too (each keeps its own currency). The name can't change, and
+  /// issued invoices never do.
+  Future<ClientDetail> editClient({
+    required String id,
+    required ClientInput input,
+    required bool updateProjects,
+  });
 
   /// Correct an expense; its ledger posting is replaced with it
   Future<ExpenseRow> editExpense({

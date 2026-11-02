@@ -21,7 +21,6 @@ Future<ProjectDetail?> projectForm(
   ProjectDetail? existing,
 }) {
   final values = existing?.edit;
-  final states = gstStates();
   return FormDialog.show(
     context,
     title: existing == null ? 'New project' : 'Edit project',
@@ -40,46 +39,12 @@ Future<ProjectDetail?> projectForm(
         pick: (context) => _pickClient(context, app),
         pickTooltip: 'Earlier clients',
       ),
-      FieldSpec(
-        'client_gstin',
-        'Client GSTIN',
-        hint: 'blank if unregistered or abroad',
-        initial: values?.clientGstin ?? '',
-      ),
-      FieldSpec(
-        'client_state',
-        'State',
-        hint: 'India, no GSTIN: the place of supply',
-        initial: values?.clientState ?? '',
-        options: ['', for (final state in states) state.code],
-        optionLabels: {
-          '': 'Not known',
-          for (final state in states)
-            state.code: '${state.name} (${state.code})',
-        },
-        derive: (values) => gstinState(gstin: values['client_gstin'] ?? ''),
-        deriveFrom: const ['client_gstin'],
-        derivedHint: "From the client's GSTIN",
-      ),
-      FieldSpec(
-        'client_country',
-        'Country',
-        hint: 'abroad only, e.g. Germany',
-        initial: values?.clientCountry ?? '',
-      ),
-      FieldSpec(
-        'address',
-        'Address',
-        hint: 'one line each: street, city and PIN / postcode',
-        initial: values?.clientAddress.join('\n') ?? '',
-        multiline: true,
-      ),
-      FieldSpec(
-        'currency',
-        'Currency',
-        hint: 'anything but INR needs a client abroad',
-        initial: values?.currency ?? 'INR',
-        options: currencies,
+      ...clientFields(
+        gstin: values?.clientGstin,
+        state: values?.clientState,
+        country: values?.clientCountry,
+        address: values?.clientAddress,
+        currency: values?.currency,
       ),
       FieldSpec(
         'hourly_rate',
@@ -156,6 +121,60 @@ Future<ProjectDetail?> milestoneForm(
             );
     },
   );
+}
+
+/// A client's details after their name, keyed as [projectForm] and the edit client form both
+/// read them, so an [ApiError] names the same field in either
+List<FieldSpec> clientFields({
+  String? gstin,
+  String? state,
+  String? country,
+  List<String>? address,
+  String? currency,
+}) {
+  final states = gstStates();
+  return [
+    FieldSpec(
+      'client_gstin',
+      'Client GSTIN',
+      hint: 'blank if unregistered or abroad',
+      initial: gstin ?? '',
+    ),
+    FieldSpec(
+      'client_state',
+      'State',
+      hint: 'India, no GSTIN: the place of supply',
+      initial: state ?? '',
+      options: ['', for (final state in states) state.code],
+      optionLabels: {
+        '': 'Not known',
+        for (final state in states) state.code: '${state.name} (${state.code})',
+      },
+      derive: (values) => gstinState(gstin: values['client_gstin'] ?? ''),
+      deriveFrom: const ['client_gstin'],
+      derivedHint: "From the client's GSTIN",
+    ),
+    FieldSpec(
+      'client_country',
+      'Country',
+      hint: 'abroad only, e.g. Germany',
+      initial: country ?? '',
+    ),
+    FieldSpec(
+      'address',
+      'Address',
+      hint: 'one line each: street, city and PIN / postcode',
+      initial: address?.join('\n') ?? '',
+      multiline: true,
+    ),
+    FieldSpec(
+      'currency',
+      'Currency',
+      hint: 'anything but INR needs a client abroad',
+      initial: currency ?? 'INR',
+      options: currencies,
+    ),
+  ];
 }
 
 /// The client fields of [projectForm] filled from an earlier client, or cleared for a new one

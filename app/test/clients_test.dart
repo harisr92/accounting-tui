@@ -3,7 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'support.dart';
 
-/// The Clients screens against the real Rust core: opened from Projects, read-only
+/// The Clients screens against the real Rust core: opened from Projects; a client's details
+/// are corrected from their screen
 void main() {
   setUpAll(initRust);
 
@@ -57,5 +58,28 @@ void main() {
 
     expect(find.text('Initrode GmbH'), findsOneWidget);
     expect(find.text('Acme Pvt Ltd'), findsNothing);
+  });
+
+  testWidgets('a client is corrected, with their open projects if asked', (
+    tester,
+  ) async {
+    await openClients(tester);
+    await tester.tap(find.text('Acme Pvt Ltd'));
+    await settle(tester);
+    await tester.tap(find.byTooltip('Edit client'));
+    await settle(tester);
+    expect(find.text('Edit Acme Pvt Ltd'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Address'),
+      'Plot 9, MIDC\nPune 411019',
+    );
+    await tester.tap(find.text('Save'));
+    await pumpUntil(tester, find.text('Update open projects too?'));
+    expect(find.text('Website Revamp'), findsWidgets);
+
+    await tester.tap(find.text('Update projects'));
+    await pumpUntil(tester, find.text('Plot 9, MIDC, Pune 411019'));
+    expect(find.text('Invoices · 2'), findsOneWidget);
   });
 }

@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'rows.dart';
 
 // These functions are ignored because they are not marked as `pub`: `owed`, `region_fields`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`
 
 /// Every GST state, in code order: the choices for a client's state
 List<StateRow> gstStates() => RustLib.instance.api.crateApiClientsGstStates();
@@ -79,6 +79,9 @@ class ClientDetail {
   final String id;
   final String name;
 
+  /// The details as the edit client form starts from
+  final ClientInput edit;
+
   /// As in [`ClientSummaryRow::place`]
   final String? place;
 
@@ -97,6 +100,7 @@ class ClientDetail {
   const ClientDetail({
     required this.id,
     required this.name,
+    required this.edit,
     this.place,
     required this.address,
     this.owed,
@@ -108,6 +112,7 @@ class ClientDetail {
   int get hashCode =>
       id.hashCode ^
       name.hashCode ^
+      edit.hashCode ^
       place.hashCode ^
       address.hashCode ^
       owed.hashCode ^
@@ -121,11 +126,59 @@ class ClientDetail {
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
+          edit == other.edit &&
           place == other.place &&
           address == other.address &&
           owed == other.owed &&
           projects == other.projects &&
           invoices == other.invoices;
+}
+
+/// A client's details as typed into the edit client form, which can't change the name. The
+/// fields and their meanings are `ProjectInput`'s client fields.
+class ClientInput {
+  /// Blank for an unregistered client or one abroad
+  final String? gstin;
+
+  /// GST state code (`29`): the place of supply for a client in India without a GSTIN
+  final String? state;
+
+  /// Blank for a client in India
+  final String? country;
+
+  /// One entry per line; blank lines are dropped
+  final List<String> address;
+
+  /// `INR`, `USD`, `GBP` or `EUR`; blank means INR. The default for new projects: each
+  /// project keeps its own.
+  final String? currency;
+
+  const ClientInput({
+    this.gstin,
+    this.state,
+    this.country,
+    required this.address,
+    this.currency,
+  });
+
+  @override
+  int get hashCode =>
+      gstin.hashCode ^
+      state.hashCode ^
+      country.hashCode ^
+      address.hashCode ^
+      currency.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ClientInput &&
+          runtimeType == other.runtimeType &&
+          gstin == other.gstin &&
+          state == other.state &&
+          country == other.country &&
+          address == other.address &&
+          currency == other.currency;
 }
 
 /// A line of the Clients screen
