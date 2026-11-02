@@ -323,3 +323,56 @@ fn a_merge_across_gstins_is_refused_and_the_picker_stays() {
         4
     );
 }
+
+#[test]
+fn a_client_left_without_projects_is_removed_after_asking() {
+    let store = demo::store().unwrap();
+    let mut projects = ProjectService::new(store.repository());
+    let project = projects
+        .create(compter_core::services::ProjectDraft {
+            name: "Brochure".to_owned(),
+            client: compter_core::domain::ClientDetails::named("Aardvark", None),
+            billing: compter_core::domain::Billing::Fixed,
+        })
+        .unwrap();
+    projects.delete(project.id()).unwrap();
+    let mut app = clients_app(&store);
+    app.handle_key(Key::Char('2'));
+    // "Aardvark" sorts first
+    app.handle_key(Key::Enter);
+    app.handle_key(Key::Char('x'));
+    let asked = screen(&app, W, H);
+    assert!(asked.contains("Remove Aardvark from clients?"), "{asked}");
+
+    // No backs out to their page
+    app.handle_key(Key::Char('n'));
+    let kept = screen(&app, W, H);
+    assert!(kept.contains("Projects (0)"), "{kept}");
+
+    app.handle_key(Key::Char('x'));
+    app.handle_key(Key::Char('y'));
+    let list = screen(&app, W, H);
+    assert!(list.contains("Aardvark removed from clients"), "{list}");
+    assert!(list.contains("Acme Pvt Ltd"), "{list}");
+    assert_eq!(
+        compter_core::services::ClientService::new(store.repository())
+            .list()
+            .unwrap()
+            .len(),
+        4
+    );
+}
+
+#[test]
+fn a_client_with_projects_is_not_removed() {
+    let store = demo::store().unwrap();
+    let mut app = clients_app(&store);
+    app.handle_key(Key::Char('2'));
+    app.handle_key(Key::Enter);
+    app.handle_key(Key::Char('x'));
+
+    let refused = screen(&app, W, H);
+    assert!(refused.contains("only a client with none"), "{refused}");
+    assert!(!refused.contains("Remove Acme"), "{refused}");
+    assert!(refused.contains("Projects ("), "{refused}");
+}

@@ -1,6 +1,6 @@
-//! Changing the opened client: correcting their details, renaming them, or merging them into
-//! another client. Each change that would reach their open projects asks first whether it
-//! should.
+//! Changing the opened client: correcting their details, renaming them, merging them into
+//! another client, or removing one with nothing filed under them. Each change that would reach
+//! their open projects asks first whether it should.
 
 use crate::ui::form::{Confirm, Field, Form, ListEvent, ListItem, ListPicker};
 use crate::ui::key::Key;
@@ -147,6 +147,23 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientsView<R>
         )))
     }
 
+    /// Ask before removing the opened client, or say why they can't go
+    pub(super) fn start_remove(&mut self) -> Action {
+        let Some(opened) = &self.opened else {
+            return Action::Ignored;
+        };
+        let client = &opened.account.client;
+        if let Err(error) = self.service.ensure_removable(client.id()) {
+            return Action::Notify(Notice::error(error.to_string()));
+        }
+        self.removing = Some(Confirm::new(format!(
+            "Remove {} from clients? They have no projects or invoices. A new project under \
+             their name adds them again.",
+            client.name()
+        )));
+        Action::Handled
+    }
+
     /// Check the corrected details, then ask about the open projects that would change, or
     /// save straight away when there are none
     pub(super) fn submit_edit(&mut self, form: &Form) -> Result<Notice, String> {
@@ -256,6 +273,37 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> ClientsView<R>
                 self.merging = Some(merging);
                 error.map_or(Action::Handled, |e| Action::Notify(Notice::error(e)))
             }
+        }
+    }
+
+    /// `y` removes the opened client and goes back to the list; `n` or `Esc` stays on their page
+    pub(super) fn answer_remove(&mut self, confirm: Confirm, key: Key) -> Action {
+        match Confirm::answer(key) {
+            Some(true) => self.remove(),
+            Some(false) => Action::Handled,
+            None => {
+                self.removing = Some(confirm);
+                Action::Handled
+            }
+        }
+    }
+
+    /// Remove the opened client and go back to the list; a refusal stays on their page
+    fn remove(&mut self) -> Action {
+        let Some(opened) = &self.opened else {
+            return Action::Ignored;
+        };
+        let (id, name) = (
+            opened.account.client.id(),
+            opened.account.client.name().to_owned(),
+        );
+        if let Err(error) = self.service.remove(id) {
+            return Action::Notify(Notice::error(error.to_string()));
+        }
+        self.opened = None;
+        match self.reload_list() {
+            Ok(()) => Action::Notify(Notice::success(format!("{name} removed from clients"))),
+            Err(error) => Action::Notify(Notice::error(error.to_string())),
         }
     }
 
