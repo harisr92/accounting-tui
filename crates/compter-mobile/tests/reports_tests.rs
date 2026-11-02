@@ -2,7 +2,7 @@ mod support;
 
 use std::path::Path;
 
-use compter_mobile::api::{CompterApp, ProfileInput, ReportRow, Tone};
+use compter_mobile::api::{CompterApp, InputField, ProfileInput, ReportRow, Tone};
 use support::demo;
 
 fn figure<'a>(report: &'a ReportRow, label: &str) -> &'a str {
@@ -81,9 +81,9 @@ fn returns_are_written_for_the_gst_portal() {
     assert!(iff.summary.starts_with("IFF Aug 2026: "), "{}", iff.summary);
 
     let wrong = app.export_gstr1(2026, 5, false, false).unwrap_err();
-    assert_eq!(wrong.field.as_deref(), Some("quarter"));
+    assert_eq!(wrong.field, Some(InputField::Quarter));
     let wrong = app.export_iff(2026, 8).unwrap_err();
-    assert_eq!(wrong.field.as_deref(), Some("month"));
+    assert_eq!(wrong.field, Some(InputField::Month));
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn a_change_of_basis_needs_a_financial_year() {
             ..app.profile_input().unwrap()
         })
         .unwrap_err();
-    assert_eq!(error.field.as_deref(), Some("basis_from"));
+    assert_eq!(error.field, Some(InputField::BasisFrom));
     // Earlier years keep accrual
     let report = app.report(2025).unwrap();
     assert_eq!(report.income_tax_switch, None);

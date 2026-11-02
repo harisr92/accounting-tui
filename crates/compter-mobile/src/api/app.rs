@@ -5,27 +5,28 @@ use flutter_rust_bridge::frb;
 
 use compter_core::demo;
 use compter_core::domain::{
-    BasisSchedule, Billing, ClientDetails, ClientId, ClientRegion, Currency, Discount, DomainError,
+    BasisSchedule, Billing, ClientDetails, ClientId, ClientRegion, Currency, Discount,
     ExchangeRate, ExpenseId, IncomeBasis, Invoice, InvoiceNumber, MilestoneId, ProfileDraft,
     Project, ProjectId, ProjectSummary, ReturnKind, ReturnTerms, TimeEntry,
 };
 use compter_core::input;
 use compter_core::services::{
     ClientService, CreditDraft, CreditLineDraft, DashboardService, ExpenseDraft, ExpenseService,
-    InvoiceService, InvoicingError, MilestoneDraft, ProjectDraft, ProjectService, ReportService,
-    ServiceError, creditable_lines_of,
+    InvoiceService, MilestoneDraft, ProjectDraft, ProjectService, ReportService, ServiceError,
+    creditable_lines_of,
 };
 use compter_core::storage::sync::{self, Lease, Resolution, SyncDir, SyncError};
 use compter_core::storage::{DataDir, RedbRepository, Store};
 
+use super::error::Form;
 use super::expenses::{category, fiscal_year};
 use super::profile::{currency, this_year};
 use super::reports::month_label;
 use super::{
     ApiError, ClientChoiceRow, ClientDetail, ClientInput, ClientSummaryRow, CreditInput,
     CreditLineInput, CreditPreviewRow, CreditedRow, DashboardRow, ExpenseInput, ExpenseList,
-    ExpenseRow, ExportRow, InvoiceDetail, InvoiceList, InvoicePreviewRow, InvoiceRow, IssuedRow,
-    MilestoneInput, PaymentInput, ProfileInput, ProfileRow, ProjectDetail, ProjectInput,
+    ExpenseRow, ExportRow, InputField, InvoiceDetail, InvoiceList, InvoicePreviewRow, InvoiceRow,
+    IssuedRow, MilestoneInput, PaymentInput, ProfileInput, ProfileRow, ProjectDetail, ProjectInput,
     ProjectRow, ReceivedRow, ReportRow, SentRow, SyncStatusRow, TimeInput,
 };
 
@@ -105,10 +106,8 @@ impl CompterApp {
         drop((projects, clients, invoices, expenses, reports, dashboard));
         store.close().map_err(ServiceError::from)?;
         let result = step(&dir);
-        let store = Store::open(&dir).map_err(|e| ApiError {
-            field: None,
-            message: format!("{e}; restart compter"),
-        })?;
+        let store =
+            Store::open(&dir).map_err(|e| ApiError::general(format!("{e}; restart compter")))?;
         *self = Self::over(store, dir, false);
         Ok(result.map_err(ServiceError::from)?)
     }
@@ -163,9 +162,11 @@ impl CompterApp {
     ) -> Result<Vec<String>, ApiError> {
         let id = client_id(&id)?;
         let details = client_details(self.clients.client(id)?.name(), input)?;
-        Ok(project_names(
-            &self.clients.projects_to_update(id, &details)?,
-        ))
+        let stale = self
+            .clients
+            .projects_to_update(id, &details)
+            .map_err(ApiError::on(Form::Client))?;
+        Ok(project_names(&stale))
     }
 
     /// Correct a client's GSTIN, place, address or currency, and with `update_projects` their
@@ -179,11 +180,11 @@ impl CompterApp {
     ) -> Result<ClientDetail, ApiError> {
         let id = client_id(&id)?;
         let details = client_details(self.clients.client(id)?.name(), input)?;
-        Ok(ClientDetail::from(&self.clients.update(
-            id,
-            details,
-            update_projects,
-        )?))
+        let account = self
+            .clients
+            .update(id, details, update_projects)
+            .map_err(ApiError::on(Form::Client))?;
+        Ok(ClientDetail::from(&account))
     }
 
     /// The names of the client's open projects that renaming them `name` would change: asked
@@ -195,7 +196,11 @@ impl CompterApp {
         name: String,
     ) -> Result<Vec<String>, ApiError> {
         let id = client_id(&id)?;
-        Ok(project_names(&self.clients.projects_to_rename(id, &name)?))
+        let stale = self
+            .clients
+            .projects_to_rename(id, &name)
+            .map_err(ApiError::on(Form::RenameClient))?;
+        Ok(project_names(&stale))
     }
 
     /// Call a client `name` from now on, and with `update_projects` their open projects too.
@@ -207,11 +212,11 @@ impl CompterApp {
         update_projects: bool,
     ) -> Result<ClientDetail, ApiError> {
         let id = client_id(&id)?;
-        Ok(ClientDetail::from(&self.clients.rename(
-            id,
-            &name,
-            update_projects,
-        )?))
+        let account = self
+            .clients
+            .rename(id, &name, update_projects)
+            .map_err(ApiError::on(Form::RenameClient))?;
+        Ok(ClientDetail::from(&account))
     }
 
     /// The names of the open projects of `from` that merging it into `into` would give
@@ -249,9 +254,11 @@ impl CompterApp {
     }
 
     pub fn create_project(&mut self, input: ProjectInput) -> Result<ProjectDetail, ApiError> {
-        Ok(ProjectDetail::from(
-            &self.projects.create(project_draft(input)?)?,
-        ))
+        let project = self
+            .projects
+            .create(project_draft(input)?)
+            .map_err(ApiError::on(Form::Project))?;
+        Ok(ProjectDetail::from(&project))
     }
 
     /// Change a project's details and billing; the currency is fixed once something is invoiced
@@ -261,9 +268,11 @@ impl CompterApp {
         input: ProjectInput,
     ) -> Result<ProjectDetail, ApiError> {
         let id = project_id(&id)?;
-        Ok(ProjectDetail::from(
-            &self.projects.update_details(id, project_draft(input)?)?,
-        ))
+        let project = self
+            .projects
+            .update_details(id, project_draft(input)?)
+            .map_err(ApiError::on(Form::Project))?;
+        Ok(ProjectDetail::from(&project))
     }
 
     /// Delete a project with nothing invoiced in it
@@ -286,9 +295,11 @@ impl CompterApp {
     ) -> Result<ProjectDetail, ApiError> {
         let id = self::project_id(&project_id)?;
         let draft = milestone_draft(&self.projects.load(id)?, input)?;
-        Ok(ProjectDetail::from(
-            &self.projects.add_milestone(id, draft)?,
-        ))
+        let project = self
+            .projects
+            .add_milestone(id, draft)
+            .map_err(ApiError::on(Form::Milestone))?;
+        Ok(ProjectDetail::from(&project))
     }
 
     /// Change a pending milestone
@@ -302,9 +313,11 @@ impl CompterApp {
         let project = self.projects.load(id)?;
         let index = index_of(&project, &milestone_id)?;
         let draft = milestone_draft(&project, input)?;
-        Ok(ProjectDetail::from(
-            &self.projects.edit_milestone(id, index, draft)?,
-        ))
+        let project = self
+            .projects
+            .edit_milestone(id, index, draft)
+            .map_err(ApiError::on(Form::Milestone))?;
+        Ok(ProjectDetail::from(&project))
     }
 
     /// Remove a milestone that has not been invoiced
@@ -328,11 +341,11 @@ impl CompterApp {
         input: TimeInput,
     ) -> Result<ProjectDetail, ApiError> {
         let id = self::project_id(&project_id)?;
-        let date = date(&input.date, "date")?;
+        let date = date(&input.date, InputField::Date)?;
         let minutes = input::duration_minutes(&input.duration)
-            .map_err(|e| ApiError::invalid("duration", e))?;
+            .map_err(|e| ApiError::invalid(InputField::Duration, e))?;
         let entry = TimeEntry::new(date, minutes, input.note.trim())
-            .map_err(|e| ApiError::invalid("duration", e.to_string()))?;
+            .map_err(|e| ApiError::invalid(InputField::Duration, e.to_string()))?;
         let index = index_of(&self.projects.load(id)?, &milestone_id)?;
         Ok(ProjectDetail::from(
             &self.projects.log_time(id, index, entry)?,
@@ -367,8 +380,9 @@ impl CompterApp {
 
     /// Save the business profile; the logo, set elsewhere, is kept
     pub fn save_profile(&mut self, input: ProfileInput) -> Result<ProfileRow, ApiError> {
-        let currency = currency(&input.currency)
-            .ok_or_else(|| ApiError::invalid("currency", "choose INR, USD, GBP or EUR"))?;
+        let currency = currency(&input.currency).ok_or_else(|| {
+            ApiError::invalid(InputField::Currency, "choose INR, USD, GBP or EUR")
+        })?;
         let lines = |lines: Vec<String>| {
             lines
                 .iter()
@@ -377,7 +391,7 @@ impl CompterApp {
         };
         let saved = self.invoices.profile()?;
         let from = input::fiscal_year_or(&input.basis_from, this_year())
-            .map_err(|message| ApiError::invalid("basis_from", message))?;
+            .map_err(|message| ApiError::invalid(InputField::BasisFrom, message))?;
         let basis = if input.cash_basis {
             IncomeBasis::Cash
         } else {
@@ -396,9 +410,11 @@ impl CompterApp {
             // Set from the stored schedule by `save_profile_with_basis`
             income_basis: BasisSchedule::default(),
         };
-        Ok(ProfileRow::from(
-            &self.invoices.save_profile_with_basis(draft, from, basis)?,
-        ))
+        let profile = self
+            .invoices
+            .save_profile_with_basis(draft, from, basis)
+            .map_err(ApiError::on(Form::Profile))?;
+        Ok(ProfileRow::from(&profile))
     }
 
     /// Every issued invoice, newest first
@@ -436,7 +452,7 @@ impl CompterApp {
                 exchange_rate(rate.as_deref())?,
                 discount.as_ref(),
             )
-            .map_err(discount_error)?;
+            .map_err(ApiError::on(Form::Issue))?;
         Ok(InvoicePreviewRow::from(&preview))
     }
 
@@ -460,7 +476,7 @@ impl CompterApp {
                 exchange_rate(rate.as_deref())?,
                 discount.as_ref(),
             )
-            .map_err(discount_error)?;
+            .map_err(ApiError::on(Form::Issue))?;
         // The service returns only the invoice; the milestones it invoiced are in the project,
         // read once for both
         let project = self.projects.load(id)?;
@@ -479,17 +495,18 @@ impl CompterApp {
         input: PaymentInput,
     ) -> Result<InvoiceDetail, ApiError> {
         let number = InvoiceNumber::from_stored(&number);
-        let date = date(&input.date, "date")?;
-        let received =
-            input::money(&input.received).map_err(|e| ApiError::invalid("received", e))?;
+        let date = date(&input.date, InputField::Date)?;
+        let received = input::money(&input.received)
+            .map_err(|e| ApiError::invalid(InputField::Received, e))?;
         let third = input::money(&input.tds_or_banked)
-            .map_err(|e| ApiError::invalid("tds_or_banked", e))?;
+            .map_err(|e| ApiError::invalid(InputField::TdsOrBanked, e))?;
         let invoice = if self.invoices.load(&number)?.currency().is_inr() {
             self.invoices.record_payment(&number, date, received, third)
         } else {
             self.invoices
                 .record_foreign_payment(&number, date, received, third)
-        }?;
+        }
+        .map_err(ApiError::on(Form::Payment))?;
         self.detail(&invoice)
     }
 
@@ -500,14 +517,17 @@ impl CompterApp {
         input: CreditInput,
     ) -> Result<CreditPreviewRow, ApiError> {
         let number = InvoiceNumber::from_stored(&number);
-        let draft = self.checked_draft(&number, input)?;
-        let preview = self.invoices.preview_credit(&number, draft)?;
+        let (draft, form) = self.checked_draft(&number, input)?;
+        let preview = self
+            .invoices
+            .preview_credit(&number, draft)
+            .map_err(ApiError::on(form))?;
         Ok(CreditPreviewRow::from(&preview))
     }
 
     /// Check the lines picked for a credit note against invoice `number` before asking when and
     /// why: each amount is a number, more than zero and no more than is left on its line. A
-    /// refusal names the line's field, `line:<milestone_id>`.
+    /// refusal names the line ([`InputField::CreditLine`], with its milestone as `line`).
     pub fn check_credit_lines(
         &self,
         number: String,
@@ -520,16 +540,19 @@ impl CompterApp {
     }
 
     /// `input` as a credit note draft, its lines checked first so a refusal names its line
-    /// even when issuing (another device may have credited it since the preview)
+    /// even when issuing (another device may have credited it since the preview), with the
+    /// form it came from: on an invoice the client withheld TDS from, that form asks for TDS
+    /// reversed
     fn checked_draft(
         &self,
         number: &InvoiceNumber,
         input: CreditInput,
-    ) -> Result<CreditDraft, ApiError> {
+    ) -> Result<(CreditDraft, Form), ApiError> {
         let draft = credit_draft(input)?;
         let invoice = self.invoices.load(number)?;
         self.invoices.check_credit_lines(&invoice, &draft.lines)?;
-        Ok(draft)
+        let tds = invoice.tds_withheld();
+        Ok((draft, Form::Credit { tds }))
     }
 
     /// Issue a credit note against invoice `number` and write its PDF
@@ -539,8 +562,11 @@ impl CompterApp {
         input: CreditInput,
     ) -> Result<CreditedRow, ApiError> {
         let number = InvoiceNumber::from_stored(&number);
-        let draft = self.checked_draft(&number, input)?;
-        let credited = self.invoices.issue_credit(&number, draft)?;
+        let (draft, form) = self.checked_draft(&number, input)?;
+        let credited = self
+            .invoices
+            .issue_credit(&number, draft)
+            .map_err(ApiError::on(form))?;
         Ok(CreditedRow {
             note_number: credited.note.number().to_string(),
             invoice: self.detail(&credited.invoice)?,
@@ -589,7 +615,11 @@ impl CompterApp {
 
     /// Record an expense paid from the bank
     pub fn add_expense(&mut self, input: ExpenseInput) -> Result<ExpenseRow, ApiError> {
-        Ok(ExpenseRow::from(&self.expenses.add(expense_draft(input)?)?))
+        let expense = self
+            .expenses
+            .add(expense_draft(input)?)
+            .map_err(ApiError::on(Form::Expense))?;
+        Ok(ExpenseRow::from(&expense))
     }
 
     /// Correct an expense; its ledger posting is replaced with it
@@ -599,9 +629,11 @@ impl CompterApp {
         input: ExpenseInput,
     ) -> Result<ExpenseRow, ApiError> {
         let id = expense_id(&id)?;
-        Ok(ExpenseRow::from(
-            &self.expenses.edit(id, expense_draft(input)?)?,
-        ))
+        let expense = self
+            .expenses
+            .edit(id, expense_draft(input)?)
+            .map_err(ApiError::on(Form::Expense))?;
+        Ok(ExpenseRow::from(&expense))
     }
 
     /// Remove an expense and its ledger posting
@@ -634,7 +666,7 @@ impl CompterApp {
             .ok()
             .and_then(|q| q.checked_sub(1))
             .and_then(|q| quarters.get(q).copied())
-            .ok_or_else(|| ApiError::invalid("quarter", "choose a quarter, 1 to 4"))?;
+            .ok_or_else(|| ApiError::invalid(InputField::Quarter, "choose a quarter, 1 to 4"))?;
         let [first, second, _] = quarter.months();
         let furnished: Vec<(i32, u32)> = [(first_month_filed, first), (second_month_filed, second)]
             .into_iter()
@@ -658,7 +690,7 @@ impl CompterApp {
         let month = usize::try_from(month)
             .ok()
             .and_then(|m| months.get(m).copied())
-            .ok_or_else(|| ApiError::invalid("month", "choose a month"))?;
+            .ok_or_else(|| ApiError::invalid(InputField::Month, "choose a month"))?;
         let (path, iff) = self.reports.export_iff(month)?;
         Ok(ExportRow {
             path: path.to_string_lossy().into_owned(),
@@ -682,10 +714,7 @@ impl CompterApp {
             return Err(ServiceError::NoSyncInDemo.into());
         }
         let lease = sync::lease_for(&self.dir, &device_name).map_err(ServiceError::from)?;
-        serde_json::to_string_pretty(&lease).map_err(|e| ApiError {
-            field: None,
-            message: e.to_string(),
-        })
+        serde_json::to_string_pretty(&lease).map_err(|e| ApiError::general(e.to_string()))
     }
 
     /// Who has compter open, from the `lease.json` found in the sync folder: `compter is open
@@ -783,13 +812,13 @@ fn today() -> NaiveDate {
 }
 
 /// A typed date for the input called `field`; blank means today
-fn date(input: &str, field: &str) -> Result<NaiveDate, ApiError> {
+fn date(input: &str, field: InputField) -> Result<NaiveDate, ApiError> {
     input::date_or(input, today()).map_err(|e| ApiError::invalid(field, e))
 }
 
 fn project_id(id: &str) -> Result<ProjectId, ApiError> {
     id.parse()
-        .map_err(|_| ApiError::invalid("project_id", "not a project id"))
+        .map_err(|_| ApiError::invalid(InputField::ProjectId, "not a project id"))
 }
 
 /// The projects' names, as a question about them lists them
@@ -799,12 +828,12 @@ fn project_names(projects: &[ProjectSummary]) -> Vec<String> {
 
 fn client_id(id: &str) -> Result<ClientId, ApiError> {
     id.parse()
-        .map_err(|_| ApiError::invalid("client_id", "not a client id"))
+        .map_err(|_| ApiError::invalid(InputField::ClientId, "not a client id"))
 }
 
 fn milestone_id(id: &str) -> Result<MilestoneId, ApiError> {
     id.parse()
-        .map_err(|_| ApiError::invalid("milestone_id", "not a milestone id"))
+        .map_err(|_| ApiError::invalid(InputField::MilestoneId, "not a milestone id"))
 }
 
 fn milestone_ids_of(ids: &[String]) -> Result<Vec<MilestoneId>, ApiError> {
@@ -815,14 +844,16 @@ fn milestone_ids_of(ids: &[String]) -> Result<Vec<MilestoneId>, ApiError> {
 fn index_of(project: &Project, id: &str) -> Result<usize, ApiError> {
     project
         .milestone_index(milestone_id(id)?)
-        .ok_or_else(|| ApiError::invalid("milestone_id", "no such milestone"))
+        .ok_or_else(|| ApiError::invalid(InputField::MilestoneId, "no such milestone"))
 }
 
 fn project_draft(input: ProjectInput) -> Result<ProjectDraft, ApiError> {
     let billing = match input.hourly_rate.as_deref().and_then(input::optional) {
         Some(rate) => {
-            let rate = input::money(&rate).map_err(|e| ApiError::invalid("hourly_rate", e))?;
-            Billing::hourly(rate).map_err(|e| ApiError::invalid("hourly_rate", e.to_string()))?
+            let rate =
+                input::money(&rate).map_err(|e| ApiError::invalid(InputField::HourlyRate, e))?;
+            Billing::hourly(rate)
+                .map_err(|e| ApiError::invalid(InputField::HourlyRate, e.to_string()))?
         }
         None => Billing::Fixed,
     };
@@ -850,12 +881,13 @@ fn client_details(name: &str, input: ClientInput) -> Result<ClientDetails, ApiEr
             state: optional(&input.state)
                 .map(|code| StateCode::parse(&code))
                 .transpose()
-                .map_err(|e| ApiError::invalid("client_state", e.to_string()))?,
+                .map_err(|e| ApiError::invalid(InputField::ClientState, e.to_string()))?,
         },
     };
     let currency = match optional(&input.currency) {
-        Some(code) => currency(&code)
-            .ok_or_else(|| ApiError::invalid("currency", "choose INR, USD, GBP or EUR"))?,
+        Some(code) => currency(&code).ok_or_else(|| {
+            ApiError::invalid(InputField::Currency, "choose INR, USD, GBP or EUR")
+        })?,
         None => Currency::Inr,
     };
     Ok(ClientDetails {
@@ -875,12 +907,13 @@ fn milestone_draft(project: &Project, input: MilestoneInput) -> Result<Milestone
     let amount = match (hourly, input.amount.as_deref()) {
         (true, _) => None,
         (false, amount) => Some(
-            input::money(amount.unwrap_or_default()).map_err(|e| ApiError::invalid("amount", e))?,
+            input::money(amount.unwrap_or_default())
+                .map_err(|e| ApiError::invalid(InputField::Amount, e))?,
         ),
     };
     Ok(MilestoneDraft {
         name: input.name.trim().to_owned(),
-        due_date: date(&input.due_date, "due_date")?,
+        due_date: date(&input.due_date, InputField::DueDate)?,
         amount,
     })
 }
@@ -889,47 +922,29 @@ fn milestone_draft(project: &Project, input: MilestoneInput) -> Result<Milestone
 fn exchange_rate(rate: Option<&str>) -> Result<Option<ExchangeRate>, ApiError> {
     rate.and_then(input::optional)
         .map(|rate| {
-            let rate = input::money(&rate).map_err(|e| ApiError::invalid("rate", e))?;
-            ExchangeRate::new(rate).map_err(|e| ApiError::invalid("rate", e.to_string()))
+            let rate = input::money(&rate).map_err(|e| ApiError::invalid(InputField::Rate, e))?;
+            ExchangeRate::new(rate).map_err(|e| ApiError::invalid(InputField::Rate, e.to_string()))
         })
         .transpose()
 }
 
 fn discount_of(discount: Option<&str>) -> Result<Option<Discount>, ApiError> {
-    input::discount(discount.unwrap_or_default()).map_err(|e| ApiError::invalid("discount", e))
+    input::discount(discount.unwrap_or_default())
+        .map_err(|e| ApiError::invalid(InputField::Discount, e))
 }
 
-/// A discount the invoice can't take names the discount field
-fn discount_error(error: ServiceError) -> ApiError {
-    let message = error.to_string();
-    match error {
-        ServiceError::Domain(e) | ServiceError::Invoicing(InvoicingError::Domain(e))
-            if matches!(
-                e,
-                DomainError::DiscountPercent
-                    | DomainError::DiscountTooLarge { .. }
-                    | DomainError::FractionOfPaisa
-            ) =>
-        {
-            ApiError::invalid("discount", message)
-        }
-        error => error.into(),
-    }
-}
-
-/// Credit note lines as typed; a refused one names its field, `line:<milestone_id>`
+/// Credit note lines as typed; a refused one names its line
 fn credit_lines(lines: &[CreditLineInput]) -> Result<Vec<CreditLineDraft>, ApiError> {
     lines
         .iter()
         .map(|line| {
-            let field = || format!("line:{}", line.milestone_id);
+            let refused = |message: &str| ApiError::invalid_line(&line.milestone_id, message);
             Ok(CreditLineDraft {
                 milestone_id: line
                     .milestone_id
                     .parse()
-                    .map_err(|_| ApiError::invalid(&field(), "not a milestone id"))?,
-                taxable_value: input::money(&line.amount)
-                    .map_err(|e| ApiError::invalid(&field(), e))?,
+                    .map_err(|_| refused("not a milestone id"))?,
+                taxable_value: input::money(&line.amount).map_err(refused)?,
             })
         })
         .collect()
@@ -937,7 +952,7 @@ fn credit_lines(lines: &[CreditLineInput]) -> Result<Vec<CreditLineDraft>, ApiEr
 
 fn credit_draft(input: CreditInput) -> Result<CreditDraft, ApiError> {
     Ok(CreditDraft {
-        date: date(&input.date, "date")?,
+        date: date(&input.date, InputField::Date)?,
         lines: credit_lines(&input.lines)?,
         reason: input.reason.trim().to_owned(),
         returned: ReturnTerms {
@@ -946,14 +961,14 @@ fn credit_draft(input: CreditInput) -> Result<CreditDraft, ApiError> {
             } else {
                 ReturnKind::Refunded
             },
-            refunded_inr: optional_money(&input.refunded_inr, "refunded_inr")?,
-            tds_reversed: optional_money(&input.tds_reversed, "tds_reversed")?,
+            refunded_inr: optional_money(&input.refunded_inr, InputField::RefundedInr)?,
+            tds_reversed: optional_money(&input.tds_reversed, InputField::TdsReversed)?,
         },
     })
 }
 
 /// A money field that may be left blank
-fn optional_money(value: &str, field: &'static str) -> Result<Option<BigDecimal>, ApiError> {
+fn optional_money(value: &str, field: InputField) -> Result<Option<BigDecimal>, ApiError> {
     input::optional(value)
         .map(|amount| input::money(&amount).map_err(|e| ApiError::invalid(field, e)))
         .transpose()
@@ -961,19 +976,20 @@ fn optional_money(value: &str, field: &'static str) -> Result<Option<BigDecimal>
 
 fn expense_id(id: &str) -> Result<ExpenseId, ApiError> {
     id.parse()
-        .map_err(|_| ApiError::invalid("expense_id", "not an expense id"))
+        .map_err(|_| ApiError::invalid(InputField::ExpenseId, "not an expense id"))
 }
 
 fn expense_draft(input: ExpenseInput) -> Result<ExpenseDraft, ApiError> {
     Ok(ExpenseDraft {
-        date: date(&input.date, "date")?,
+        date: date(&input.date, InputField::Date)?,
         category: category(&input.category)
-            .ok_or_else(|| ApiError::invalid("category", "choose a category"))?,
+            .ok_or_else(|| ApiError::invalid(InputField::Category, "choose a category"))?,
         description: input.description.trim().to_owned(),
-        amount: input::money(&input.amount).map_err(|e| ApiError::invalid("amount", e))?,
+        amount: input::money(&input.amount)
+            .map_err(|e| ApiError::invalid(InputField::Amount, e))?,
         gst_credit: match input::optional(&input.gst_credit) {
             Some(credit) => {
-                input::money(&credit).map_err(|e| ApiError::invalid("gst_credit", e))?
+                input::money(&credit).map_err(|e| ApiError::invalid(InputField::GstCredit, e))?
             }
             None => BigDecimal::zero(),
         },

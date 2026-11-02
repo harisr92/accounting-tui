@@ -1,7 +1,7 @@
 mod support;
 
 use compter_mobile::api::expenses::expense_categories;
-use compter_mobile::api::{CompterApp, ExpenseInput};
+use compter_mobile::api::{CompterApp, ExpenseInput, InputField};
 use support::demo;
 
 fn expense(date: &str, amount: &str, gst_credit: &str) -> ExpenseInput {
@@ -66,18 +66,18 @@ fn refused_expenses_name_their_field() {
         category: "Snacks".to_owned(),
         ..expense("", "100", "")
     };
-    assert_eq!(field(no_category, &mut app).as_deref(), Some("category"));
+    assert_eq!(field(no_category, &mut app), Some(InputField::Category));
     assert_eq!(
-        field(expense("", "lots", ""), &mut app).as_deref(),
-        Some("amount")
+        field(expense("", "lots", ""), &mut app),
+        Some(InputField::Amount)
     );
     assert_eq!(
-        field(expense("", "100", "x"), &mut app).as_deref(),
-        Some("gst_credit")
+        field(expense("", "100", "x"), &mut app),
+        Some(InputField::GstCredit)
     );
     assert_eq!(
-        field(expense("2/10/26", "100", ""), &mut app).as_deref(),
-        Some("date")
+        field(expense("2/10/26", "100", ""), &mut app),
+        Some(InputField::Date)
     );
     assert!(expense_categories().contains(&"Software & subscriptions".to_owned()));
 }
@@ -91,6 +91,6 @@ fn gst_credit_needs_a_gstin_in_the_profile() {
         .add_expense(expense("2026-10-02", "1,180", "180"))
         .unwrap_err();
 
-    assert_eq!(error.field, None);
+    assert_eq!(error.field, Some(InputField::GstCredit));
     assert!(error.message.contains("GSTIN"), "{}", error.message);
 }

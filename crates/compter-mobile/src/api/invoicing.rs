@@ -183,7 +183,7 @@ impl InvoiceDetail {
             settled: invoice.is_settled(),
             creditable: invoice.creditable() > BigDecimal::zero(),
             credit_guide: invoice.credit_guide(),
-            tds_withheld: invoice.payments().iter().any(|p| !p.tds.is_zero()),
+            tds_withheld: invoice.tds_withheld(),
             client_advance: None,
             foreign,
             history: payments.chain(credits).collect(),
@@ -339,8 +339,8 @@ pub struct CreditInput {
 pub struct CreditLineInput {
     /// The milestone the line billed (`InvoiceLineRow::milestone_id`)
     pub milestone_id: String,
-    /// Value taken back before GST, in the invoice's currency. An error in it names the field
-    /// `line:<milestone_id>`.
+    /// Value taken back before GST, in the invoice's currency. An error in it is
+    /// `InputField::CreditLine` with this `milestone_id` as its `line`.
     pub amount: String,
 }
 

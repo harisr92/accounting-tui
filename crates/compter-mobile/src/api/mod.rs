@@ -16,7 +16,7 @@ pub mod rows;
 pub use app::CompterApp;
 pub use clients::{ClientChoiceRow, ClientDetail, ClientInput, ClientSummaryRow, StateRow};
 pub use dashboard::{DashboardRow, ReadyRow, UnpaidRow};
-pub use error::ApiError;
+pub use error::{ApiError, InputField};
 pub use expenses::{ExpenseInput, ExpenseList, ExpenseRow};
 pub use handoff::{ReceivedRow, SentRow, SyncStatusRow};
 pub use invoicing::{
