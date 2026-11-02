@@ -203,9 +203,36 @@ fn a_client_is_saved_with_the_projects_taking_their_details() {
     repo.save_client(&ClientRecord {
         client: &client,
         projects: std::slice::from_ref(&project),
+        removed: None,
     })
     .unwrap();
 
     assert_eq!(repo.clients().unwrap(), [client]);
     assert_eq!(repo.load(project.id()).unwrap(), project);
+}
+
+#[test]
+fn a_merged_client_goes_in_the_same_write() {
+    let store = Store::in_memory().unwrap();
+    let mut repo = store.repository();
+    let mut acme = Client::new(ClientDetails::named("Acme", None)).unwrap();
+    let typo = Client::new(ClientDetails::named("Acmee", None)).unwrap();
+    let project = Project::new("Site", "Acmee", None, Billing::Fixed).unwrap();
+    repo.save_with_client(&project, &typo).unwrap();
+    repo.save_client(&ClientRecord {
+        client: &acme,
+        projects: &[],
+        removed: None,
+    })
+    .unwrap();
+
+    acme.absorb(&typo).unwrap();
+    repo.save_client(&ClientRecord {
+        client: &acme,
+        projects: &[],
+        removed: Some(typo.id()),
+    })
+    .unwrap();
+
+    assert_eq!(repo.clients().unwrap(), [acme]);
 }

@@ -8,7 +8,7 @@ use super::gstr1::{MonthlyIff, QuarterlyGstr1, monthly_iff, quarterly_gstr1};
 use super::reports::{YearReport, YearReportBuilder};
 use crate::domain::{CreditNote, FiscalYear, Invoice, InvoiceKind, Quarter};
 use crate::storage::{
-    DataDir, ExpenseRepository, InvoiceRepository, SettingsRepository, write_file,
+    ClientRepository, DataDir, ExpenseRepository, InvoiceRepository, SettingsRepository, write_file,
 };
 
 /// Year reports and GST returns, computed on demand from the stored invoices and expenses
@@ -17,7 +17,9 @@ pub struct ReportService<R> {
     data_dir: Option<DataDir>,
 }
 
-impl<R: InvoiceRepository + ExpenseRepository + SettingsRepository> ReportService<R> {
+impl<R: InvoiceRepository + ExpenseRepository + SettingsRepository + ClientRepository>
+    ReportService<R>
+{
     pub fn new(repo: R, data_dir: Option<DataDir>) -> Self {
         Self { repo, data_dir }
     }
@@ -28,7 +30,7 @@ impl<R: InvoiceRepository + ExpenseRepository + SettingsRepository> ReportServic
             .load_profile()?
             .map(|profile| profile.income_basis().clone())
             .unwrap_or_default();
-        let mut builder = YearReportBuilder::new(year, basis);
+        let mut builder = YearReportBuilder::new(year, basis).with_clients(&self.repo.clients()?);
         self.repo
             .scan_invoices(&mut |invoice| builder.add_invoice(&invoice))?;
         self.repo

@@ -2,8 +2,8 @@ use accounting_core::{Account, Transaction};
 
 use super::StorageError;
 use crate::domain::{
-    Appearance, BusinessProfile, Client, CreditNote, Expense, ExpenseId, FiscalYear, Invoice,
-    InvoiceNumber, InvoiceSummary, Logo, LogoId, Project, ProjectId, ProjectSummary,
+    Appearance, BusinessProfile, Client, ClientId, CreditNote, Expense, ExpenseId, FiscalYear,
+    Invoice, InvoiceNumber, InvoiceSummary, Logo, LogoId, Project, ProjectId, ProjectSummary,
 };
 
 /// Where projects live. The app depends on this trait, not on redb.
@@ -26,22 +26,25 @@ pub trait ProjectRepository {
     fn delete(&mut self, id: ProjectId) -> Result<(), StorageError>;
 }
 
-/// A client's details corrected from the address book, with the open projects that take them
-/// too, saved together or not at all
+/// A client corrected, renamed or merged in the address book, with the open projects that take
+/// the change too, saved together or not at all
 pub struct ClientRecord<'a> {
     pub client: &'a Client,
     /// Projects whose copy of the client was updated; may be empty
     pub projects: &'a [Project],
+    /// The client merged into `client`, whose record goes
+    pub removed: Option<ClientId>,
 }
 
 /// The clients billed so far: the address book a new project's client is picked from. Clients
 /// are written with a project ([`ProjectRepository::save_with_client`]), or corrected on their
-/// own ([`save_client`](Self::save_client)).
+/// own ([`save_client`](Self::save_client)), which also removes a client merged into another.
 pub trait ClientRepository {
     /// Every client, sorted by name
     fn clients(&self) -> Result<Vec<Client>, StorageError>;
 
-    /// Replace a client's record, and the projects in `record`, in one write
+    /// Replace a client's record and the projects in `record`, and remove the client it
+    /// names as merged, in one write
     fn save_client(&mut self, record: &ClientRecord) -> Result<(), StorageError>;
 }
 

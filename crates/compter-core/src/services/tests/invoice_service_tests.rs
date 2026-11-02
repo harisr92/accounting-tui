@@ -7,11 +7,15 @@ use super::fixtures::{
     profile_draft,
 };
 use crate::domain::{
-    Currency, Discount, DomainError, ExchangeRate, InvoiceStatus, MilestoneId, MilestoneStatus,
-    ProjectStatus, ReturnKind, ReturnTerms,
+    Client, Currency, Discount, DomainError, ExchangeRate, InvoiceStatus, MilestoneId,
+    MilestoneStatus, ProjectStatus, ReturnKind, ReturnTerms,
 };
-use crate::services::{CreditLineDraft, InvoiceService, InvoicingError, ServiceError, chart};
-use crate::storage::{InvoiceRepository, ProjectRepository, RedbRepository, Store};
+use crate::services::{
+    ClientService, CreditLineDraft, InvoiceService, InvoicingError, ServiceError, chart,
+};
+use crate::storage::{
+    ClientRecord, ClientRepository, InvoiceRepository, ProjectRepository, RedbRepository, Store,
+};
 
 fn rupees(amount: i64) -> BigDecimal {
     BigDecimal::from(amount)
@@ -515,6 +519,23 @@ fn credits_on_a_paid_invoice_can_be_kept_as_an_advance_up_to_its_total() {
     let client = credited.invoice.client_name().to_owned();
     assert_eq!(service.client_advance(&client).unwrap(), rupees(11_800));
     assert_eq!(service.client_advance("Someone else").unwrap(), rupees(0));
+
+    // Renamed, the client still holds the advance on the invoice issued under the old name
+    let mut clients = ClientService::new(store.repository());
+    let recorded = Client::new(project.client_details()).unwrap();
+    store
+        .repository()
+        .save_client(&ClientRecord {
+            client: &recorded,
+            projects: &[],
+            removed: None,
+        })
+        .unwrap();
+    clients.rename(recorded.id(), "Renamed Co", false).unwrap();
+    assert_eq!(
+        service.client_advance("renamed co").unwrap(),
+        rupees(11_800)
+    );
 
     // Every note together takes off at most the invoice's ₹59,000
     assert!(matches!(

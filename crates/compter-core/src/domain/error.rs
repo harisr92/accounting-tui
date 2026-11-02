@@ -42,6 +42,8 @@ pub enum DomainError {
     ProjectArchived,
     #[error("a client abroad can't have a GSTIN")]
     ForeignClientWithGstin,
+    #[error("{other} has a different GSTIN: they are a separate registration, not a duplicate")]
+    ClientGstinsDiffer { other: String },
     #[error("the client's GSTIN is registered in {0}; leave the state blank or choose that one")]
     StateNotGstins(String),
     #[error("SAC code {0} is not in the GST rate list")]

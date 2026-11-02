@@ -655,7 +655,7 @@ fn a_discounted_milestone_is_billed_and_credited_net_of_its_discount() {
 }
 
 #[test]
-fn adopting_a_client_keeps_the_name_and_the_projects_currency() {
+fn adopting_a_client_takes_the_name_but_keeps_the_projects_currency() {
     let mut p = Project::for_client("Audit", abroad_in(Currency::Usd), Billing::Fixed).unwrap();
     p.add_milestone("Report", date(), rupees(1000)).unwrap();
     p.invoice_milestone(0, "INV/26-27/001").unwrap();
@@ -671,7 +671,7 @@ fn adopting_a_client_keeps_the_name_and_the_projects_currency() {
 
     assert!(p.would_adopt(&corrected));
     p.adopt_client(corrected.clone()).unwrap();
-    assert_eq!(p.client_name(), "Initrode GmbH");
+    assert_eq!(p.client_name(), "INITRODE");
     assert_eq!(p.currency(), Currency::Usd);
     assert_eq!(p.client_address(), ["Hauptstrasse 2", "10115 Berlin"]);
     assert_eq!(p.milestones()[0].status(), MilestoneStatus::Invoiced);

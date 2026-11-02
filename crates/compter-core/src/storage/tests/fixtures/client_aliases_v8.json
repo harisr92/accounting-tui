@@ -1,0 +1,13 @@
+{
+  "id": "019a4c3e-7b20-7c11-9a3e-2f6d8b1c0a56",
+  "name": "Acme Pvt Ltd",
+  "aliases": [
+    "Acme",
+    "Acmee"
+  ],
+  "gstin": "27AAPFU0939F2ZU",
+  "region": {
+    "type": "india"
+  },
+  "currency": "INR"
+}

@@ -179,6 +179,9 @@ impl ClientRepository for RedbRepository {
         for project in record.projects {
             put_project(&txn, project)?;
         }
+        if let Some(removed) = record.removed {
+            txn.open_table(CLIENTS)?.remove(removed.as_uuid())?;
+        }
         txn.commit()?;
         Ok(())
     }

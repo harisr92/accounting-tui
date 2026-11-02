@@ -34,6 +34,7 @@ const DISCOUNT_INVOICE_V6: &str = include_str!("fixtures/invoice_discount_v6.jso
 const DISCOUNT_PROJECT_V6: &str = include_str!("fixtures/project_discount_v6.json");
 const CLIENT_V7: &str = include_str!("fixtures/client_v7.json");
 const CLIENT_ABROAD_V7: &str = include_str!("fixtures/client_abroad_v7.json");
+const CLIENT_ALIASES_V8: &str = include_str!("fixtures/client_aliases_v8.json");
 
 #[test]
 fn hourly_project_v1_still_loads() {
@@ -310,4 +311,15 @@ fn clients_v7_still_load() {
         ClientRegion::Abroad { country } if country == "Germany"
     ));
     assert_eq!(abroad.currency(), Currency::Eur);
+}
+
+#[test]
+fn a_client_with_earlier_names_v8_still_loads() {
+    let client: Client = decode("clients", "fixture", CLIENT_ALIASES_V8.as_bytes()).unwrap();
+    assert_eq!(client.name(), "Acme Pvt Ltd");
+    assert_eq!(client.aliases(), ["Acme", "Acmee"]);
+    assert!(client.matches("ACMEE"));
+
+    let before: Client = decode("clients", "fixture", CLIENT_V7.as_bytes()).unwrap();
+    assert!(before.aliases().is_empty());
 }
