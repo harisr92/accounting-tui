@@ -6,19 +6,23 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `invalid`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `eq`, `fmt`, `fmt`, `from`
+// These functions are ignored because they are not marked as `pub`: `any_form`, `domain_error`, `domain_field`, `field_for`, `general`, `invalid_line`, `invalid`, `on`, `refused`, `service_field`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Form`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `hash`
 
 /// Why a call failed, as Dart shows it. `field` names the input that was refused, so a form can
-/// show the message next to it; it is `None` for anything else.
+/// show the message under it; it is `None` for anything else, which a form shows as a toast.
 class ApiError implements FrbException {
-  final String? field;
+  final InputField? field;
+
+  /// With [`InputField::CreditLine`], the milestone whose credit note line was refused
+  final String? line;
   final String message;
 
-  const ApiError({this.field, required this.message});
+  const ApiError({this.field, this.line, required this.message});
 
   @override
-  int get hashCode => field.hashCode ^ message.hashCode;
+  int get hashCode => field.hashCode ^ line.hashCode ^ message.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -26,5 +30,78 @@ class ApiError implements FrbException {
       other is ApiError &&
           runtimeType == other.runtimeType &&
           field == other.field &&
+          line == other.line &&
           message == other.message;
+}
+
+/// An input of the phone's forms, as both sides name it: a refusal says which one it is about
+/// ([`ApiError::field`]) and the Dart form keys its fields by it, so renaming one on either side
+/// stops the build instead of moving the error off its field.
+enum InputField {
+  /// A project's, milestone's or the business's name
+  name,
+  clientName,
+  clientGstin,
+  clientState,
+  clientCountry,
+
+  /// The client's or the business's
+  address,
+  currency,
+  hourlyRate,
+  dueDate,
+
+  /// A milestone's or an expense's
+  amount,
+
+  /// The business's own
+  gstin,
+  sacCode,
+  invoicePrefix,
+  lutArn,
+  terms,
+  incomeBasis,
+  basisFrom,
+
+  /// An expense's, payment's, credit note's or time entry's
+  date,
+  category,
+  description,
+  gstCredit,
+  discount,
+
+  /// The exchange rate an invoice is issued at
+  rate,
+  received,
+
+  /// TDS withheld, or for a foreign invoice the rupees banked
+  tdsOrBanked,
+  reason,
+
+  /// Refund, or keep as the client's advance
+  returned,
+  refundedInr,
+  tdsReversed,
+  duration,
+  note,
+  quarter,
+
+  /// The months of a quarter filed by IFF
+  filed,
+  month,
+
+  /// One line of a credit note: [`ApiError::line`] names which
+  creditLine,
+
+  /// Not typed: the record a call was made on
+  projectId,
+
+  /// Not typed: the record a call was made on
+  milestoneId,
+
+  /// Not typed: the record a call was made on
+  clientId,
+
+  /// Not typed: the record a call was made on
+  expenseId,
 }

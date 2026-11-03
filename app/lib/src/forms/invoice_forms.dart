@@ -10,12 +10,9 @@ import '../subscription/paywall.dart';
 import 'form_dialog.dart';
 
 const _amount = TextInputType.numberWithOptions(decimal: true);
-const _date = FieldSpec('date', 'Date', date: true);
+const _date = FieldSpec(InputField.date, 'Date', date: true);
 const _refund = 'Refund';
 const _advance = 'Keep as advance';
-
-/// How Rust names the amount of one credit note line in `ApiError.field`: `line:<milestone id>`
-const _line = 'line:';
 
 /// Pick which pending milestones of [project] to invoice together, starting from [milestone],
 /// then show the invoice they would get today and issue it on a yes, like `i` in the terminal.
@@ -60,26 +57,26 @@ Future<IssuedRow?> issueInvoice(
     writes: false,
     fields: [
       const FieldSpec(
-        'discount',
+        InputField.discount,
         'Discount',
         hint: 'e.g. 5000 or 10%, before GST; blank for none',
       ),
       if (foreign)
         FieldSpec(
-          'rate',
+          InputField.rate,
           '₹ per ${project.currency}',
           hint: "today's rate, e.g. RBI reference rate",
           keyboardType: _amount,
         ),
     ],
     submit: (values) async => (
-      values['rate'],
-      values['discount'],
+      values[InputField.rate],
+      values[InputField.discount],
       await app.previewInvoice(
         projectId: project.id,
         milestoneIds: milestoneIds,
-        rate: values['rate'],
-        discount: values['discount'],
+        rate: values[InputField.rate],
+        discount: values[InputField.discount],
       ),
     ),
   );
@@ -127,7 +124,7 @@ Future<InvoiceDetail?> recordPayment(
     fields: [
       _date,
       FieldSpec(
-        'received',
+        InputField.received,
         'Received (${invoice.currency})',
         hint: '${invoice.balance} due; part payments are fine',
         keyboardType: _amount,
@@ -135,7 +132,7 @@ Future<InvoiceDetail?> recordPayment(
       ),
       if (invoice.foreign)
         FieldSpec(
-          'tds_or_banked',
+          InputField.tdsOrBanked,
           'Banked ₹',
           hint:
               'rupees credited to your bank; invoiced at '
@@ -144,7 +141,7 @@ Future<InvoiceDetail?> recordPayment(
         )
       else
         FieldSpec(
-          'tds_or_banked',
+          InputField.tdsOrBanked,
           'TDS',
           hint: 'withheld by the client; 10% is ${invoice.usualTds ?? ''}',
           keyboardType: _amount,
@@ -154,9 +151,9 @@ Future<InvoiceDetail?> recordPayment(
     submit: (values) => app.recordPayment(
       number: invoice.number,
       input: PaymentInput(
-        date: values['date']!,
-        received: values['received']!,
-        tdsOrBanked: values['tds_or_banked']!,
+        date: values[InputField.date]!,
+        received: values[InputField.received]!,
+        tdsOrBanked: values[InputField.tdsOrBanked]!,
       ),
     ),
   );
@@ -245,7 +242,7 @@ Future<List<(String, String)>?> _pickCreditLines(
               : kept.containsKey(line.milestoneId),
         ),
     ],
-    fieldPrefix: _line,
+    rowField: InputField.creditLine,
     check: (picked) => app.checkCreditLines(
       number: invoice.number,
       lines: _creditLines(picked),
@@ -260,9 +257,9 @@ List<CreditLineInput> _creditLines(List<(String, String)> picked) => [
 
 /// [error] with the line it is about named, when it is about one: `Build: …`
 ApiError _naming(ApiError error, Map<String, String> names) {
-  final field = error.field;
-  if (field == null || !field.startsWith(_line)) return error;
-  final name = names[field.substring(_line.length)] ?? 'A line';
+  final line = error.line;
+  if (error.field != InputField.creditLine || line == null) return error;
+  final name = names[line] ?? 'A line';
   // A line Rust checked names itself already
   if (error.message.startsWith('$name: ')) return error;
   return ApiError(message: '$name: ${error.message}');
@@ -286,12 +283,12 @@ Future<(CreditInput, CreditPreviewRow)?> _creditTerms(
     fields: [
       _date,
       const FieldSpec(
-        'reason',
+        InputField.reason,
         'Reason',
         hint: 'e.g. Discount agreed, billed in error',
       ),
       const FieldSpec(
-        'returned',
+        InputField.returned,
         'If already paid',
         hint: 'what happens to the part the client already paid',
         initial: _refund,
@@ -299,14 +296,14 @@ Future<(CreditInput, CreditPreviewRow)?> _creditTerms(
       ),
       if (invoice.foreign)
         const FieldSpec(
-          'refunded_inr',
+          InputField.refundedInr,
           'Refunded ₹',
           hint: 'rupees refunded from your bank, for a refund',
           keyboardType: _amount,
         )
       else if (invoice.tdsWithheld)
         const FieldSpec(
-          'tds_reversed',
+          InputField.tdsReversed,
           'TDS reversed',
           hint:
               'TDS the client cancels in its return; blank keeps it as your credit',
@@ -315,12 +312,12 @@ Future<(CreditInput, CreditPreviewRow)?> _creditTerms(
     ],
     submit: (values) async {
       final input = CreditInput(
-        date: values['date']!,
+        date: values[InputField.date]!,
         lines: lines,
-        reason: values['reason']!,
-        keepAsAdvance: values['returned'] == _advance,
-        refundedInr: values['refunded_inr'] ?? '',
-        tdsReversed: values['tds_reversed'] ?? '',
+        reason: values[InputField.reason]!,
+        keepAsAdvance: values[InputField.returned] == _advance,
+        refundedInr: values[InputField.refundedInr] ?? '',
+        tdsReversed: values[InputField.tdsReversed] ?? '',
       );
       try {
         return (
@@ -347,16 +344,20 @@ Future<ProjectDetail?> logTime(
     title: 'Log time on ${milestone.name}',
     fields: const [
       _date,
-      FieldSpec('duration', 'Time', hint: '1h30m, 45m, 1:30 or 1.5 (hours)'),
-      FieldSpec('note', 'Note', hint: 'what was done'),
+      FieldSpec(
+        InputField.duration,
+        'Time',
+        hint: '1h30m, 45m, 1:30 or 1.5 (hours)',
+      ),
+      FieldSpec(InputField.note, 'Note', hint: 'what was done'),
     ],
     submit: (values) => app.logTime(
       projectId: project.id,
       milestoneId: milestone.id,
       input: TimeInput(
-        date: values['date']!,
-        duration: values['duration']!,
-        note: values['note']!,
+        date: values[InputField.date]!,
+        duration: values[InputField.duration]!,
+        note: values[InputField.note]!,
       ),
     ),
   );

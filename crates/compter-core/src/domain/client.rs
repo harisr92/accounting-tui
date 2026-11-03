@@ -143,9 +143,9 @@ pub(super) fn validate_client(
     region: &ClientRegion,
     currency: Currency,
 ) -> Result<(), DomainError> {
-    require(name, "client name")?;
+    require(name, ClientField::Name)?;
     if let ClientRegion::Abroad { country } = region {
-        require(country, "client country")?;
+        require(country, ClientField::Country)?;
         if gstin.is_some() {
             return Err(DomainError::ForeignClientWithGstin);
         }
@@ -292,7 +292,7 @@ impl Client {
     /// drops that alias.
     pub fn rename(&mut self, name: &str) -> Result<(), DomainError> {
         let name = name.trim();
-        require(name, "client name")?;
+        require(name, ClientField::Name)?;
         if !same_client(&self.name, name) {
             let old = std::mem::replace(&mut self.name, name.to_owned());
             self.aliases.retain(|alias| !same_client(alias, name));
@@ -460,5 +460,24 @@ impl ClientIndex {
         self.names
             .get(&client_key(name))
             .map_or(name, |(_, current)| current.as_str())
+    }
+}
+
+/// A client's text that can't be left blank, named in [`DomainError::EmptyField`] through
+/// [`RecordField`](super::RecordField)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ClientField {
+    Name,
+    /// Only a client abroad has one
+    Country,
+}
+
+impl ClientField {
+    /// How the user knows it, in an error's message
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Name => "client name",
+            Self::Country => "client country",
+        }
     }
 }

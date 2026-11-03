@@ -66,8 +66,8 @@ class CreditLineInput {
   /// The milestone the line billed (`InvoiceLineRow::milestone_id`)
   final String milestoneId;
 
-  /// Value taken back before GST, in the invoice's currency. An error in it names the field
-  /// `line:<milestone_id>`.
+  /// Value taken back before GST, in the invoice's currency. An error in it is
+  /// `InputField::CreditLine` with this `milestone_id` as its `line`.
   final String amount;
 
   const CreditLineInput({required this.milestoneId, required this.amount});

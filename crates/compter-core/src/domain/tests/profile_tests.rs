@@ -1,6 +1,6 @@
 use crate::domain::{
     BasisSchedule, BusinessProfile, Currency, DomainError, FiscalYear, IncomeBasis, LogoId,
-    ProfileDraft,
+    ProfileDraft, ProfileField, RecordField,
 };
 
 fn draft() -> ProfileDraft {
@@ -50,7 +50,9 @@ fn rejects_bad_settings() {
     };
     assert!(matches!(
         with(|d| d.address.clear()),
-        Err(DomainError::EmptyField("business address"))
+        Err(DomainError::EmptyField(RecordField::Profile(
+            ProfileField::Address
+        )))
     ));
     assert!(matches!(
         with(|d| d.sac_code = "123456".to_owned()),

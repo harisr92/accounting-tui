@@ -3,8 +3,8 @@ mod support;
 use std::path::Path;
 
 use compter_mobile::api::{
-    CompterApp, CreditInput, CreditLineInput, PaymentInput, ProfileInput, ProjectDetail,
-    ProjectInput, TimeInput,
+    CompterApp, CreditInput, CreditLineInput, InputField, PaymentInput, ProfileInput,
+    ProjectDetail, ProjectInput, TimeInput,
 };
 use support::{demo, milestone, project};
 
@@ -97,7 +97,7 @@ fn saving_the_profile_drops_blank_lines_and_names_a_bad_currency() {
             ..input.clone()
         })
         .unwrap_err();
-    assert_eq!(wrong.field.as_deref(), Some("currency"));
+    assert_eq!(wrong.field, Some(InputField::Currency));
 
     let saved = app.save_profile(input).unwrap();
     assert_eq!(saved.address, ["12 FC Road"]);
@@ -180,7 +180,7 @@ fn a_refused_payment_names_its_field_and_records_nothing() {
     let bad_amount = app
         .record_payment(number.clone(), payment("lots", "0"))
         .unwrap_err();
-    assert_eq!(bad_amount.field.as_deref(), Some("received"));
+    assert_eq!(bad_amount.field, Some(InputField::Received));
     let bad_date = app
         .record_payment(
             number.clone(),
@@ -190,11 +190,15 @@ fn a_refused_payment_names_its_field_and_records_nothing() {
             },
         )
         .unwrap_err();
-    assert_eq!(bad_date.field.as_deref(), Some("date"));
+    assert_eq!(bad_date.field, Some(InputField::Date));
     let too_much = app
         .record_payment(number.clone(), payment("1,00,000", "0"))
         .unwrap_err();
-    assert_eq!(too_much.field, None);
+    assert_eq!(too_much.field, Some(InputField::Received));
+    let negative_tds = app
+        .record_payment(number.clone(), payment("100", "-5"))
+        .unwrap_err();
+    assert_eq!(negative_tds.field, Some(InputField::TdsOrBanked));
 
     assert!(app.invoice(number).unwrap().history.is_empty());
 }
@@ -269,7 +273,10 @@ fn a_paid_invoice_can_be_credited_with_a_refund_or_an_advance() {
     let too_much = app
         .issue_credit(number.clone(), credit(&line, "30000"))
         .unwrap_err();
-    assert_eq!(too_much.field, Some(format!("line:{line}")));
+    assert_eq!(
+        (too_much.field, too_much.line.as_deref()),
+        (Some(InputField::CreditLine), Some(line.as_str()))
+    );
     assert!(
         too_much.message.contains("25000.00"),
         "{}",
@@ -309,11 +316,8 @@ fn a_refund_after_tds_names_the_tds_the_client_reverses() {
         ..credit(&line, "50000")
     };
     assert_eq!(
-        app.issue_credit(number.clone(), bad)
-            .unwrap_err()
-            .field
-            .as_deref(),
-        Some("tds_reversed")
+        app.issue_credit(number.clone(), bad).unwrap_err().field,
+        Some(InputField::TdsReversed)
     );
 
     let reversed = CreditInput {
@@ -357,7 +361,7 @@ fn a_client_abroad_is_invoiced_at_the_rate_typed() {
             None,
         )
         .unwrap_err();
-    assert_eq!(bad_rate.field.as_deref(), Some("rate"));
+    assert_eq!(bad_rate.field, Some(InputField::Rate));
     let preview = app
         .preview_invoice(created.id, vec![draft], Some("90".to_owned()), None)
         .unwrap();
@@ -378,7 +382,7 @@ fn a_client_in_india_needs_a_real_state_code() {
             ..project("Website", None)
         })
         .unwrap_err();
-    assert_eq!(wrong.field.as_deref(), Some("client_state"));
+    assert_eq!(wrong.field, Some(InputField::ClientState));
 }
 
 #[test]
@@ -395,7 +399,7 @@ fn time_is_logged_on_hourly_milestones() {
     let wrong = app
         .log_time(mobile.id.clone(), beta.clone(), time("soon"))
         .unwrap_err();
-    assert_eq!(wrong.field.as_deref(), Some("duration"));
+    assert_eq!(wrong.field, Some(InputField::Duration));
     let logged = app
         .log_time(mobile.id, beta.clone(), time("1h30m"))
         .unwrap();
@@ -477,7 +481,10 @@ fn several_milestones_go_on_one_invoice_and_credit_notes_pick_its_lines() {
         ..credit(&ids[0], "")
     };
     let error = app.preview_credit(invoice.number.clone(), bad).unwrap_err();
-    assert_eq!(error.field, Some(format!("line:{}", ids[1])));
+    assert_eq!(
+        (error.field, error.line.as_deref()),
+        (Some(InputField::CreditLine), Some(ids[1].as_str()))
+    );
 
     // Lines are checked while they can still be changed: more than is left names the line
     let over = app
@@ -489,7 +496,10 @@ fn several_milestones_go_on_one_invoice_and_credit_notes_pick_its_lines() {
             }],
         )
         .unwrap_err();
-    assert_eq!(over.field, Some(format!("line:{}", ids[1])));
+    assert_eq!(
+        (over.field, over.line.as_deref()),
+        (Some(InputField::CreditLine), Some(ids[1].as_str()))
+    );
     assert!(over.message.contains("left to credit"), "{}", over.message);
     app.check_credit_lines(invoice.number.clone(), credit(&ids[1], "5000").lines)
         .unwrap();
@@ -497,12 +507,18 @@ fn several_milestones_go_on_one_invoice_and_credit_notes_pick_its_lines() {
     let fraction = app
         .check_credit_lines(invoice.number.clone(), credit(&ids[1], "5000.004").lines)
         .unwrap_err();
-    assert_eq!(fraction.field, Some(format!("line:{}", ids[1])));
+    assert_eq!(
+        (fraction.field, fraction.line.as_deref()),
+        (Some(InputField::CreditLine), Some(ids[1].as_str()))
+    );
     // Previewing or issuing checks the lines too, naming the one refused
     let preview = app
         .preview_credit(invoice.number.clone(), credit(&ids[1], "6000"))
         .unwrap_err();
-    assert_eq!(preview.field, Some(format!("line:{}", ids[1])));
+    assert_eq!(
+        (preview.field, preview.line.as_deref()),
+        (Some(InputField::CreditLine), Some(ids[1].as_str()))
+    );
     assert!(
         preview.message.starts_with("Print: "),
         "{}",
@@ -559,7 +575,7 @@ fn a_discount_comes_off_before_gst_and_shows_on_the_invoice() {
             Some("100%".to_owned()),
         )
         .unwrap_err();
-    assert_eq!(refused.field.as_deref(), Some("discount"));
+    assert_eq!(refused.field, Some(InputField::Discount));
     let refused = app
         .preview_invoice(
             website.id.clone(),
@@ -568,7 +584,16 @@ fn a_discount_comes_off_before_gst_and_shows_on_the_invoice() {
             Some("lots".to_owned()),
         )
         .unwrap_err();
-    assert_eq!(refused.field.as_deref(), Some("discount"));
+    assert_eq!(refused.field, Some(InputField::Discount));
+    let refused = app
+        .preview_invoice(
+            website.id.clone(),
+            vec![launch.clone()],
+            None,
+            Some("0".to_owned()),
+        )
+        .unwrap_err();
+    assert_eq!(refused.field, Some(InputField::Discount));
 
     let preview = app
         .preview_invoice(
@@ -586,4 +611,33 @@ fn a_discount_comes_off_before_gst_and_shows_on_the_invoice() {
         .unwrap();
     assert_eq!(issued.invoice.discount.as_deref(), Some("₹4,000.00"));
     assert_eq!(issued.invoice.balance, "₹42,480.00");
+}
+
+#[test]
+fn a_credit_note_refusal_names_its_field() {
+    let (_scratch, mut app) = demo();
+    let number = issue_launch(&mut app);
+    let line = first_line(&app, &number);
+
+    let no_reason = app
+        .preview_credit(
+            number.clone(),
+            CreditInput {
+                reason: " ".to_owned(),
+                ..credit(&line, "100")
+            },
+        )
+        .unwrap_err();
+    assert_eq!(no_reason.field, Some(InputField::Reason));
+
+    let too_early = app
+        .preview_credit(
+            number,
+            CreditInput {
+                date: "2000-01-01".to_owned(),
+                ..credit(&line, "100")
+            },
+        )
+        .unwrap_err();
+    assert_eq!(too_early.field, Some(InputField::Date));
 }

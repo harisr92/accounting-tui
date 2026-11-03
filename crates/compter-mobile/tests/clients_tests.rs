@@ -1,5 +1,6 @@
 mod support;
 
+use compter_mobile::api::InputField;
 use compter_mobile::api::clients::{gst_states, gstin_state};
 use support::{demo, project};
 
@@ -48,7 +49,7 @@ fn a_state_other_than_the_gstins_is_refused() {
     input.client_gstin = Some("27AAPFU0939F2ZU".to_owned());
 
     let error = app.create_project(input.clone()).unwrap_err();
-    assert_eq!(error.field.as_deref(), Some("client_state"));
+    assert_eq!(error.field, Some(InputField::ClientState));
     assert!(error.message.contains("Maharashtra"), "{}", error.message);
 
     input.client_state = Some("27".to_owned());
@@ -98,7 +99,7 @@ fn an_opened_client_lists_their_projects_and_invoices() {
     assert_eq!(milestones, ["Frontend", "Design"]);
 
     let error = app.client("not an id".to_owned()).unwrap_err();
-    assert_eq!(error.field.as_deref(), Some("client_id"));
+    assert_eq!(error.field, Some(InputField::ClientId));
 }
 
 #[test]
@@ -130,7 +131,7 @@ fn a_bad_correction_names_its_field() {
     input.state = Some("99".to_owned());
 
     let error = app.client_projects_to_update(acme.id, input).unwrap_err();
-    assert_eq!(error.field.as_deref(), Some("client_state"));
+    assert_eq!(error.field, Some(InputField::ClientState));
 }
 
 #[test]
@@ -152,7 +153,7 @@ fn a_renamed_client_keeps_the_old_name_as_an_alias() {
     let taken = app
         .rename_client(acme.id, "Globex Labs".to_owned(), false)
         .unwrap_err();
-    assert_eq!(taken.field.as_deref(), Some("client_name"));
+    assert_eq!(taken.field, Some(InputField::ClientName));
 }
 
 #[test]

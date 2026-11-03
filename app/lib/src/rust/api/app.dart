@@ -15,7 +15,7 @@ import 'profile.dart';
 import 'reports.dart';
 import 'rows.dart';
 
-// These functions are ignored because they are not marked as `pub`: `checked_draft`, `client_details`, `client_id`, `closed`, `credit_draft`, `credit_lines`, `date`, `detail_in`, `detail`, `discount_error`, `discount_of`, `exchange_rate`, `expense_draft`, `expense_id`, `index_of`, `milestone_draft`, `milestone_id`, `milestone_ids_of`, `optional_money`, `over`, `project_draft`, `project_id`, `project_names`, `today`
+// These functions are ignored because they are not marked as `pub`: `checked_draft`, `client_details`, `client_id`, `closed`, `credit_draft`, `credit_lines`, `date`, `detail_in`, `detail`, `discount_of`, `exchange_rate`, `expense_draft`, `expense_id`, `index_of`, `milestone_draft`, `milestone_id`, `milestone_ids_of`, `optional_money`, `over`, `project_draft`, `project_id`, `project_names`, `today`
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<CompterApp>>
 abstract class CompterApp implements RustOpaqueInterface {
@@ -29,7 +29,7 @@ abstract class CompterApp implements RustOpaqueInterface {
 
   /// Check the lines picked for a credit note against invoice `number` before asking when and
   /// why: each amount is a number, more than zero and no more than is left on its line. A
-  /// refusal names the line's field, `line:<milestone_id>`.
+  /// refusal names the line ([`InputField::CreditLine`], with its milestone as `line`).
   Future<void> checkCreditLines({
     required String number,
     required List<CreditLineInput> lines,

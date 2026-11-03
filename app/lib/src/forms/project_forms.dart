@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../rust/api/error.dart';
 import '../rust/api/app.dart';
 import '../rust/api/clients.dart';
 import '../rust/api/rows.dart';
@@ -26,13 +27,13 @@ Future<ProjectDetail?> projectForm(
     title: existing == null ? 'New project' : 'Edit project',
     fields: [
       FieldSpec(
-        'name',
+        InputField.name,
         'Name',
         hint: 'e.g. Website Revamp',
         initial: values?.name ?? '',
       ),
       FieldSpec(
-        'client_name',
+        InputField.clientName,
         'Client',
         hint: 'e.g. Acme Pvt Ltd',
         initial: values?.clientName ?? '',
@@ -47,7 +48,7 @@ Future<ProjectDetail?> projectForm(
         currency: values?.currency,
       ),
       FieldSpec(
-        'hourly_rate',
+        InputField.hourlyRate,
         'Rate / hour',
         hint: 'blank for a fixed price',
         keyboardType: _amount,
@@ -56,14 +57,14 @@ Future<ProjectDetail?> projectForm(
     ],
     submit: (values) {
       final input = ProjectInput(
-        name: values['name']!,
-        clientName: values['client_name']!,
-        clientGstin: values['client_gstin'],
-        clientState: values['client_state'],
-        clientCountry: values['client_country'],
-        clientAddress: values['address']!.split('\n'),
-        currency: values['currency'],
-        hourlyRate: values['hourly_rate'],
+        name: values[InputField.name]!,
+        clientName: values[InputField.clientName]!,
+        clientGstin: values[InputField.clientGstin],
+        clientState: values[InputField.clientState],
+        clientCountry: values[InputField.clientCountry],
+        clientAddress: values[InputField.address]!.split('\n'),
+        currency: values[InputField.currency],
+        hourlyRate: values[InputField.hourlyRate],
       );
       return existing == null
           ? app.createProject(input: input)
@@ -86,20 +87,20 @@ Future<ProjectDetail?> milestoneForm(
     title: existing == null ? 'Add milestone' : 'Edit milestone',
     fields: [
       FieldSpec(
-        'name',
+        InputField.name,
         'Name',
         hint: 'e.g. Design',
         initial: values?.name ?? '',
       ),
       FieldSpec(
-        'due_date',
+        InputField.dueDate,
         'Due date',
         date: true,
         initial: values?.dueDate ?? '',
       ),
       if (!project.hourly)
         FieldSpec(
-          'amount',
+          InputField.amount,
           'Amount',
           hint: 'e.g. 50,000',
           keyboardType: _amount,
@@ -108,9 +109,9 @@ Future<ProjectDetail?> milestoneForm(
     ],
     submit: (values) {
       final input = MilestoneInput(
-        name: values['name']!,
-        dueDate: values['due_date']!,
-        amount: values['amount'],
+        name: values[InputField.name]!,
+        dueDate: values[InputField.dueDate]!,
+        amount: values[InputField.amount],
       );
       return existing == null
           ? app.addMilestone(projectId: project.id, input: input)
@@ -135,13 +136,13 @@ List<FieldSpec> clientFields({
   final states = gstStates();
   return [
     FieldSpec(
-      'client_gstin',
+      InputField.clientGstin,
       'Client GSTIN',
       hint: 'blank if unregistered or abroad',
       initial: gstin ?? '',
     ),
     FieldSpec(
-      'client_state',
+      InputField.clientState,
       'State',
       hint: 'India, no GSTIN: the place of supply',
       initial: state ?? '',
@@ -150,25 +151,26 @@ List<FieldSpec> clientFields({
         '': 'Not known',
         for (final state in states) state.code: '${state.name} (${state.code})',
       },
-      derive: (values) => gstinState(gstin: values['client_gstin'] ?? ''),
-      deriveFrom: const ['client_gstin'],
+      derive: (values) =>
+          gstinState(gstin: values[InputField.clientGstin] ?? ''),
+      deriveFrom: const [InputField.clientGstin],
       derivedHint: "From the client's GSTIN",
     ),
     FieldSpec(
-      'client_country',
+      InputField.clientCountry,
       'Country',
       hint: 'abroad only, e.g. Germany',
       initial: country ?? '',
     ),
     FieldSpec(
-      'address',
+      InputField.address,
       'Address',
       hint: 'one line each: street, city and PIN / postcode',
       initial: address?.join('\n') ?? '',
       multiline: true,
     ),
     FieldSpec(
-      'currency',
+      InputField.currency,
       'Currency',
       hint: 'anything but INR needs a client abroad',
       initial: currency ?? 'INR',
@@ -178,7 +180,7 @@ List<FieldSpec> clientFields({
 }
 
 /// The client fields of [projectForm] filled from an earlier client, or cleared for a new one
-Future<Map<String, String>?> _pickClient(
+Future<Map<InputField, String>?> _pickClient(
   BuildContext context,
   CompterApp app,
 ) async {
@@ -186,11 +188,11 @@ Future<Map<String, String>?> _pickClient(
   if (pick == null) return null;
   final client = pick.client;
   return {
-    'client_name': client?.name ?? '',
-    'client_gstin': client?.gstin ?? '',
-    'client_state': client?.state ?? '',
-    'client_country': client?.country ?? '',
-    'address': client?.address.join('\n') ?? '',
-    'currency': client?.currency ?? 'INR',
+    InputField.clientName: client?.name ?? '',
+    InputField.clientGstin: client?.gstin ?? '',
+    InputField.clientState: client?.state ?? '',
+    InputField.clientCountry: client?.country ?? '',
+    InputField.address: client?.address.join('\n') ?? '',
+    InputField.currency: client?.currency ?? 'INR',
   };
 }

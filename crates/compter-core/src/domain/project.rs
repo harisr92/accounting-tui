@@ -11,8 +11,8 @@ use super::billing::amount_for;
 use super::client::validate_client;
 use super::error::require;
 use super::{
-    Billing, ClientDetails, ClientRegion, Currency, DomainError, Milestone, MilestoneId,
-    MilestoneStatus, TimeEntry,
+    Billing, ClientDetails, ClientRegion, Currency, DomainError, Milestone, MilestoneField,
+    MilestoneId, MilestoneStatus, TimeEntry,
 };
 
 /// Lifecycle state of a project, derived from its milestones
@@ -375,7 +375,7 @@ impl Project {
     ) -> Result<usize, DomainError> {
         self.ensure_not_archived()?;
         let name = name.into();
-        require(&name, "milestone name")?;
+        require(&name, MilestoneField::Name)?;
         let amount = self.resolve_amount(amount)?;
         self.milestones.push(Milestone::new(name, due_date, amount));
         self.refresh();
@@ -391,7 +391,7 @@ impl Project {
         amount: Option<BigDecimal>,
     ) -> Result<(), DomainError> {
         let name = name.into();
-        require(&name, "milestone name")?;
+        require(&name, MilestoneField::Name)?;
         let amount = self.resolve_amount(amount)?;
         self.milestone_mut(index)?.edit(name, due_date, amount)?;
         self.refresh();
@@ -421,7 +421,7 @@ impl Project {
         client: ClientDetails,
     ) -> Result<(), DomainError> {
         let name = name.into();
-        require(&name, "project name")?;
+        require(&name, ProjectField::Name)?;
         let client = client.checked()?;
         if client.currency != self.currency && self.has_billed_milestones() {
             return Err(DomainError::CurrencyLocked);
@@ -664,7 +664,7 @@ impl Project {
     }
 
     fn validate(&self) -> Result<(), DomainError> {
-        require(&self.name, "project name")?;
+        require(&self.name, ProjectField::Name)?;
         validate_client(
             &self.client_name,
             self.client_gstin.as_ref(),
@@ -688,5 +688,21 @@ impl Project {
             }
         }
         Ok(())
+    }
+}
+
+/// A project's text that can't be left blank, named in [`DomainError::EmptyField`] through
+/// [`RecordField`](super::RecordField)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ProjectField {
+    Name,
+}
+
+impl ProjectField {
+    /// How the user knows it, in an error's message
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Name => "project name",
+        }
     }
 }

@@ -1,7 +1,7 @@
 use bigdecimal::BigDecimal;
 use chrono::NaiveDate;
 
-use crate::domain::{DomainError, Expense, ExpenseCategory, ExpenseId};
+use crate::domain::{DomainError, Expense, ExpenseCategory, ExpenseField, ExpenseId, RecordField};
 
 fn date() -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, 10, 1).unwrap()
@@ -27,7 +27,12 @@ fn cost_excludes_claimed_gst() {
 #[test]
 fn rejects_bad_amounts() {
     assert!(matches!(expense(0, 0), Err(DomainError::NonPositiveAmount)));
-    assert!(matches!(expense(100, -1), Err(DomainError::NegativeAmount)));
+    assert!(matches!(
+        expense(100, -1),
+        Err(DomainError::NegativeAmount(RecordField::Expense(
+            ExpenseField::GstCredit
+        )))
+    ));
     assert!(matches!(
         expense(100, 100),
         Err(DomainError::GstCreditTooLarge)

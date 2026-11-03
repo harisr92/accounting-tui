@@ -54,6 +54,21 @@ void main() {
     expect(find.text('No expenses this year'), findsOneWidget);
   });
 
+  testWidgets('a notice goes when another tab is opened', (tester) async {
+    await openExpenses(tester);
+    await tester.tap(find.byTooltip('Add expense'));
+    await settle(tester);
+    await pickDate(tester, 'Date', DateTime(2026, 10, 2));
+    await fill(tester, 'Description', 'GitHub');
+    await fill(tester, 'Amount', '1,000');
+    await tester.tap(find.text('Save'));
+    await pumpUntil(tester, find.text('Added GitHub for ₹1,000.00'));
+
+    await tester.tap(find.byIcon(Icons.home_outlined));
+    await settle(tester);
+    expect(find.text('Added GitHub for ₹1,000.00'), findsNothing);
+  });
+
   testWidgets('an expense is added, edited and deleted', (tester) async {
     await openExpenses(tester);
 

@@ -126,8 +126,8 @@ pub struct CreditNoteParts {
 
 impl CreditNote {
     pub fn issue(parts: CreditNoteParts) -> Result<Self, DomainError> {
-        require(parts.number.as_str(), "credit note number")?;
-        require(&parts.reason, "reason for the credit note")?;
+        require(parts.number.as_str(), CreditNoteField::Number)?;
+        require(&parts.reason, CreditNoteField::Reason)?;
         check_currency(parts.currency, parts.exchange_rate.as_ref(), parts.kind)?;
         if parts.amounts.total <= BigDecimal::zero() {
             return Err(DomainError::NonPositiveAmount);
@@ -230,5 +230,24 @@ impl CreditNote {
 
     pub fn logo(&self) -> Option<LogoId> {
         self.logo
+    }
+}
+
+/// A credit note's text that can't be left blank, named in [`DomainError::EmptyField`] through
+/// [`RecordField`](super::RecordField)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CreditNoteField {
+    Reason,
+    /// Generated, never typed: blank only in a damaged record
+    Number,
+}
+
+impl CreditNoteField {
+    /// How the user knows it, in an error's message
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Reason => "reason for the credit note",
+            Self::Number => "credit note number",
+        }
     }
 }

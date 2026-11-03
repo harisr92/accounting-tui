@@ -1,12 +1,12 @@
 use accounting_core::InvoiceError;
 
-use super::MilestoneStatus;
+use super::{MilestoneStatus, RecordField};
 
 /// Why a domain operation or a loaded record was rejected
 #[derive(Debug, thiserror::Error)]
 pub enum DomainError {
     #[error("{0} must not be empty")]
-    EmptyField(&'static str),
+    EmptyField(RecordField),
     #[error(transparent)]
     InvalidGstin(#[from] InvoiceError),
     #[error("amount must be greater than zero")]
@@ -52,8 +52,8 @@ pub enum DomainError {
     InvalidInvoicePrefix,
     #[error("invoice prefix {0} is the credit note series; choose another")]
     ReservedInvoicePrefix(&'static str),
-    #[error("amount can't be negative")]
-    NegativeAmount,
+    #[error("{0} can't be negative")]
+    NegativeAmount(RecordField),
     #[error("nothing is due on this invoice")]
     InvoiceAlreadyPaid,
     #[error(
@@ -139,9 +139,9 @@ pub enum DomainError {
 }
 
 /// Reject blank text fields
-pub(super) fn require(value: &str, field: &'static str) -> Result<(), DomainError> {
+pub(super) fn require(value: &str, field: impl Into<RecordField>) -> Result<(), DomainError> {
     if value.trim().is_empty() {
-        Err(DomainError::EmptyField(field))
+        Err(DomainError::EmptyField(field.into()))
     } else {
         Ok(())
     }

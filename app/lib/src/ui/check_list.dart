@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../rust/api/error.dart';
+import 'error_toast.dart';
 import 'theme.dart';
 
 const _amountKeyboard = TextInputType.numberWithOptions(decimal: true);
@@ -33,8 +34,8 @@ class CheckItem {
 /// Returns the keys picked, in the order listed, each with the amount typed on it (empty for a
 /// row without one); `null` when cancelled. [submitLabel] stays disabled until something is
 /// picked. [note] is shown under the title. [check] runs before the sheet closes: an
-/// [ApiError] keeps it open, under the row whose key is its field after [fieldPrefix], or at
-/// the top for anything else.
+/// [ApiError] keeps it open: under the row it names when its field is [rowField] and its
+/// `line` is the row's key, or as a closable toast for anything else.
 Future<List<(String, String)>?> showCheckList(
   BuildContext context, {
   required String title,
@@ -43,7 +44,7 @@ Future<List<(String, String)>?> showCheckList(
   String? amountLabel,
   String? note,
   Future<void> Function(List<(String, String)> picked)? check,
-  String fieldPrefix = '',
+  InputField? rowField,
 }) {
   return showModalBottomSheet<List<(String, String)>>(
     context: context,
@@ -58,7 +59,7 @@ Future<List<(String, String)>?> showCheckList(
       amountLabel: amountLabel,
       note: note,
       check: check,
-      fieldPrefix: fieldPrefix,
+      rowField: rowField,
     ),
   );
 }
@@ -71,7 +72,7 @@ class _CheckList extends StatefulWidget {
     this.amountLabel,
     this.note,
     this.check,
-    this.fieldPrefix = '',
+    this.rowField,
   });
 
   final String title;
@@ -80,7 +81,7 @@ class _CheckList extends StatefulWidget {
   final String? amountLabel;
   final String? note;
   final Future<void> Function(List<(String, String)> picked)? check;
-  final String fieldPrefix;
+  final InputField? rowField;
 
   @override
   State<_CheckList> createState() => _CheckListState();
@@ -104,9 +105,9 @@ class _CheckListState extends State<_CheckList> {
 
   /// The row [_error] is about, if it names one
   String? get _errorKey {
-    final field = _error?.field;
-    if (field == null || !field.startsWith(widget.fieldPrefix)) return null;
-    final key = field.substring(widget.fieldPrefix.length);
+    final error = _error;
+    final key = error?.line;
+    if (key == null || error?.field != widget.rowField) return null;
     return widget.items.any((i) => i.key == key) ? key : null;
   }
 
@@ -163,7 +164,7 @@ class _CheckListState extends State<_CheckList> {
         if (mounted) setState(() => _error = error);
         return;
       } catch (error) {
-        // Anything else still shows, at the top, rather than leaving Next doing nothing
+        // Anything else still shows, as the toast, rather than leaving Next doing nothing
         if (mounted) setState(() => _error = ApiError(message: '$error'));
         return;
       } finally {
@@ -192,16 +193,6 @@ class _CheckListState extends State<_CheckList> {
               padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 8),
               child: Text(note, style: theme.textTheme.bodyMedium),
             ),
-          if (_error case final error? when _errorKey == null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(gutter, 0, gutter, 8),
-              child: Text(
-                error.message,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.error,
-                ),
-              ),
-            ),
           CheckboxListTile(
             title: const Text('Select all'),
             tristate: true,
@@ -211,10 +202,15 @@ class _CheckListState extends State<_CheckList> {
           ),
           const Divider(height: 1),
           Flexible(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [for (final item in widget.items) _row(item)],
+            // A refusal about no one row shows at the foot of the list until closed
+            child: WithErrorToast(
+              message: _errorKey == null ? _error?.message : null,
+              onClose: () => setState(() => _error = null),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [for (final item in widget.items) _row(item)],
+                ),
               ),
             ),
           ),

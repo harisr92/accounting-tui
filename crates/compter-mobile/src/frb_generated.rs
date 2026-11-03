@@ -2832,10 +2832,12 @@ impl SseDecode for String {
 impl SseDecode for crate::api::error::ApiError {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field = <Option<String>>::sse_decode(deserializer);
+        let mut var_field = <Option<crate::api::error::InputField>>::sse_decode(deserializer);
+        let mut var_line = <Option<String>>::sse_decode(deserializer);
         let mut var_message = <String>::sse_decode(deserializer);
         return crate::api::error::ApiError {
             field: var_field,
+            line: var_line,
             message: var_message,
         };
     }
@@ -3138,6 +3140,55 @@ impl SseDecode for i32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         deserializer.cursor.read_i32::<NativeEndian>().unwrap()
+    }
+}
+
+impl SseDecode for crate::api::error::InputField {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::error::InputField::Name,
+            1 => crate::api::error::InputField::ClientName,
+            2 => crate::api::error::InputField::ClientGstin,
+            3 => crate::api::error::InputField::ClientState,
+            4 => crate::api::error::InputField::ClientCountry,
+            5 => crate::api::error::InputField::Address,
+            6 => crate::api::error::InputField::Currency,
+            7 => crate::api::error::InputField::HourlyRate,
+            8 => crate::api::error::InputField::DueDate,
+            9 => crate::api::error::InputField::Amount,
+            10 => crate::api::error::InputField::Gstin,
+            11 => crate::api::error::InputField::SacCode,
+            12 => crate::api::error::InputField::InvoicePrefix,
+            13 => crate::api::error::InputField::LutArn,
+            14 => crate::api::error::InputField::Terms,
+            15 => crate::api::error::InputField::IncomeBasis,
+            16 => crate::api::error::InputField::BasisFrom,
+            17 => crate::api::error::InputField::Date,
+            18 => crate::api::error::InputField::Category,
+            19 => crate::api::error::InputField::Description,
+            20 => crate::api::error::InputField::GstCredit,
+            21 => crate::api::error::InputField::Discount,
+            22 => crate::api::error::InputField::Rate,
+            23 => crate::api::error::InputField::Received,
+            24 => crate::api::error::InputField::TdsOrBanked,
+            25 => crate::api::error::InputField::Reason,
+            26 => crate::api::error::InputField::Returned,
+            27 => crate::api::error::InputField::RefundedInr,
+            28 => crate::api::error::InputField::TdsReversed,
+            29 => crate::api::error::InputField::Duration,
+            30 => crate::api::error::InputField::Note,
+            31 => crate::api::error::InputField::Quarter,
+            32 => crate::api::error::InputField::Filed,
+            33 => crate::api::error::InputField::Month,
+            34 => crate::api::error::InputField::CreditLine,
+            35 => crate::api::error::InputField::ProjectId,
+            36 => crate::api::error::InputField::MilestoneId,
+            37 => crate::api::error::InputField::ClientId,
+            38 => crate::api::error::InputField::ExpenseId,
+            _ => unreachable!("Invalid variant for InputField: {}", inner),
+        };
     }
 }
 
@@ -3580,6 +3631,17 @@ impl SseDecode for Option<String> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<String>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::error::InputField> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::error::InputField>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -4162,6 +4224,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::error::ApiError {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.field.into_into_dart().into_dart(),
+            self.line.into_into_dart().into_dart(),
             self.message.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -4555,6 +4618,61 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::invoicing::HistoryRow>
     for crate::api::invoicing::HistoryRow
 {
     fn into_into_dart(self) -> crate::api::invoicing::HistoryRow {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::error::InputField {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Name => 0.into_dart(),
+            Self::ClientName => 1.into_dart(),
+            Self::ClientGstin => 2.into_dart(),
+            Self::ClientState => 3.into_dart(),
+            Self::ClientCountry => 4.into_dart(),
+            Self::Address => 5.into_dart(),
+            Self::Currency => 6.into_dart(),
+            Self::HourlyRate => 7.into_dart(),
+            Self::DueDate => 8.into_dart(),
+            Self::Amount => 9.into_dart(),
+            Self::Gstin => 10.into_dart(),
+            Self::SacCode => 11.into_dart(),
+            Self::InvoicePrefix => 12.into_dart(),
+            Self::LutArn => 13.into_dart(),
+            Self::Terms => 14.into_dart(),
+            Self::IncomeBasis => 15.into_dart(),
+            Self::BasisFrom => 16.into_dart(),
+            Self::Date => 17.into_dart(),
+            Self::Category => 18.into_dart(),
+            Self::Description => 19.into_dart(),
+            Self::GstCredit => 20.into_dart(),
+            Self::Discount => 21.into_dart(),
+            Self::Rate => 22.into_dart(),
+            Self::Received => 23.into_dart(),
+            Self::TdsOrBanked => 24.into_dart(),
+            Self::Reason => 25.into_dart(),
+            Self::Returned => 26.into_dart(),
+            Self::RefundedInr => 27.into_dart(),
+            Self::TdsReversed => 28.into_dart(),
+            Self::Duration => 29.into_dart(),
+            Self::Note => 30.into_dart(),
+            Self::Quarter => 31.into_dart(),
+            Self::Filed => 32.into_dart(),
+            Self::Month => 33.into_dart(),
+            Self::CreditLine => 34.into_dart(),
+            Self::ProjectId => 35.into_dart(),
+            Self::MilestoneId => 36.into_dart(),
+            Self::ClientId => 37.into_dart(),
+            Self::ExpenseId => 38.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::error::InputField {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::error::InputField>
+    for crate::api::error::InputField
+{
+    fn into_into_dart(self) -> crate::api::error::InputField {
         self
     }
 }
@@ -5221,7 +5339,8 @@ impl SseEncode for String {
 impl SseEncode for crate::api::error::ApiError {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Option<String>>::sse_encode(self.field, serializer);
+        <Option<crate::api::error::InputField>>::sse_encode(self.field, serializer);
+        <Option<String>>::sse_encode(self.line, serializer);
         <String>::sse_encode(self.message, serializer);
     }
 }
@@ -5412,6 +5531,59 @@ impl SseEncode for i32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_i32::<NativeEndian>(self).unwrap();
+    }
+}
+
+impl SseEncode for crate::api::error::InputField {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::error::InputField::Name => 0,
+                crate::api::error::InputField::ClientName => 1,
+                crate::api::error::InputField::ClientGstin => 2,
+                crate::api::error::InputField::ClientState => 3,
+                crate::api::error::InputField::ClientCountry => 4,
+                crate::api::error::InputField::Address => 5,
+                crate::api::error::InputField::Currency => 6,
+                crate::api::error::InputField::HourlyRate => 7,
+                crate::api::error::InputField::DueDate => 8,
+                crate::api::error::InputField::Amount => 9,
+                crate::api::error::InputField::Gstin => 10,
+                crate::api::error::InputField::SacCode => 11,
+                crate::api::error::InputField::InvoicePrefix => 12,
+                crate::api::error::InputField::LutArn => 13,
+                crate::api::error::InputField::Terms => 14,
+                crate::api::error::InputField::IncomeBasis => 15,
+                crate::api::error::InputField::BasisFrom => 16,
+                crate::api::error::InputField::Date => 17,
+                crate::api::error::InputField::Category => 18,
+                crate::api::error::InputField::Description => 19,
+                crate::api::error::InputField::GstCredit => 20,
+                crate::api::error::InputField::Discount => 21,
+                crate::api::error::InputField::Rate => 22,
+                crate::api::error::InputField::Received => 23,
+                crate::api::error::InputField::TdsOrBanked => 24,
+                crate::api::error::InputField::Reason => 25,
+                crate::api::error::InputField::Returned => 26,
+                crate::api::error::InputField::RefundedInr => 27,
+                crate::api::error::InputField::TdsReversed => 28,
+                crate::api::error::InputField::Duration => 29,
+                crate::api::error::InputField::Note => 30,
+                crate::api::error::InputField::Quarter => 31,
+                crate::api::error::InputField::Filed => 32,
+                crate::api::error::InputField::Month => 33,
+                crate::api::error::InputField::CreditLine => 34,
+                crate::api::error::InputField::ProjectId => 35,
+                crate::api::error::InputField::MilestoneId => 36,
+                crate::api::error::InputField::ClientId => 37,
+                crate::api::error::InputField::ExpenseId => 38,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 
@@ -5723,6 +5895,16 @@ impl SseEncode for Option<String> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <String>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::error::InputField> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::error::InputField>::sse_encode(value, serializer);
         }
     }
 }

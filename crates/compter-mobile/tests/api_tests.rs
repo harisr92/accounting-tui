@@ -2,10 +2,12 @@ use chrono::Local;
 
 mod support;
 
-use compter_mobile::api::{ApiError, CompterApp, ProjectDetail, TimeInput};
+use compter_mobile::api::{
+    ApiError, CompterApp, InputField, ProfileInput, ProjectDetail, ProjectInput, TimeInput,
+};
 use support::{demo, milestone, project};
 
-fn field(error: ApiError) -> Option<String> {
+fn field(error: ApiError) -> Option<InputField> {
     error.field
 }
 
@@ -80,31 +82,98 @@ fn refused_input_names_its_field_and_saves_nothing() {
     let bad_rate = app
         .create_project(project("Support", Some("lots")))
         .unwrap_err();
-    assert_eq!(field(bad_rate).as_deref(), Some("hourly_rate"));
+    assert_eq!(field(bad_rate), Some(InputField::HourlyRate));
     assert_eq!(app.projects(true).unwrap().len(), before);
 
     let fixed = app.create_project(project("Website", None)).unwrap();
     let no_amount = app
         .add_milestone(fixed.id.clone(), milestone("Design", "", None))
         .unwrap_err();
-    assert_eq!(field(no_amount).as_deref(), Some("amount"));
+    assert_eq!(field(no_amount), Some(InputField::Amount));
     let bad_date = app
         .add_milestone(
             fixed.id.clone(),
             milestone("Design", "01/11/2026", Some("1")),
         )
         .unwrap_err();
-    assert_eq!(field(bad_date).as_deref(), Some("due_date"));
+    assert_eq!(field(bad_date), Some(InputField::DueDate));
     assert!(app.project(fixed.id).unwrap().milestones.is_empty());
 
     let bad_id = app.project("nope".to_owned()).unwrap_err();
-    assert_eq!(field(bad_id).as_deref(), Some("project_id"));
+    assert_eq!(field(bad_id), Some(InputField::ProjectId));
 }
 
 #[test]
-fn domain_rules_come_back_as_messages_without_a_field() {
+fn a_rule_a_project_breaks_names_its_field() {
     let (_scratch, mut app) = demo();
-    let error = app.create_project(project("", None)).unwrap_err();
+    let refused =
+        |app: &mut CompterApp, input: ProjectInput| field(app.create_project(input).unwrap_err());
+
+    assert_eq!(refused(&mut app, project("", None)), Some(InputField::Name));
+    let blank_client = ProjectInput {
+        client_name: " ".to_owned(),
+        ..project("Site", None)
+    };
+    assert_eq!(
+        refused(&mut app, blank_client),
+        Some(InputField::ClientName)
+    );
+    let bad_gstin = ProjectInput {
+        client_gstin: Some("29AAAAA0000A1Z0".to_owned()),
+        client_state: None,
+        ..project("Site", None)
+    };
+    assert_eq!(refused(&mut app, bad_gstin), Some(InputField::ClientGstin));
+    let dollars_in_india = ProjectInput {
+        currency: Some("USD".to_owned()),
+        ..project("Site", None)
+    };
+    assert_eq!(
+        refused(&mut app, dollars_in_india),
+        Some(InputField::Currency)
+    );
+
+    let created = app.create_project(project("Site", None)).unwrap();
+    let unnamed = app
+        .add_milestone(created.id, milestone(" ", "", Some("100")))
+        .unwrap_err();
+    assert_eq!(field(unnamed), Some(InputField::Name));
+}
+
+#[test]
+fn a_rule_the_profile_breaks_names_its_field() {
+    let (_scratch, mut app) = demo();
+    let refused =
+        |app: &mut CompterApp, input: ProfileInput| field(app.save_profile(input).unwrap_err());
+    let saved = app.profile_input().unwrap();
+
+    let unnamed = ProfileInput {
+        name: String::new(),
+        ..saved.clone()
+    };
+    assert_eq!(refused(&mut app, unnamed), Some(InputField::Name));
+    let bad_gstin = ProfileInput {
+        gstin: "29AAAAA0000A1Z0".to_owned(),
+        ..saved.clone()
+    };
+    // The business's own GSTIN, not a client's
+    assert_eq!(refused(&mut app, bad_gstin), Some(InputField::Gstin));
+    let bad_prefix = ProfileInput {
+        invoice_prefix: "TOO-LONG".to_owned(),
+        ..saved
+    };
+    assert_eq!(
+        refused(&mut app, bad_prefix),
+        Some(InputField::InvoicePrefix)
+    );
+}
+
+#[test]
+fn a_refusal_outside_a_form_has_no_field() {
+    let (_scratch, mut app) = demo();
+    let created = app.create_project(project("Site", None)).unwrap();
+    // Only a finished project can be archived: about the project, not an input
+    let error = app.set_archived(created.id, true).unwrap_err();
     assert_eq!(error.field, None);
     assert!(!error.message.is_empty());
 }

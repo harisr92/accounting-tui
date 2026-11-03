@@ -454,7 +454,7 @@ impl<R: Repository> InvoicesView<R> {
 /// When and why, after the lines were picked. A note beyond what is due gives the rest back to
 /// the client: refunded (in rupees, on a foreign invoice) or kept as an advance.
 fn credit_form(invoice: &Invoice) -> Form {
-    let tds_withheld = invoice.payments().iter().any(|p| !p.tds.is_zero());
+    let tds_withheld = invoice.tds_withheld();
     let currency = invoice.currency();
     let mut fields = vec![
         Field::text("Date", "YYYY-MM-DD, blank for today"),
