@@ -107,15 +107,15 @@ impl Form {
             let Some(field) = self.fields.get(index) else {
                 continue;
             };
-            let sources: Vec<String> = field
-                .derived_sources(index)
-                .into_iter()
-                .filter_map(|source| self.fields.get(source))
-                .map(|source| source.value().to_owned())
-                .collect();
-            if sources.is_empty() {
+            // Every source, in order, or none: `derive` reads them by position
+            let Some(sources) = field.derived_sources(index).and_then(|sources| {
+                sources
+                    .into_iter()
+                    .map(|source| self.fields.get(source).map(|s| s.value().to_owned()))
+                    .collect::<Option<Vec<String>>>()
+            }) else {
                 continue;
-            }
+            };
             let sources: Vec<&str> = sources.iter().map(String::as_str).collect();
             if let Some(field) = self.fields.get_mut(index) {
                 field.rederive(&sources);

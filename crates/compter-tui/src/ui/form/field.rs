@@ -174,14 +174,14 @@ impl Field {
         }
     }
 
-    /// The positions of the fields this one is worked out from, given this one's; empty when
-    /// it isn't derived
-    pub(super) fn derived_sources(&self, index: usize) -> Vec<usize> {
-        self.derived.as_ref().map_or_else(Vec::new, |derived| {
+    /// The positions of the fields this one is worked out from, given this one's, in the order
+    /// `derive` takes them; `None` when it isn't derived or a source lies above the first row
+    pub(super) fn derived_sources(&self, index: usize) -> Option<Vec<usize>> {
+        self.derived.as_ref().and_then(|derived| {
             derived
                 .above
                 .iter()
-                .filter_map(|&above| index.checked_sub(above))
+                .map(|&above| index.checked_sub(above))
                 .collect()
         })
     }

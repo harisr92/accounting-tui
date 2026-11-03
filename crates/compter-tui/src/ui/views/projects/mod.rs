@@ -904,7 +904,9 @@ impl<R: Repository> View for ProjectsView<R> {
 
     fn key_hints(&self) -> &'static [KeyHint] {
         match (&self.modal, self.focus) {
-            (Some(Modal::Form(kind, form)), _) if kind.is_project() && form.can_pick() => {
+            (Some(Modal::Form(kind, form)), _)
+                if kind.is_project() && !form.is_picking() && form.can_pick() =>
+            {
                 PROJECT_FORM_HINTS
             }
             (Some(Modal::Form(kind, form)), _) if kind.is_project() && !form.is_picking() => {

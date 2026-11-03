@@ -850,3 +850,14 @@ fn ctrl_l_is_offered_only_on_a_field_with_a_list_it_can_open() {
     type_keys(&mut app, "\t\t27AAPFU0939F2ZU\t\t");
     assert!(!footer(&app).contains("Ctrl-l list"), "{}", footer(&app));
 }
+
+#[test]
+fn the_state_list_shows_its_own_keys_while_open() {
+    let store = Store::in_memory().unwrap();
+    let mut app = projects_app(&store);
+    app.handle_key(Key::Char('n'));
+    type_keys(&mut app, "\t\t\t\t");
+    app.handle_key(Key::Ctrl('l'));
+    let footer = screen(&app, 160, H);
+    assert!(!footer.contains("Ctrl-p earlier client"), "{footer}");
+}

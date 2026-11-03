@@ -42,9 +42,7 @@ const STATES: &[(&str, &str)] = &[
 
 /// `Some("Karnataka")` for `"29"`
 pub fn state_name(code: &str) -> Option<&'static str> {
-    states()
-        .find(|state| state.code == code)
-        .map(GstState::name)
+    state(code).map(GstState::name)
 }
 
 /// A GST state or union territory: what a client in India picks as their place of supply.
@@ -74,9 +72,12 @@ impl GstState {
 
 /// `Karnataka (29)`, or the bare code when it isn't a GST state code
 pub fn state_label(code: &str) -> String {
-    states()
-        .find(|state| state.code == code)
-        .map_or_else(|| code.to_owned(), GstState::label)
+    state(code).map_or_else(|| code.to_owned(), GstState::label)
+}
+
+/// The GST state with this code, if it is one
+fn state(code: &str) -> Option<GstState> {
+    states().find(|state| state.code == code)
 }
 
 /// Every GST state and union territory, in code order: the choices for a client's place of
