@@ -472,6 +472,28 @@ void main() {
 
     expect(find.textContaining('Karnataka (29)'), findsOneWidget);
   });
+
+  testWidgets("the state a GSTIN gives is saved, as the terminal saves it", (
+    tester,
+  ) async {
+    final compter = await demoApp(tester);
+    await launchWith(tester, compter);
+    await tester.tap(find.byTooltip('New project'));
+    await settle(tester);
+    await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Site');
+    await tester.enterText(find.widgetWithText(TextField, 'Client'), 'Wayne');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Client GSTIN'),
+      '27AAPFU0939F2ZU',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await settle(tester);
+
+    final clients = await tester.runAsync(compter.clients);
+    final wayne = clients!.firstWhere((c) => c.name == 'Wayne');
+    expect(wayne.state, '27');
+  });
 }
 
 /// Launch the demo and create a project called [name], landing on it

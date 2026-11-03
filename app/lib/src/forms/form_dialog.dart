@@ -16,8 +16,9 @@ typedef FieldPicker =
 ///
 /// [pick] adds a button to a text field that fills in other fields too, e.g. a client's
 /// details from an earlier client. [derive] works the field out from the others whenever one
-/// named in [deriveFrom] changes: while it gives a value, the field shows it, is locked with [derivedHint] under it,
-/// and is submitted blank, since Rust works it out the same way.
+/// named in [deriveFrom] changes: while it gives a value, the field shows it, is locked with
+/// [derivedHint] under it, and is submitted as shown, as the terminal does, so a client is
+/// saved the same way from either.
 class FieldSpec {
   const FieldSpec(
     this.key,
@@ -209,12 +210,8 @@ class _FormDialogState<T> extends State<FormDialog<T>> {
       _fieldError = null;
       _toast = null;
     });
-    final values = {
-      for (final entry in _values.entries)
-        entry.key: _derived.containsKey(entry.key) ? '' : entry.value,
-    };
     try {
-      final result = await widget.submit(values);
+      final result = await widget.submit(_values);
       if (mounted) Navigator.of(context).pop(result);
     } on ApiError catch (error) {
       if (mounted) setState(() => _refused(error));

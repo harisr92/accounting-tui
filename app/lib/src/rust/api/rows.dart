@@ -247,7 +247,8 @@ class ProjectInput {
   /// Blank for an unregistered client or one abroad
   final String? clientGstin;
 
-  /// GST state code (`29`): the place of supply for a client in India without a GSTIN
+  /// GST state code (`29`): the place of supply for a client in India, the GSTIN's own state when
+  /// they have one
   final String? clientState;
 
   /// Blank for a client in India

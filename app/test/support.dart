@@ -42,11 +42,22 @@ Future<void> launchDemo(
   List<Override> overrides = const [],
   IconData? tab = startTab,
 }) async {
+  await launchWith(
+    tester,
+    await demoApp(tester),
+    overrides: overrides,
+    tab: tab,
+  );
+}
+
+/// The demo business, in memory, writing its PDFs to a scratch folder; for a test that reads
+/// the app back after acting on it, launched with [launchWith]
+Future<CompterApp> demoApp(WidgetTester tester) async {
   final compter = await tester.runAsync(() async {
     final scratch = await Directory.systemTemp.createTemp('compter_test');
     return CompterApp.demo(scratchDir: scratch.path);
   });
-  await launchWith(tester, compter!, overrides: overrides, tab: tab);
+  return compter!;
 }
 
 /// The app on [compter], an opened database, then on [tab]
