@@ -48,14 +48,9 @@ pub struct Form {
 }
 
 impl Form {
-    pub const HINTS: &'static [KeyHint] = &[
-        KeyHint::new("Enter", "save"),
-        KeyHint::new("Esc", "cancel"),
-        KeyHint::new("Tab/↑↓", "field"),
-        KeyHint::new("Space/←→", "choose"),
-    ];
+    pub const HINTS: &'static [KeyHint] = Self::LIST_HINTS.split_at(Self::LIST_HINTS.len() - 1).0;
 
-    /// [`Form::HINTS`] for a form with a field filled in from a list
+    /// [`Form::HINTS`] and, last, Ctrl-l: while the focused field can be filled in from a list
     pub const LIST_HINTS: &'static [KeyHint] = &[
         KeyHint::new("Enter", "save"),
         KeyHint::new("Esc", "cancel"),
@@ -76,15 +71,21 @@ impl Form {
         form
     }
 
-    /// The keys the form takes now: the list's while one is open
+    /// The keys the form takes now: the list's while one is open, and Ctrl-l only while the
+    /// focused field can open its list
     pub fn hints(&self) -> &'static [KeyHint] {
         if self.is_picking() {
             ListPicker::HINTS
-        } else if self.fields.iter().any(Field::has_list) {
+        } else if self.can_pick() {
             Self::LIST_HINTS
         } else {
             Self::HINTS
         }
+    }
+
+    /// Ctrl-l would open the focused field's list: it has one, and isn't derived
+    pub fn can_pick(&self) -> bool {
+        self.fields.get(self.focus).is_some_and(Field::can_pick)
     }
 
     /// A field is being filled in from its list, which takes every key
@@ -100,17 +101,24 @@ impl Form {
             .unwrap_or_default()
     }
 
-    /// Work every derived field out again from the field it comes from
+    /// Work every derived field out again from the fields it comes from
     fn rederive(&mut self) {
         for index in 0..self.fields.len() {
-            let source = self
-                .fields
-                .get(index)
-                .and_then(|field| field.derived_source(index))
-                .and_then(|source| self.fields.get(source))
-                .map(|source| source.value().to_owned());
-            if let (Some(source), Some(field)) = (source, self.fields.get_mut(index)) {
-                field.rederive(&source);
+            let Some(field) = self.fields.get(index) else {
+                continue;
+            };
+            let sources: Vec<String> = field
+                .derived_sources(index)
+                .into_iter()
+                .filter_map(|source| self.fields.get(source))
+                .map(|source| source.value().to_owned())
+                .collect();
+            if sources.is_empty() {
+                continue;
+            }
+            let sources: Vec<&str> = sources.iter().map(String::as_str).collect();
+            if let Some(field) = self.fields.get_mut(index) {
+                field.rederive(&sources);
             }
         }
     }

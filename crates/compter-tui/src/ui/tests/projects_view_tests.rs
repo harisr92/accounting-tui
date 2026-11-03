@@ -818,3 +818,35 @@ fn a_client_takes_more_than_two_address_lines() {
         ["12 Main Road", "Indiranagar", "Bengaluru 560038"]
     );
 }
+
+#[test]
+fn a_gstin_on_a_client_abroad_leaves_the_state_unlocked() {
+    let store = Store::in_memory().unwrap();
+    let mut app = projects_app(&store);
+    app.handle_key(Key::Char('n'));
+    // GSTIN, then Client in: Abroad
+    type_keys(&mut app, "Site\tAcme\t27AAPFU0939F2ZU\t ");
+    let abroad = screen(&app, W, H);
+    assert!(!abroad.contains("from the client's GSTIN"), "{abroad}");
+    // Back in India the GSTIN's state shows again
+    app.handle_key(Key::Char(' '));
+    let india = screen(&app, W, H);
+    assert!(india.contains("from the client's GSTIN"), "{india}");
+}
+
+#[test]
+fn ctrl_l_is_offered_only_on_a_field_with_a_list_it_can_open() {
+    let store = Store::in_memory().unwrap();
+    let mut app = projects_app(&store);
+    let footer = |app: &crate::app::App| screen(app, 160, H);
+    app.handle_key(Key::Char('n'));
+    assert!(!footer(&app).contains("Ctrl-l list"), "{}", footer(&app));
+    type_keys(&mut app, "\t\t\t\t");
+    assert!(footer(&app).contains("Ctrl-l list"), "{}", footer(&app));
+
+    // A GSTIN locks the state, so its list can't open
+    app.handle_key(Key::Esc);
+    app.handle_key(Key::Char('n'));
+    type_keys(&mut app, "\t\t27AAPFU0939F2ZU\t\t");
+    assert!(!footer(&app).contains("Ctrl-l list"), "{}", footer(&app));
+}

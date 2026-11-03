@@ -36,8 +36,8 @@ pub fn fields(client: &ClientDetails) -> Vec<Field> {
             .with_preview(describe_state)
             .with_list("States", state_list())
             .derived_from(
-                field::STATE - field::GSTIN,
-                parse::gstin_state,
+                &[field::STATE - field::GSTIN, field::STATE - field::REGION],
+                gstin_state,
                 "from the client's GSTIN",
             ),
         Field::text("Country", "abroad only, e.g. Germany").with_value(shown.country),
@@ -120,6 +120,15 @@ fn state_list() -> Vec<(String, ListItem)> {
     states()
         .map(|state| (state.code().to_owned(), ListItem::new(state.label(), "")))
         .collect()
+}
+
+/// The state a client's GSTIN is registered in, from the GSTIN and where the client is: none
+/// for a client abroad, whose state isn't asked for (and whose GSTIN is refused on saving)
+fn gstin_state(sources: &[&str]) -> Option<String> {
+    match sources {
+        [gstin, region] if REGION_OPTIONS.get(ABROAD) != Some(region) => parse::gstin_state(gstin),
+        _ => None,
+    }
 }
 
 /// Name the state a typed GST state code stands for

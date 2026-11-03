@@ -155,8 +155,11 @@ fn ctrl_l_fills_a_field_in_from_its_list() {
 }
 
 /// `ABC` once three letters are typed above
-fn shout(source: &str) -> Option<String> {
-    (source.len() == 3).then(|| source.to_uppercase())
+fn shout(sources: &[&str]) -> Option<String> {
+    match sources {
+        [source] => (source.len() == 3).then(|| source.to_uppercase()),
+        _ => None,
+    }
 }
 
 #[test]
@@ -168,7 +171,7 @@ fn a_derived_field_follows_its_source_and_gives_back_what_was_typed() {
             Field::text("Derived", "hint")
                 .with_value("typed")
                 .with_list("Codes", vec![("x".to_owned(), ListItem::new("x", ""))])
-                .derived_from(1, shout, "from the source"),
+                .derived_from(&[1], shout, "from the source"),
         ],
     );
     press(&mut form, "ab");

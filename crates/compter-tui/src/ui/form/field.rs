@@ -14,9 +14,10 @@ const INLINE_CHOICES: usize = 3;
 /// Describes how a text field's current input will be read, e.g. `= 1h 30m`
 pub type Preview = fn(&str) -> String;
 
-/// Works a field's value out from another field's text, e.g. a state from a GSTIN; `None`
-/// while it can't, and the field is typed in as usual
-pub type Derive = fn(&str) -> Option<String>;
+/// Works a field's value out from other fields' text (a choice gives its option's label),
+/// in the order they are named, e.g. a state from a GSTIN; `None` while it can't, and the field
+/// is typed in as usual
+pub type Derive = fn(&[&str]) -> Option<String>;
 
 #[derive(Debug, Clone)]
 enum Kind {
@@ -47,10 +48,10 @@ struct Choices {
     items: Vec<ListItem>,
 }
 
-/// A text field worked out from the field `above` rows up while `derive` gives a value
+/// A text field worked out from the fields `above` rows up while `derive` gives a value
 #[derive(Debug, Clone)]
 struct Derived {
-    above: usize,
+    above: &'static [usize],
     derive: Derive,
     hint: &'static str,
     /// What was typed before the field was worked out, put back once it no longer is; `Some`
@@ -126,10 +127,16 @@ impl Field {
         self
     }
 
-    /// Work a text field out from the field `above` rows up whenever `derive` gives a value
-    /// for it: the field then shows that value with `hint`, and takes no input
+    /// Work a text field out from the fields these many rows up, in this order, whenever
+    /// `derive` gives a value for it: the field then shows that value with `hint`, and takes
+    /// no input
     #[must_use]
-    pub fn derived_from(mut self, above: usize, derive: Derive, hint: &'static str) -> Self {
+    pub fn derived_from(
+        mut self,
+        above: &'static [usize],
+        derive: Derive,
+        hint: &'static str,
+    ) -> Self {
         self.derived = Some(Derived {
             above,
             derive,
@@ -167,23 +174,28 @@ impl Field {
         }
     }
 
-    /// The position of the field this one is worked out from, given this one's
-    pub(super) fn derived_source(&self, index: usize) -> Option<usize> {
-        self.derived
-            .as_ref()
-            .and_then(|derived| index.checked_sub(derived.above))
+    /// The positions of the fields this one is worked out from, given this one's; empty when
+    /// it isn't derived
+    pub(super) fn derived_sources(&self, index: usize) -> Vec<usize> {
+        self.derived.as_ref().map_or_else(Vec::new, |derived| {
+            derived
+                .above
+                .iter()
+                .filter_map(|&above| index.checked_sub(above))
+                .collect()
+        })
     }
 
-    /// Work the field out again from its source's text: show the derived value while there is
-    /// one, and what was typed before once there isn't
-    pub(super) fn rederive(&mut self, source: &str) {
+    /// Work the field out again from its sources' text: show the derived value while there
+    /// is one, and what was typed before once there isn't
+    pub(super) fn rederive(&mut self, sources: &[&str]) {
         let Some(derived) = &mut self.derived else {
             return;
         };
         let Kind::Text { value, .. } = &mut self.kind else {
             return;
         };
-        match ((derived.derive)(source), derived.typed.take()) {
+        match ((derived.derive)(sources), derived.typed.take()) {
             (Some(worked_out), typed) => {
                 let typed = typed.unwrap_or_else(|| std::mem::take(value));
                 *value = worked_out;
@@ -201,12 +213,13 @@ impl Field {
 
     /// The list to fill the field in from, unless it has none or is derived
     pub(super) fn picker(&self) -> Option<ListPicker> {
-        let choices = self.choices.as_ref().filter(|_| !self.is_derived())?;
+        let choices = self.choices.as_ref().filter(|_| self.can_pick())?;
         Some(ListPicker::new(choices.title, choices.items.clone()))
     }
 
-    pub(super) fn has_list(&self) -> bool {
-        self.choices.is_some()
+    /// Has a list to fill it in from, and isn't locked by being derived
+    pub(super) fn can_pick(&self) -> bool {
+        self.choices.is_some() && !self.is_derived()
     }
 
     /// Fill the field in with the list's row at `index`

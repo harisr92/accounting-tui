@@ -42,10 +42,9 @@ const STATES: &[(&str, &str)] = &[
 
 /// `Some("Karnataka")` for `"29"`
 pub fn state_name(code: &str) -> Option<&'static str> {
-    STATES
-        .iter()
-        .find(|(c, _)| *c == code)
-        .map(|(_, name)| *name)
+    states()
+        .find(|state| state.code == code)
+        .map(GstState::name)
 }
 
 /// A GST state or union territory: what a client in India picks as their place of supply.

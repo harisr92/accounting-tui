@@ -57,7 +57,8 @@ const MILESTONE_HINTS: &[KeyHint] = &[
     Filter::CLEAR_HINT,
 ];
 
-/// The form's keys, plus the earlier-clients picker the project forms open and the state list
+/// The form's keys, plus the earlier-clients picker the project forms open and, last, Ctrl-l
+/// for the state list, shown only while the focused field can open one
 const PROJECT_FORM_HINTS: &[KeyHint] = &[
     KeyHint::new("Enter", "save"),
     KeyHint::new("Esc", "cancel"),
@@ -66,6 +67,10 @@ const PROJECT_FORM_HINTS: &[KeyHint] = &[
     KeyHint::new("Ctrl-p", "earlier client"),
     KeyHint::new("Ctrl-l", "list"),
 ];
+
+/// [`PROJECT_FORM_HINTS`] while the focused field has no list to open
+const PROJECT_FORM_HINTS_NO_LIST: &[KeyHint] =
+    PROJECT_FORM_HINTS.split_at(PROJECT_FORM_HINTS.len() - 1).0;
 
 /// Leaves about 18 columns for a project name next to its status
 const LIST_MIN_WIDTH: u16 = 30;
@@ -899,8 +904,11 @@ impl<R: Repository> View for ProjectsView<R> {
 
     fn key_hints(&self) -> &'static [KeyHint] {
         match (&self.modal, self.focus) {
-            (Some(Modal::Form(kind, form)), _) if kind.is_project() && !form.is_picking() => {
+            (Some(Modal::Form(kind, form)), _) if kind.is_project() && form.can_pick() => {
                 PROJECT_FORM_HINTS
+            }
+            (Some(Modal::Form(kind, form)), _) if kind.is_project() && !form.is_picking() => {
+                PROJECT_FORM_HINTS_NO_LIST
             }
             (Some(Modal::Form(_, form)), _) => form.hints(),
             (Some(Modal::Client { .. }), _) => ListPicker::HINTS,
