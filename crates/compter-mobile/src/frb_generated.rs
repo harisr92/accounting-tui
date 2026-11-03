@@ -3928,9 +3928,11 @@ impl SseDecode for crate::api::clients::StateRow {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_code = <String>::sse_decode(deserializer);
         let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_label = <String>::sse_decode(deserializer);
         return crate::api::clients::StateRow {
             code: var_code,
             name: var_name,
+            label: var_label,
         };
     }
 }
@@ -5189,6 +5191,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::clients::StateRow {
         [
             self.code.into_into_dart().into_dart(),
             self.name.into_into_dart().into_dart(),
+            self.label.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -6078,6 +6081,7 @@ impl SseEncode for crate::api::clients::StateRow {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.code, serializer);
         <String>::sse_encode(self.name, serializer);
+        <String>::sse_encode(self.label, serializer);
     }
 }
 

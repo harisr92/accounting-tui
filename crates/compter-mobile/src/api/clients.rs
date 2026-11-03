@@ -19,7 +19,8 @@ pub struct ClientChoiceRow {
     /// `Germany · EUR`
     pub summary: String,
     pub gstin: Option<String>,
-    /// GST state code (`29`), for a client in India without a GSTIN
+    /// GST state code (`29`): the place of supply for a client in India, the GSTIN's own state when
+    /// they have one
     pub state: Option<String>,
     /// Set only for a client abroad
     pub country: Option<String>,
@@ -55,15 +56,18 @@ pub struct StateRow {
     pub code: String,
     /// `Karnataka`
     pub name: String,
+    /// `Karnataka (29)`, as the state list shows it
+    pub label: String,
 }
 
 /// Every GST state, in code order: the choices for a client's state
 #[frb(sync)]
 pub fn gst_states() -> Vec<StateRow> {
     states()
-        .map(|(code, name)| StateRow {
-            code: code.to_owned(),
-            name: name.to_owned(),
+        .map(|state| StateRow {
+            code: state.code().to_owned(),
+            name: state.name().to_owned(),
+            label: state.label(),
         })
         .collect()
 }
@@ -119,7 +123,8 @@ impl From<&ClientSummary> for ClientSummaryRow {
 pub struct ClientInput {
     /// Blank for an unregistered client or one abroad
     pub gstin: Option<String>,
-    /// GST state code (`29`): the place of supply for a client in India without a GSTIN
+    /// GST state code (`29`): the place of supply for a client in India, the GSTIN's own state when
+    /// they have one
     pub state: Option<String>,
     /// Blank for a client in India
     pub country: Option<String>,
