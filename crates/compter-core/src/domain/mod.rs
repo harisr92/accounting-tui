@@ -44,7 +44,7 @@ pub use profile::{
 };
 pub use project::{Project, ProjectField, ProjectId, ProjectStatus, ProjectSummary};
 pub use record_field::RecordField;
-pub use states::{state_label, state_name, states};
+pub use states::{GstState, state_label, state_name, states};
 
 #[cfg(test)]
 mod tests;

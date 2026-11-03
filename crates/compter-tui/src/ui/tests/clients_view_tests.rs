@@ -376,3 +376,33 @@ fn a_client_with_projects_is_not_removed() {
     assert!(!refused.contains("Remove Acme"), "{refused}");
     assert!(refused.contains("Projects ("), "{refused}");
 }
+
+#[test]
+fn an_address_keeps_every_line_through_an_edit() {
+    let store = demo::store().unwrap();
+    let mut app = clients_app(&store);
+    edit_acme_address(&mut app);
+    type_keys(&mut app, "Plot 9, MIDC");
+    // Past the second line onto a new third one
+    app.handle_key(Key::Down);
+    app.handle_key(Key::Down);
+    type_keys(&mut app, "Maharashtra\nn");
+
+    let projects = ProjectService::new(store.repository());
+    let website = projects.find_by_name("Website Revamp").unwrap();
+    // The project kept its own copy; the client has all three lines
+    assert_eq!(
+        store.repository().load(website).unwrap().client_address(),
+        ["Plot 7, MIDC", "Pune 411019"]
+    );
+    app.handle_key(Key::Char('e'));
+    let form = screen(&app, W, H);
+    // A row each in the form, not joined onto two
+    for line in [
+        "│  Address     Plot 9, MIDC  ",
+        "│              Pune 411019  ",
+        "│              Maharashtra  ",
+    ] {
+        assert!(form.contains(line), "missing {line:?}\n{form}");
+    }
+}

@@ -105,3 +105,8 @@ fn a_whole_gstin_in_any_case_names_its_state_and_a_partial_one_none() {
     assert_eq!(gstin_state("27AAPFU"), None);
     assert_eq!(gstin_state(""), None);
 }
+
+#[test]
+fn a_gstin_of_the_centres_jurisdiction_names_no_state() {
+    assert_eq!(gstin_state("99AAPFU0939F2ZJ"), None);
+}

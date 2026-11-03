@@ -38,7 +38,7 @@ fn a_gstin_names_its_state_once_it_is_whole() {
     assert!(
         gst_states()
             .iter()
-            .any(|s| s.code == "29" && s.name == "Karnataka")
+            .any(|s| s.code == "29" && s.name == "Karnataka" && s.label == "Karnataka (29)")
     );
 }
 

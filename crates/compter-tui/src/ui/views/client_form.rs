@@ -3,11 +3,13 @@
 
 use accounting_core::StateCode;
 
-use crate::ui::form::{Field, Form, parse};
-use compter_core::domain::{ClientDetails, ClientRegion, Currency, state_name};
+use crate::ui::form::{Field, Form, ListItem, parse};
+use compter_core::domain::{ClientDetails, ClientRegion, Currency, state_name, states};
 
 const REGION_OPTIONS: &[&str] = &["India", "Abroad"];
 const ABROAD: usize = 1;
+/// Address lines a client can have; plenty for a street, a building, a city and a postcode
+const ADDRESS_LINES: usize = 6;
 
 /// Positions of the client fields, counted from the first of them in a form
 mod field {
@@ -15,13 +17,12 @@ mod field {
     pub const REGION: usize = 1;
     pub const STATE: usize = 2;
     pub const COUNTRY: usize = 3;
-    pub const ADDRESS_1: usize = 4;
-    pub const ADDRESS_2: usize = 5;
-    pub const CURRENCY: usize = 6;
+    pub const ADDRESS: usize = 4;
+    pub const CURRENCY: usize = 5;
 }
 
 /// How many fields [`fields`] adds
-pub const COUNT: usize = 7;
+pub const COUNT: usize = 6;
 
 /// GSTIN, where the client is, the address and the currency, filled from `client`. The name
 /// isn't among them: the project form asks for it, and a client's own name can't change.
@@ -30,12 +31,22 @@ pub fn fields(client: &ClientDetails) -> Vec<Field> {
     vec![
         Field::text("GSTIN", "blank if unregistered or abroad").with_value(shown.gstin),
         Field::choice("Client in", REGION_OPTIONS).with_choice(shown.region),
-        Field::text("State code", "India, no GSTIN: e.g. 29")
+        Field::text("State", "India, no GSTIN: a code like 29, or Ctrl-l")
             .with_value(shown.state)
-            .with_preview(describe_state),
+            .with_preview(describe_state)
+            .with_list("States", state_list())
+            .derived_from(
+                &[field::STATE - field::GSTIN, field::STATE - field::REGION],
+                gstin_state,
+                "from the client's GSTIN",
+            ),
         Field::text("Country", "abroad only, e.g. Germany").with_value(shown.country),
-        Field::text("Address", "street, building").with_value(shown.address_1),
-        Field::text("", "city, PIN / postcode").with_value(shown.address_2),
+        Field::lines(
+            "Address",
+            "street, then city and PIN / postcode",
+            ADDRESS_LINES,
+        )
+        .with_value(shown.address),
         Field::choice("Currency", Currency::LABELS).with_choice(shown.currency),
     ]
 }
@@ -47,8 +58,7 @@ pub fn fill(form: &mut Form, first: usize, client: &ClientDetails) {
     form.set_choice(first + field::REGION, shown.region);
     form.set_value(first + field::STATE, shown.state);
     form.set_value(first + field::COUNTRY, shown.country);
-    form.set_value(first + field::ADDRESS_1, shown.address_1);
-    form.set_value(first + field::ADDRESS_2, shown.address_2);
+    form.set_value(first + field::ADDRESS, shown.address);
     form.set_choice(first + field::CURRENCY, shown.currency);
 }
 
@@ -58,9 +68,8 @@ struct Shown<'a> {
     region: usize,
     state: &'a str,
     country: &'a str,
-    address_1: &'a str,
-    /// The form has two address lines; any further ones join the second
-    address_2: String,
+    /// A line break between lines, as a lines field is set
+    address: String,
     currency: usize,
 }
 
@@ -75,8 +84,7 @@ impl<'a> Shown<'a> {
             region,
             state,
             country,
-            address_1: client.address.first().map_or("", String::as_str),
-            address_2: client.address.get(1..).unwrap_or_default().join(", "),
+            address: client.address.join("\n"),
             currency: client.currency.index(),
         }
     }
@@ -101,13 +109,26 @@ pub fn read(form: &Form, first: usize, name: &str) -> Result<ClientDetails, Stri
     Ok(ClientDetails {
         name: name.trim().to_owned(),
         gstin,
-        address: vec![
-            value(field::ADDRESS_1).to_owned(),
-            value(field::ADDRESS_2).to_owned(),
-        ],
+        address: form.lines(first + field::ADDRESS),
         region,
         currency: Currency::from_index(form.choice(first + field::CURRENCY)),
     })
+}
+
+/// Every GST state to pick from, labelled as core labels them; the code goes in the field
+fn state_list() -> Vec<(String, ListItem)> {
+    states()
+        .map(|state| (state.code().to_owned(), ListItem::new(state.label(), "")))
+        .collect()
+}
+
+/// The state a client's GSTIN is registered in, from the GSTIN and where the client is: none
+/// for a client abroad, whose state isn't asked for (and whose GSTIN is refused on saving)
+fn gstin_state(sources: &[&str]) -> Option<String> {
+    match sources {
+        [gstin, region] if REGION_OPTIONS.get(ABROAD) != Some(region) => parse::gstin_state(gstin),
+        _ => None,
+    }
 }
 
 /// Name the state a typed GST state code stands for

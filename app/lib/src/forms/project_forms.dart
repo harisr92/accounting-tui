@@ -149,7 +149,7 @@ List<FieldSpec> clientFields({
       options: ['', for (final state in states) state.code],
       optionLabels: {
         '': 'Not known',
-        for (final state in states) state.code: '${state.name} (${state.code})',
+        for (final state in states) state.code: state.label,
       },
       derive: (values) =>
           gstinState(gstin: values[InputField.clientGstin] ?? ''),

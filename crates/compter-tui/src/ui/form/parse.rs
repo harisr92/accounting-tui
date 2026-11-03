@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 pub use compter_core::input::{
-    ParseResult, date_or, discount, duration_minutes, fiscal_year_or, money, optional,
+    ParseResult, date_or, discount, duration_minutes, fiscal_year_or, gstin_state, money, optional,
 };
 
 /// `$HOME`, or `%USERPROFILE%` on Windows: what a leading `~` stands for

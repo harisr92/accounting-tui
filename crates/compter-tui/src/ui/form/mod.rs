@@ -10,7 +10,7 @@ pub mod parse;
 
 pub use checklist::{Checklist, ChecklistItem};
 pub use confirm::Confirm;
-pub use field::{Field, Preview};
+pub use field::{Derive, Field, Preview};
 pub use folder_picker::{FolderPicker, PickerEvent};
 pub use list_picker::{ListEvent, ListItem, ListPicker};
 
@@ -42,22 +42,95 @@ pub struct Form {
     fields: Vec<Field>,
     focus: usize,
     error: Option<String>,
+    /// The list a field is being filled in from (Ctrl-l), with that field's position; it
+    /// takes every key while open
+    picker: Option<(usize, ListPicker)>,
 }
 
 impl Form {
-    pub const HINTS: &'static [KeyHint] = &[
+    pub const HINTS: &'static [KeyHint] = Self::LIST_HINTS.split_at(Self::LIST_HINTS.len() - 1).0;
+
+    /// [`Form::HINTS`] and, last, Ctrl-l: while the focused field can be filled in from a list
+    pub const LIST_HINTS: &'static [KeyHint] = &[
         KeyHint::new("Enter", "save"),
         KeyHint::new("Esc", "cancel"),
         KeyHint::new("Tab/↑↓", "field"),
         KeyHint::new("Space/←→", "choose"),
+        KeyHint::new("Ctrl-l", "list"),
     ];
 
     pub fn new(title: &'static str, fields: Vec<Field>) -> Self {
-        Self {
+        let mut form = Self {
             title,
             fields,
             focus: 0,
             error: None,
+            picker: None,
+        };
+        form.rederive();
+        form
+    }
+
+    /// The keys the form takes now: the list's while one is open, and Ctrl-l only while the
+    /// focused field can open its list
+    pub fn hints(&self) -> &'static [KeyHint] {
+        if self.is_picking() {
+            ListPicker::HINTS
+        } else if self.can_pick() {
+            Self::LIST_HINTS
+        } else {
+            Self::HINTS
+        }
+    }
+
+    /// Ctrl-l would open the focused field's list: it has one, and isn't derived
+    pub fn can_pick(&self) -> bool {
+        self.fields.get(self.focus).is_some_and(Field::can_pick)
+    }
+
+    /// A field is being filled in from its list, which takes every key
+    pub fn is_picking(&self) -> bool {
+        self.picker.is_some()
+    }
+
+    /// The lines typed into lines field `index`, trimmed, blank ones left out
+    pub fn lines(&self, index: usize) -> Vec<String> {
+        self.fields
+            .get(index)
+            .map(Field::typed_lines)
+            .unwrap_or_default()
+    }
+
+    /// Work every derived field out again from the fields it comes from
+    fn rederive(&mut self) {
+        for index in 0..self.fields.len() {
+            let Some(field) = self.fields.get(index) else {
+                continue;
+            };
+            // Every source, in order, or none: `derive` reads them by position
+            let Some(sources) = field.derived_sources(index).and_then(|sources| {
+                sources
+                    .into_iter()
+                    .map(|source| self.fields.get(source).map(|s| s.value().to_owned()))
+                    .collect::<Option<Vec<String>>>()
+            }) else {
+                continue;
+            };
+            let sources: Vec<&str> = sources.iter().map(String::as_str).collect();
+            if let Some(field) = self.fields.get_mut(index) {
+                field.rederive(&sources);
+            }
+        }
+    }
+
+    /// Move focus to `index`, telling the fields it leaves and enters
+    fn focus_on(&mut self, index: usize, from_above: bool) {
+        if let Some(field) = self.fields.get_mut(self.focus) {
+            field.leave();
+        }
+        self.focus = index;
+        if let Some(field) = self.fields.get_mut(index) {
+            field.enter(from_above);
         }
     }
 
@@ -87,6 +160,7 @@ impl Form {
         if let Some(field) = self.fields.get_mut(index) {
             field.set_value(text);
             self.error = None;
+            self.rederive();
         }
     }
 
@@ -95,6 +169,7 @@ impl Form {
         if let Some(field) = self.fields.get_mut(index) {
             field.set_choice(choice);
             self.error = None;
+            self.rederive();
         }
     }
 
@@ -124,25 +199,51 @@ impl Form {
     }
 
     pub fn handle_key(&mut self, key: Key) -> FormEvent {
+        if let Some((index, mut picker)) = self.picker.take() {
+            match picker.handle_key(key) {
+                ListEvent::Picked(row) => {
+                    if let Some(field) = self.fields.get_mut(index) {
+                        field.pick(row);
+                    }
+                    self.error = None;
+                    self.rederive();
+                }
+                ListEvent::Cancel => {}
+                ListEvent::Edited | ListEvent::Ignored => self.picker = Some((index, picker)),
+            }
+            return FormEvent::Edited;
+        }
         let count = self.fields.len().max(1);
+        let focus = self.focus;
+        let input = |form: &mut Self| {
+            form.fields
+                .get_mut(focus)
+                .is_some_and(|field| field.input(key))
+        };
         match key {
             Key::Esc => FormEvent::Cancel,
             Key::Enter => FormEvent::Submit,
+            Key::Ctrl('l') => match self.fields.get(focus).and_then(Field::picker) {
+                Some(picker) => {
+                    self.picker = Some((self.focus, picker));
+                    FormEvent::Edited
+                }
+                None => FormEvent::Ignored,
+            },
+            // A lines field moves between its own lines first
+            Key::Up | Key::Down if input(self) => FormEvent::Edited,
             Key::Tab | Key::Down => {
-                self.focus = (self.focus + 1) % count;
+                self.focus_on((self.focus + 1) % count, true);
                 FormEvent::Edited
             }
             Key::BackTab | Key::Up => {
-                self.focus = (self.focus + count - 1) % count;
+                self.focus_on((self.focus + count - 1) % count, false);
                 FormEvent::Edited
             }
             _ => {
-                let edited = self
-                    .fields
-                    .get_mut(self.focus)
-                    .is_some_and(|field| field.input(key));
-                if edited {
+                if input(self) {
                     self.error = None;
+                    self.rederive();
                     FormEvent::Edited
                 } else {
                     FormEvent::Ignored
@@ -152,10 +253,11 @@ impl Form {
     }
 
     pub fn render(&self, frame: &mut Frame, theme: &Theme) {
-        let mut lines = Vec::with_capacity(self.fields.len() + 3);
+        let rows: usize = self.fields.iter().map(Field::height).sum();
+        let mut lines = Vec::with_capacity(rows + 3);
         lines.push(Line::default());
         for (index, field) in self.fields.iter().enumerate() {
-            lines.push(self.field_line(field, index == self.focus, theme));
+            lines.extend(Self::field_lines(field, index == self.focus, theme));
         }
         lines.push(Line::default());
         match &self.error {
@@ -173,16 +275,31 @@ impl Form {
             .saturating_add(2);
         let area = modal(frame, self.title, WIDTH, height, theme);
         frame.render_widget(Paragraph::new(lines), area);
+        if let Some((_, picker)) = &self.picker {
+            picker.render(frame, theme);
+        }
     }
 
-    fn field_line<'a>(&self, field: &'a Field, focused: bool, theme: &Theme) -> Line<'a> {
+    /// A field's rows, its label on the first
+    fn field_lines<'a>(
+        field: &'a Field,
+        focused: bool,
+        theme: &Theme,
+    ) -> impl Iterator<Item = Line<'a>> {
         let label_style = if focused { theme.key() } else { theme.dim() };
-        let mut spans = vec![Span::styled(
-            format!("  {:<LABEL_WIDTH$}", field.label()),
-            label_style,
-        )];
-        spans.extend(field.spans(focused, theme));
-        Line::from(spans)
+        field
+            .rows(focused, theme)
+            .into_iter()
+            .enumerate()
+            .map(move |(row, spans)| {
+                let label = if row == 0 { field.label() } else { "" };
+                let mut line = vec![Span::styled(
+                    format!("  {label:<LABEL_WIDTH$}"),
+                    label_style,
+                )];
+                line.extend(spans);
+                Line::from(line)
+            })
     }
 }
 

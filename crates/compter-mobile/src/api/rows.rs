@@ -206,7 +206,8 @@ pub struct ProjectInput {
     pub client_name: String,
     /// Blank for an unregistered client or one abroad
     pub client_gstin: Option<String>,
-    /// GST state code (`29`): the place of supply for a client in India without a GSTIN
+    /// GST state code (`29`): the place of supply for a client in India, the GSTIN's own state when
+    /// they have one
     pub client_state: Option<String>,
     /// Blank for a client in India
     pub client_country: Option<String>,

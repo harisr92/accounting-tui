@@ -32,7 +32,8 @@ class ClientChoiceRow {
   final String summary;
   final String? gstin;
 
-  /// GST state code (`29`), for a client in India without a GSTIN
+  /// GST state code (`29`): the place of supply for a client in India, the GSTIN's own state when
+  /// they have one
   final String? state;
 
   /// Set only for a client abroad
@@ -151,7 +152,8 @@ class ClientInput {
   /// Blank for an unregistered client or one abroad
   final String? gstin;
 
-  /// GST state code (`29`): the place of supply for a client in India without a GSTIN
+  /// GST state code (`29`): the place of supply for a client in India, the GSTIN's own state when
+  /// they have one
   final String? state;
 
   /// Blank for a client in India
@@ -248,10 +250,13 @@ class StateRow {
   /// `Karnataka`
   final String name;
 
-  const StateRow({required this.code, required this.name});
+  /// `Karnataka (29)`, as the state list shows it
+  final String label;
+
+  const StateRow({required this.code, required this.name, required this.label});
 
   @override
-  int get hashCode => code.hashCode ^ name.hashCode;
+  int get hashCode => code.hashCode ^ name.hashCode ^ label.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -259,5 +264,6 @@ class StateRow {
       other is StateRow &&
           runtimeType == other.runtimeType &&
           code == other.code &&
-          name == other.name;
+          name == other.name &&
+          label == other.label;
 }
