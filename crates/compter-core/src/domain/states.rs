@@ -48,16 +48,40 @@ pub fn state_name(code: &str) -> Option<&'static str> {
         .map(|(_, name)| *name)
 }
 
-/// `Karnataka (29)`, or the bare code when it isn't a GST state code
-pub fn state_label(code: &str) -> String {
-    match state_name(code) {
-        Some(name) => format!("{name} ({code})"),
-        None => code.to_owned(),
+/// A GST state or union territory: what a client in India picks as their place of supply.
+/// Front ends list these rather than format codes and names themselves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GstState {
+    code: &'static str,
+    name: &'static str,
+}
+
+impl GstState {
+    /// `29`, as a client's state is stored and typed
+    pub fn code(self) -> &'static str {
+        self.code
+    }
+
+    /// `Karnataka`
+    pub fn name(self) -> &'static str {
+        self.name
+    }
+
+    /// `Karnataka (29)`, as every list of states shows one
+    pub fn label(self) -> String {
+        format!("{} ({})", self.name, self.code)
     }
 }
 
-/// Every GST state and union territory as `(code, name)`, in code order: the choices for a
-/// client's place of supply
-pub fn states() -> impl Iterator<Item = (&'static str, &'static str)> {
-    STATES.iter().copied()
+/// `Karnataka (29)`, or the bare code when it isn't a GST state code
+pub fn state_label(code: &str) -> String {
+    states()
+        .find(|state| state.code == code)
+        .map_or_else(|| code.to_owned(), GstState::label)
+}
+
+/// Every GST state and union territory, in code order: the choices for a client's place of
+/// supply
+pub fn states() -> impl Iterator<Item = GstState> {
+    STATES.iter().map(|&(code, name)| GstState { code, name })
 }

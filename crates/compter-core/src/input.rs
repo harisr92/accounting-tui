@@ -6,7 +6,7 @@ use std::str::FromStr;
 use bigdecimal::{BigDecimal, RoundingMode, ToPrimitive};
 use chrono::NaiveDate;
 
-use crate::domain::{Discount, FiscalYear};
+use crate::domain::{Discount, FiscalYear, state_name};
 
 pub type ParseResult<T> = Result<T, &'static str>;
 
@@ -103,11 +103,14 @@ pub fn optional(input: &str) -> Option<String> {
 }
 
 /// The GST state code (`29`) a typed GSTIN is registered in, once it is a whole, valid GSTIN in
-/// any case and with surrounding spaces; `None` while it isn't
+/// any case and with surrounding spaces; `None` while it isn't, or when its code is no state a
+/// client can be in (`99`, the Centre's jurisdiction), so the state is left to the user rather
+/// than filled with a code the client's state refuses
 pub fn gstin_state(input: &str) -> Option<String> {
     accounting_core::Gstin::parse(&input.trim().to_uppercase())
         .ok()
         .map(|g| g.state_code().to_owned())
+        .filter(|code| state_name(code).is_some())
 }
 
 /// `10%` off, or an amount like `5,000`; blank means no discount

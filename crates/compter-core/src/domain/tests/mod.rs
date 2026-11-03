@@ -11,3 +11,4 @@ mod milestone_tests;
 mod profile_tests;
 mod project_tests;
 mod record_field_tests;
+mod states_tests;
