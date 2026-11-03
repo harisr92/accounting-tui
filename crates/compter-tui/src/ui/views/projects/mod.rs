@@ -57,13 +57,14 @@ const MILESTONE_HINTS: &[KeyHint] = &[
     Filter::CLEAR_HINT,
 ];
 
-/// The form's keys, plus the earlier-clients picker the project forms open
+/// The form's keys, plus the earlier-clients picker the project forms open and the state list
 const PROJECT_FORM_HINTS: &[KeyHint] = &[
     KeyHint::new("Enter", "save"),
     KeyHint::new("Esc", "cancel"),
     KeyHint::new("Tab/↑↓", "field"),
     KeyHint::new("Space/←→", "choose"),
     KeyHint::new("Ctrl-p", "earlier client"),
+    KeyHint::new("Ctrl-l", "list"),
 ];
 
 /// Leaves about 18 columns for a project name next to its status
@@ -502,7 +503,10 @@ impl<R: Repository> ProjectsView<R> {
 
     fn handle_modal(&mut self, modal: Modal, key: Key) -> Action {
         match modal {
-            Modal::Form(kind, form) if key == Key::Ctrl('p') && kind.is_project() => {
+            // Not while the form's own list is open: that takes every key
+            Modal::Form(kind, form)
+                if key == Key::Ctrl('p') && kind.is_project() && !form.is_picking() =>
+            {
                 self.open_client_picker(kind, form)
             }
             Modal::Client {
@@ -895,8 +899,10 @@ impl<R: Repository> View for ProjectsView<R> {
 
     fn key_hints(&self) -> &'static [KeyHint] {
         match (&self.modal, self.focus) {
-            (Some(Modal::Form(kind, _)), _) if kind.is_project() => PROJECT_FORM_HINTS,
-            (Some(Modal::Form(..)), _) => Form::HINTS,
+            (Some(Modal::Form(kind, form)), _) if kind.is_project() && !form.is_picking() => {
+                PROJECT_FORM_HINTS
+            }
+            (Some(Modal::Form(_, form)), _) => form.hints(),
             (Some(Modal::Client { .. }), _) => ListPicker::HINTS,
             (Some(Modal::Confirm(..)), _) => Confirm::HINTS,
             (Some(Modal::Pick { list, .. }), _) => list.hints(),

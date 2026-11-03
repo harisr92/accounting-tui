@@ -5,7 +5,7 @@ use crate::ui::tests::support::{projects_app, screen, type_keys};
 use chrono::NaiveDate;
 use compter_core::demo;
 use compter_core::domain::{
-    Billing, BusinessProfile, ClientDetails, MilestoneStatus, ProfileDraft, Project,
+    Billing, BusinessProfile, ClientDetails, ClientRegion, MilestoneStatus, ProfileDraft, Project,
 };
 use compter_core::storage::{ProjectRepository, SettingsRepository, Store};
 
@@ -25,10 +25,10 @@ fn create_project(app: &mut crate::app::App, fields: &str) {
 }
 
 /// Fields of the project form up to Billing: name, client, GSTIN, client in, state, country,
-/// two address lines
+/// address, currency
 fn hourly_project_keys(name: &str, client: &str, rate: &str) -> String {
     // State 29, then past country, address and currency to Billing (space: hourly) and the rate
-    format!("{name}\t{client}\t\t\t29\t\t\t\t\t \t{rate}")
+    format!("{name}\t{client}\t\t\t29\t\t\t\t \t{rate}")
 }
 
 #[test]
@@ -736,4 +736,85 @@ fn esc_leaves_the_client_picker_and_keeps_what_was_typed() {
     assert!(screen.contains("New project"), "{screen}");
     assert!(!screen.contains("Earlier clients"), "{screen}");
     assert!(screen.contains("Site"), "{screen}");
+}
+
+/// The state code of the only project's client
+fn only_state(store: &Store) -> Option<String> {
+    let id = store.repository().list().unwrap()[0].id();
+    match store.repository().load(id).unwrap().client_region() {
+        ClientRegion::India { state } => state.as_ref().map(|s| s.as_str().to_owned()),
+        ClientRegion::Abroad { .. } => None,
+    }
+}
+
+#[test]
+fn a_gstin_fills_the_state_in_and_locks_it() {
+    let store = Store::in_memory().unwrap();
+    let mut app = projects_app(&store);
+    app.handle_key(Key::Char('n'));
+    type_keys(&mut app, "Site\tAcme\t27AAPFU0939F2ZU\t\t");
+    let form = screen(&app, W, H);
+    assert!(form.contains("Maharashtra"), "{form}");
+    assert!(form.contains("from the client's GSTIN"), "{form}");
+
+    // The state takes no typing while it comes from the GSTIN
+    type_keys(&mut app, "29\n");
+    assert_eq!(only_state(&store).as_deref(), Some("27"));
+}
+
+#[test]
+fn a_state_typed_before_comes_back_once_the_gstin_goes() {
+    let store = Store::in_memory().unwrap();
+    let mut app = projects_app(&store);
+    app.handle_key(Key::Char('n'));
+    type_keys(&mut app, "Site\tAcme\t\t\t29");
+    app.handle_key(Key::BackTab);
+    app.handle_key(Key::BackTab);
+    type_keys(&mut app, "27AAPFU0939F2ZU");
+    let derived = screen(&app, W, H);
+    assert!(derived.contains("Maharashtra"), "{derived}");
+    app.handle_key(Key::Ctrl('u'));
+    let typed = screen(&app, W, H);
+    assert!(typed.contains("Karnataka"), "{typed}");
+    app.handle_key(Key::Enter);
+    assert_eq!(only_state(&store).as_deref(), Some("29"));
+}
+
+#[test]
+fn the_state_is_picked_from_the_list_of_gst_states() {
+    let store = Store::in_memory().unwrap();
+    let mut app = projects_app(&store);
+    app.handle_key(Key::Char('n'));
+    type_keys(&mut app, "Site\tAcme\t\t\t");
+    app.handle_key(Key::Ctrl('l'));
+    type_keys(&mut app, "karna");
+    let list = screen(&app, W, H);
+    assert!(list.contains("Karnataka (29)"), "{list}");
+    assert!(!list.contains("Kerala"), "{list}");
+    // Ctrl-p belongs to the list while it is open: no earlier-clients picker
+    app.handle_key(Key::Ctrl('p'));
+    type_keys(&mut app, "\n\n");
+    assert_eq!(only_state(&store).as_deref(), Some("29"));
+}
+
+#[test]
+fn a_client_takes_more_than_two_address_lines() {
+    let store = Store::in_memory().unwrap();
+    let mut app = projects_app(&store);
+    app.handle_key(Key::Char('n'));
+    type_keys(&mut app, "Site\tAcme\t\t\t29\t\t12 Main Road");
+    for line in ["Indiranagar", "Bengaluru 560038"] {
+        app.handle_key(Key::Down);
+        type_keys(&mut app, line);
+    }
+    let form = screen(&app, W, H);
+    assert!(form.contains("Bengaluru 560038"), "{form}");
+    app.handle_key(Key::Enter);
+
+    let id = store.repository().list().unwrap()[0].id();
+    let project = store.repository().load(id).unwrap();
+    assert_eq!(
+        project.client_address(),
+        ["12 Main Road", "Indiranagar", "Bengaluru 560038"]
+    );
 }

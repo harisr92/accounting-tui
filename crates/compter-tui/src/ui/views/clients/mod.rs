@@ -516,7 +516,9 @@ impl<R: ClientRepository + ProjectRepository + InvoiceRepository> View for Clien
             Confirm::HINTS
         } else if self.merging.is_some() {
             ListPicker::HINTS
-        } else if self.search.is_some() || self.editing.is_some() || self.renaming.is_some() {
+        } else if let Some(form) = &self.editing {
+            form.hints()
+        } else if self.search.is_some() || self.renaming.is_some() {
             Form::HINTS
         } else if self.opened.is_some() {
             ACCOUNT_HINTS

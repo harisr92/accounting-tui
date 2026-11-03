@@ -61,3 +61,37 @@ fn the_milestone_picker_fits_at_80x24() {
         assert!(screen.contains(expected), "missing {expected:?}\n{screen}");
     }
 }
+
+#[test]
+fn the_project_form_shows_address_lines_and_its_state_list_over_it() {
+    use crate::ui::key::Key;
+    use crate::ui::tests::support::{projects_app, type_keys};
+    use compter_core::storage::Store;
+
+    let store = Store::in_memory().unwrap();
+    let mut app = projects_app(&store);
+    app.handle_key(Key::Char('n'));
+    type_keys(&mut app, "Site\tAcme\t\t\t\t\t12 Main Road");
+    app.handle_key(Key::Down);
+    type_keys(&mut app, "Indiranagar");
+    app.handle_key(Key::Down);
+    type_keys(&mut app, "Bengaluru 560038");
+    let form = screen(&app, 100, 30);
+    for expected in [
+        "Address     12 Main Road",
+        "            Indiranagar",
+        "            Bengaluru 560038█  ↓ another line",
+        "Rate / hour",
+        "a code like 29, or Ctrl-l",
+    ] {
+        assert!(form.contains(expected), "missing {expected:?}\n{form}");
+    }
+
+    app.handle_key(Key::BackTab);
+    app.handle_key(Key::BackTab);
+    app.handle_key(Key::Ctrl('l'));
+    let list = screen(&app, 100, 30);
+    for expected in ["States", "Jammu and Kashmir (01)", "Enter pick · Esc back"] {
+        assert!(list.contains(expected), "missing {expected:?}\n{list}");
+    }
+}
