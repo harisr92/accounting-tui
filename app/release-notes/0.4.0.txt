@@ -1,0 +1,5 @@
+• Home dashboard: unpaid invoices and milestones ready to bill at a glance
+• New Clients screen: every client's projects and invoices in one place
+• Pick a saved client for a new project, and edit, rename, merge or remove clients
+• Typing a GSTIN fills in the client's state
+• Clearer errors, shown right under the field they're about
