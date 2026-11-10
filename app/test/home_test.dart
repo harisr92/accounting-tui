@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:compter/src/rust/api/app.dart';
 import 'package:compter/src/rust/api/invoicing.dart';
 import 'package:compter/src/sync/sync_controller.dart';
+import 'package:compter/src/ui/figures.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +24,13 @@ class _SignedOut extends SyncController {
 void main() {
   setUpAll(initRust);
 
+  // Once every unpaid demo invoice is past due (from 10 November 2026), Overdue shows the same amount,
+  // so an amount is looked for in its own figure
+  Finder owed(String amount) => find.descendant(
+    of: find.widgetWithText(Figure, 'Owed to you'),
+    matching: find.text(amount),
+  );
+
   Badge gearBadge(WidgetTester tester) => tester.widget<Badge>(
     find.ancestor(
       of: find.byIcon(Icons.settings_outlined),
@@ -37,7 +45,7 @@ void main() {
 
     // The demo's invoices are all from 2026, so these hold on any later day
     expect(find.text('Owed to you'), findsOneWidget);
-    expect(find.text('₹95,285.00'), findsOneWidget);
+    expect(owed('₹95,285.00'), findsOneWidget);
     expect(find.text('Umbrella Analytics'), findsOneWidget);
     expect(find.text('OVERDUE'), findsWidgets);
 
@@ -99,7 +107,7 @@ void main() {
       return CompterApp.demo(scratchDir: scratch.path);
     }))!;
     await launchWith(tester, compter, tab: null);
-    expect(find.text('₹95,285.00'), findsOneWidget);
+    expect(owed('₹95,285.00'), findsOneWidget);
 
     // Prototype's ₹18,585 is paid while the app is in the background, as a sync would bring it
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
@@ -115,12 +123,12 @@ void main() {
         ),
       ),
     );
-    expect(find.text('₹95,285.00'), findsOneWidget);
+    expect(owed('₹95,285.00'), findsOneWidget);
 
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await pumpUntil(tester, find.text('₹76,700.00'));
+    await pumpUntil(tester, owed('₹76,700.00'));
     expect(find.text('Globex Labs'), findsNothing);
   });
 }
