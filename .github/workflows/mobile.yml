@@ -94,6 +94,32 @@ jobs:
         working-directory: app
         run: flutter build apk --release
 
+      # Google Play refuses 64-bit libraries that can't load on 16 KB memory pages
+      - name: Check 16 KB page alignment
+        working-directory: app
+        run: |
+          set -o pipefail
+          shopt -s failglob
+          readelf=$(ls -d "$ANDROID_HOME"/ndk/*/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf | sort -V | tail -1)
+          unzip -q -o build/app/outputs/flutter-apk/app-release.apk 'lib/*' -d "$RUNNER_TEMP/apk"
+          status=0
+          for abi in arm64-v8a x86_64; do
+            # A missing library would otherwise pass unchecked
+            test -f "$RUNNER_TEMP/apk/lib/$abi/libcompter_mobile.so"
+          done
+          for so in "$RUNNER_TEMP"/apk/lib/{arm64-v8a,x86_64}/*.so; do
+            # Read the headers first: a failure inside the loop's list would not stop the step
+            aligns=$("$readelf" -lW "$so" | awk '/LOAD/ { print $NF }')
+            test -n "$aligns"
+            for align in $aligns; do
+              if (( align < 0x4000 )); then
+                echo "::error::$so has a LOAD segment aligned to $align, below 16 KB"
+                status=1
+              fi
+            done
+          done
+          exit $status
+
   ios:
     name: iOS build
     runs-on: macos-latest
